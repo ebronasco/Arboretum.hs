@@ -15,9 +15,9 @@ instance Graded Int where
 
 [t1,t2,t10,t13,t20,t100] = map (1,) [1,2,10,13,20,100] 
 
-v1 = vect [t13, t2, t10, t100, t1, t1, t20] :: VectorSpace (Int, Int)
+v1 = vector [t13, t2, t10, t100, t1, t1, t20] :: VectorSpace (Int, Int)
 
-v2 = vect [t13, t2, t10]
+v2 = vector [t13, t2, t10]
 
 -- OPERATIONS
 

@@ -15,22 +15,22 @@ module Symbolics (
     basisTerm,
     scale,
     term,
-    VectorSpace (Vect),
-    vect,
-    vectGraded,
+    VectorSpace (Vector),
+    vector,
+    vectorG,
     terms,
     linear,
-    flattenVect,
-    lengthVect,
-    takeWhileVect,
-    filterVect,
-    takeVect,
-    Product (Prod),
-    productTerm,
-    morphism,
+    flattenV,
+    lengthV,
+    takeWhileV,
+    filterV,
+    takeV,
+    TensorProduct (TensorProduct),
+    productMorphism,
     TensorAlgebra,
+    algebraMorphism,
     -- for debug
-    unVect,
+    unVector,
     addTerm,
     groupTerms,
 ) where
@@ -109,21 +109,21 @@ instance
     type Scalar (k, a) = k
     type Basis (k, a) = a
     term = (,)
-    scalar (s, _) = s
-    basisElement (_, x) = x
+    scalar = fst
+    basisElement = snd
 
 -- vectors represented as a list of gradings of terms
 -- NOT OPTIMAL: a vector with a single graph with grading N will have N - 1 empty lists in it
 -- SOLUTION: replace [[t]] by [(grading :: Integer, terms :: [t])]
 --          more optimal, but harded to implement. Left for later.
-data VectorSpace t = Vect {unVect :: [Grading t]}
+data VectorSpace t = Vector {unVector :: [Grading t]}
 
 -- Graded list of terms.
 terms :: VectorSpace t -> [t]
-terms = concat . unVect
+terms = concat . unVector
 
 instance (Eq t) => Eq (VectorSpace t) where
-    v1 == v2 = (unVect v1) == (unVect v2)
+    v1 == v2 = (unVector v1) == (unVector v2)
 
 -- grading of a vector is the grading of its smallest element
 instance (Graded t) => Graded (VectorSpace t) where
@@ -151,17 +151,17 @@ groupTerms :: (Term t) => [t] -> [t]
 groupTerms = foldr addTerm mempty
 
 -- for finite, non-graded lists
-vect :: (Term t) => [t] -> VectorSpace t
-vect = vectGraded . (L.sortBy compareGrading)
+vector :: (Term t) => [t] -> VectorSpace t
+vector = vectorG . (L.sortBy compareGrading)
   where
     compareGrading x y = compare (grading x) (grading y)
 
 -- for infinite, graded lists with finite gradings
-vectGraded :: (Term t) => [t] -> VectorSpace t
-vectGraded = Vect . (map groupTerms) . groupByGrading
+vectorG :: (Term t) => [t] -> VectorSpace t
+vectorG = Vector . (map groupTerms) . groupByGrading
 
 instance (Term t) => Semigroup (VectorSpace t) where
-    v1 <> v2 = Vect $ zipWithDefault addGradings (unVect v1) (unVect v2)
+    v1 <> v2 = Vector $ zipWithDefault addGradings (unVector v1) (unVector v2)
       where
         zipWithDefault _ [] [] = []
         zipWithDefault f [] (e : t) = (f [] e) : zipWithDefault f [] t
@@ -171,13 +171,13 @@ instance (Term t) => Semigroup (VectorSpace t) where
         addGradings ts1 ts2 = foldr addTerm ts1 ts2
 
 instance (Term t) => Monoid (VectorSpace t) where
-    mempty = Vect []
+    mempty = Vector []
 
 instance (Term t) => Group (VectorSpace t) where
     invert = fmap $ scale (-1)
 
 instance Functor VectorSpace where
-    fmap f = Vect . (map $ map f) . unVect
+    fmap f = Vector . (map $ map f) . unVector
 
 linear
     :: ( Term t
@@ -199,7 +199,7 @@ distributeScalar
     -> VectorSpace t0
 distributeScalar t = fmap (scale $ scalar t) $ basisElement t
 
-flattenVect
+flattenV
     :: ( Term t
        , Term t0
        , Scalar t ~ Scalar t0
@@ -207,70 +207,67 @@ flattenVect
        )
     => VectorSpace t
     -> VectorSpace t0
-flattenVect = mconcat . (map distributeScalar) . terms
+flattenV = mconcat . (map distributeScalar) . terms
 
-lengthVect :: VectorSpace t -> Int
-lengthVect = sum . (map length) . unVect
+lengthV :: VectorSpace t -> Int
+lengthV = sum . (map length) . unVector
 
-takeWhileVect :: (Graded t) => (t -> Bool) -> VectorSpace t -> VectorSpace t
-takeWhileVect f = Vect . groupByGrading . (takeWhile f) . concat . unVect
+takeWhileV :: (Graded t) => (t -> Bool) -> VectorSpace t -> VectorSpace t
+takeWhileV f = Vector . groupByGrading . (takeWhile f) . concat . unVector
 
-filterVect :: (t -> Bool) -> VectorSpace t -> VectorSpace t
-filterVect f = Vect . (map $ filter f) . unVect
+filterV :: (t -> Bool) -> VectorSpace t -> VectorSpace t
+filterV f = Vector . (map $ filter f) . unVector
 
-takeVect :: (Graded t) => Int -> VectorSpace t -> VectorSpace t
-takeVect n = Vect . groupByGrading . (take n) . concat . unVect
+takeV :: (Graded t) => Int -> VectorSpace t -> VectorSpace t
+takeV n = Vector . groupByGrading . (take n) . concat . unVector
 
 -- Graded tensor algebra
 
 -- product of terms
-data Product t = Prod (Scalar t) [Basis t]
+data TensorProduct t = TensorProduct (Scalar t) [Basis t]
 
-productTerm :: (Term t) => [t] -> Product t
-productTerm = mconcat . (map (\x -> Prod (scalar x) [basisElement x]))
+instance (Eq t, Term t) => Eq (TensorProduct t) where
+    (TensorProduct s1 ts1) == (TensorProduct s2 ts2) = (s1 == s2) && (ts1 == ts2)
 
-instance (Eq t, Term t) => Eq (Product t) where
-    (Prod s1 ts1) == (Prod s2 ts2) = (s1 == s2) && (ts1 == ts2)
-
-instance forall t. (Term t) => Graded (Product t) where
-    gradingFunction :: Product t -> Int
-    gradingFunction (Prod _ ts) = sum $ map (grading . t_term) ts
+instance forall t. (Term t) => Graded (TensorProduct t) where
+    gradingFunction :: TensorProduct t -> Int
+    gradingFunction (TensorProduct _ ts) = sum $ map (grading . t_term) ts
       where
         t_term b = (basisTerm b) :: t
 
-instance (Term t) => Semigroup (Product t) where
-    (Prod s1 ts1) <> (Prod s2 ts2) = Prod (s1 * s2) $ ts1 ++ ts2
+instance (Term t) => Semigroup (TensorProduct t) where
+    (TensorProduct s1 ts1) <> (TensorProduct s2 ts2) = TensorProduct (s1 * s2) $ ts1 ++ ts2
 
-instance (Term t) => Monoid (Product t) where
-    mempty = Prod 1 []
+instance (Term t) => Monoid (TensorProduct t) where
+    mempty = TensorProduct 1 []
 
-morphism
+productMorphism
     :: ( Scalar t ~ Scalar t0
        )
     => (Basis t -> Basis t0)
-    -> Product t
-    -> Product t0
-morphism f (Prod s ts) = Prod s $ map f ts
+    -> TensorProduct t
+    -> TensorProduct t0
+productMorphism f (TensorProduct s ts) = TensorProduct s $ map f ts
 
-instance (Term t) => Show (Product t) where
-    show (Prod s ts) = (show s) ++ " " ++ (L.intercalate " * " $ map show ts)
+instance (Term t) => Show (TensorProduct t) where
+    show (TensorProduct s ts) = (show s) ++ " " ++ (L.intercalate " * " $ map show ts)
 
 -- product of terms is a term
-instance (Term t) => Term (Product t) where
-    type Scalar (Product t) = Scalar t
-    type Basis (Product t) = [Basis t]
+instance (Term t) => Term (TensorProduct t) where
+    type Scalar (TensorProduct t) = Scalar t
+    type Basis (TensorProduct t) = [Basis t]
 
-    term = Prod
+    term = TensorProduct
 
-    scalar (Prod s _) = s
-    basisElement (Prod _ v) = v
+    scalar (TensorProduct s _) = s
+    basisElement (TensorProduct _ v) = v
 
-type TensorAlgebra t = VectorSpace (Product t)
+type TensorAlgebra t = VectorSpace (TensorProduct t)
 
 instance (Term t, Eq t) => Num (TensorAlgebra t) where
     (+) = (<>)
 
-    (Vect ts1) * (Vect ts2) = Vect $ map (map mconcat) distributed
+    (Vector ts1) * (Vector ts2) = Vector $ map (map mconcat) distributed
       where
         distributed = distributeGradedLists [ts1, ts2]
 
@@ -278,6 +275,29 @@ instance (Term t, Eq t) => Num (TensorAlgebra t) where
 
     signum _ = 1
 
-    fromInteger i = Vect [[Prod (fromInteger i) []]]
+    fromInteger i = Vector [[TensorProduct (fromInteger i) []]]
 
     negate = invert
+
+algebraMorphism
+    :: ( Term t
+       , Term t0
+       , Scalar t ~ Scalar t0
+       )
+    => (Basis t -> Basis t0)
+    -> TensorAlgebra t
+    -> TensorAlgebra t0
+algebraMorphism f = linear $ map f
+
+algebraDerivation
+    :: ( Term t
+       , Term t0
+       , Scalar t ~ Scalar t0
+       )
+    => (Basis t -> Basis t0)
+    -> TensorAlgebra t
+    -> TensorAlgebra t0
+algebraDerivation f = flattenV . (linear (vector . listDerivation f))
+  where
+    listDerivation f [] = []
+    listDerivation f (t : ts) = ((f t) : ts) : (map (t :) $ listDerivation f ts)
