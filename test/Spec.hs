@@ -1,2 +1,4 @@
-main :: IO ()
-main = putStrLn "Test suite not yet implemented"
+import Test.DocTest
+import Test.QuickCheck
+
+main = doctest ["-isrc", "src/Symbolics.hs"]

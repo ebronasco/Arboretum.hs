@@ -23,6 +23,7 @@ dependencies:
 - base >= 4.7 && < 5
 - multiset
 - groups
+- QuickCheck
 
 ghc-options:
 - -Wall
@@ -62,3 +63,5 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - graphal
+    - doctest
+    - QuickCheck

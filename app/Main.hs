@@ -9,10 +9,6 @@ import qualified Data.MultiSet as MS
 import qualified Data.List as L
 import Data.Group
 
-instance Graded Int where
-  gradingFunction 0 = 0
-  gradingFunction n = 1 + (grading $ n `div` 10)
-
 [t1,t2,t10,t13,t20,t100] = map (1,) [1,2,10,13,20,100] 
 
 v1 = vector [t13, t2, t10, t100, t1, t1, t20] :: VectorSpace (Int, Int)
@@ -47,3 +43,5 @@ addRoot :: (RootedGraph g) => [g] -> Vertex g -> g
 addRoot gList = labeledAddRoot gaList
   where
     gaList = map (\g -> (g, ())) gList
+
+main = putStrLn "Build successful."

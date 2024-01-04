@@ -29,6 +29,12 @@ class Graded t where
 
     gradingFunction :: t -> Int
 
+instance Graded Int where
+  gradingFunction 0 = 0
+  gradingFunction n = 1 + (grading $ abs_n `div` 10)
+    where
+      abs_n = abs n
+
 instance (Graded a) => Graded (k, a) where
     gradingFunction (_, x) = gradingFunction x
 

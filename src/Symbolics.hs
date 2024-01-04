@@ -6,6 +6,16 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
+{- |
+Module      : Symbolics
+Description : Symbolic algebra in Haskell using graded vector spaces.
+Copyright   : (c) Eugen Bronasco, 2024
+License     : MIT
+Maintainer  : ebronasco@gmail.com
+Stability   : experimental
+
+An implementation of symbolic algebra using graded vector spaces with the aim of being able to represent and manipulate algebras over the vector spaces of graphs.
+-}
 module Symbolics (
     Term,
     Scalar,
@@ -18,6 +28,8 @@ module Symbolics (
     VectorSpace (Vector),
     vector,
     vectorG,
+    basisVector,
+    basisVectorG,
     terms,
     linear,
     flattenV,
@@ -26,13 +38,13 @@ module Symbolics (
     filterV,
     takeV,
     TensorProduct (TensorProduct),
+    lengthTP,
+    zipProductWith,
     productMorphism,
     TensorAlgebra,
     algebraMorphism,
-    -- for debug
-    unVector,
     addTerm,
-    groupTerms,
+    unVector
 ) where
 
 import Data.Group
@@ -49,28 +61,19 @@ import GradedList (
     groupByGrading,
  )
 
--- TODO:
+-- $setup
+-- >>> import Test.QuickCheck (Arbitrary (arbitrary), Gen)
+-- >>> import Test.QuickCheck.Function (Fun (Fun), apply)
+-- >>> :{
+-- instance Arbitrary (VectorSpace (Int, Int)) where
+--    arbitrary = vector <$> (arbitrary :: Gen [(Int, Int)])
+-- :}
 
--- * find a way to extend a map f : Basis t -> Basis t0 to a linear map and a morphism.
+--------------------------------------------------------------------------------
+-- * Graded vector space
+--------------------------------------------------------------------------------
 
--- X leave `addTerm` grading-ignorant.
-
--- X represent VectorSpace t as a list of lists by grading, [grading 0, grading 1, ..., grading k, ...]
-
---      where "grading k" is a set of terms t with grading t = k.
---      This way you don't need to call groupByGrading all the time.
-
--- use list because the graphs are not Ord and lists can be infinite
--- Scalars t must be Num, Eq
--- Basis t must be Num, Eq
--- Term must be Graded
--- VectorSpace is a Group, Functor
--- Product is a Monoid, Functor
--- TensorProduct := VectorSpace (Product t) is Num, Functor
-
--- Graded vector space
-
--- minimal complete definition: Scalar t, Basis t, scalar, basisElement, (basisTerm, scale | term)
+-- | A term of a sum that forms a vector. Contains a scalar and a basis element.
 class
     ( Num (Scalar t)
     , Eq (Scalar t)
@@ -81,21 +84,32 @@ class
     ) =>
     Term t
     where
+    -- | Set the scalar type. Must be a @Num@, @Eq@, and @Show@.
     type Scalar t
+
+    -- | Set the basis type. Must be an @Eq@ and @Show@.
     type Basis t
 
+    -- | Projections of the term to the scalar and basis types.
     scalar :: t -> Scalar t
+
     basisElement :: t -> Basis t
 
+    -- | Injection of the basis type into the term type.
     basisTerm :: Basis t -> t
     basisTerm = term (fromInteger 1)
 
+    -- | Scale a term by a scalar.
     scale :: Scalar t -> t -> t
     scale k x = term (k * (scalar x)) (basisElement x)
 
+    -- | Construct a term from a scalar and a basis element.
     term :: Scalar t -> Basis t -> t
     term k x = scale k $ basisTerm x
 
+    {-# MINIMAL scalar, basisElement, (basisTerm, scale | term) #-}
+
+-- | The canonical implementation of a term.
 instance
     ( Num k
     , Eq k
@@ -112,27 +126,54 @@ instance
     scalar = fst
     basisElement = snd
 
--- vectors represented as a list of gradings of terms
--- NOT OPTIMAL: a vector with a single graph with grading N will have N - 1 empty lists in it
--- SOLUTION: replace [[t]] by [(grading :: Integer, terms :: [t])]
---          more optimal, but harded to implement. Left for later.
+
+{- | 
+    Vectors are nested lists of terms. The outer list is @[l0, l1, l2, ..]@ 
+    where @li@ is a list of terms with grading @i@.
+
+    NOT OPTIMAL: a vector with a single term with grading @N@ will have @N - 1@ empty lists in it.
+    Note: list are used because graphs are not @Ord@ and lists can be infinite.
+-}
 data VectorSpace t = Vector {unVector :: [Grading t]}
 
--- Graded list of terms.
+-- | A flat list of terms.
+-- Examples:
+--
+-- >>> terms $ Vector [[], [(1, 1), (1, 2)]]
+-- [(1,1),(1,2)]
+--
+-- Properties:
+-- 
+-- prop> terms (Vector ts) == concat ts
 terms :: VectorSpace t -> [t]
 terms = concat . unVector
 
-instance (Eq t) => Eq (VectorSpace t) where
-    v1 == v2 = (unVector v1) == (unVector v2)
+-- | Only finite vectors can be compared.
+instance (Term t) => Eq (VectorSpace t) where
+    v1 == v2 = (== 0) $ lengthV $ (<> v2) $ invert v1
 
--- grading of a vector is the grading of its smallest element
+-- | The grading of a vector is the grading of its smallest element. If the vector is empty, the grading is @0@.
 instance (Graded t) => Graded (VectorSpace t) where
-    gradingFunction = grading . head . terms
+    gradingFunction v = case terms v of
+        [] -> 0
+        t : _ -> grading t
 
 instance (Show t) => Show (VectorSpace t) where
     show v = "(" ++ (L.intercalate " + " $ map show $ terms v) ++ ")"
 
--- internal function. Adds a term to the vector. Grading ignorant.
+-- | Internal function. Adds a term to a finite list. Grading ignorant.
+--
+-- Examples:
+--
+-- >>> addTerm (1, 1) [(1, 1), (1, 2)] :: [(Int, Int)]
+-- [(2,1),(1,2)]
+-- >>> addTerm (1, 3) [(1, 1), (1, 2)] :: [(Int, Int)]
+-- [(1,3),(1,1),(1,2)]
+--
+-- Properties:
+--
+-- prop> (length $ addTerm t l) - 1 <= length (l :: [(Int, Int)])
+--
 addTerm :: (Term t) => t -> [t] -> [t]
 addTerm t ts = case (span findTerm ts) of
     (pre, []) -> t : pre
@@ -146,20 +187,67 @@ addTerm t ts = case (span findTerm ts) of
       where
         scalarSum = (scalar t) + (scalar t0)
 
--- group terms with the same basis element. Grading ignorant.
+-- | Group terms with the same basis element. Grading ignorant.
+--
+-- Examples:
+--
+-- >>> groupTerms [(1, 1), (1, 2), (1, 1), (1, 2)] :: [(Int, Int)]
+-- [(2,1),(2,2)]
+-- >>> groupTerms [(1, 1), (1, 2), (1, 1), (1, 2), (1, 3)] :: [(Int, Int)]
+-- [(2,1),(2,2),(1,3)]
+--
+-- Properties:
+--
+-- prop> (length $ groupTerms l) <= length (l :: [(Int, Int)])
+--
 groupTerms :: (Term t) => [t] -> [t]
 groupTerms = foldr addTerm mempty
 
--- for finite, non-graded lists
+-- | Construct a vector from a list of terms. The list must be finite.
+--
+-- Examples:
+--
+-- >>> vector [(1, 1), (1, 2), (1, 1), (1, 2)] :: VectorSpace (Int, Int)
+-- ((2,1) + (2,2))
+-- >>> vector [(1, 1), (1, 2), (1, 1), (-1, 2), (1, 3)] :: VectorSpace (Int, Int)
+-- ((2,1) + (1,3))
+--
 vector :: (Term t) => [t] -> VectorSpace t
 vector = vectorG . (L.sortBy compareGrading)
   where
     compareGrading x y = compare (grading x) (grading y)
 
--- for infinite, graded lists with finite gradings
+-- |  Construct a vector from a list of terms. The list must be graded with finite number of terms having the same grading. The list itself may be infinite.
+--
+-- Examples:
+--
+-- >>> vectorG [(1, 1), (1, 2), (1, 1), (1, 2)] :: VectorSpace (Int, Int)
+-- ((2,1) + (2,2))
+-- >>> takeV 10 $ vectorG [(1, i) | i <- [1..]] :: VectorSpace (Int, Int)
+-- ((1,1) + (1,2) + (1,3) + (1,4) + (1,5) + (1,6) + (1,7) + (1,8) + (1,9) + (1,10))
+--
 vectorG :: (Term t) => [t] -> VectorSpace t
 vectorG = Vector . (map groupTerms) . groupByGrading
 
+-- | The same as @vector@ but with basis elements instead of terms.
+basisVector :: (Term t) => [Basis t] -> VectorSpace t
+basisVector = vector . (map basisTerm)
+
+-- | The same as @vectorG@ but with basis elements instead of terms.
+basisVectorG :: (Term t) => [Basis t] -> VectorSpace t
+basisVectorG = vectorG . (map basisTerm)
+
+-- | Vector space is a semigroup with addition as the operation.
+--
+-- Examples:
+--
+-- >>> vector [(1, 1), (1, 2)] <> (vector [(1, 1), (1, 2), (2, 3)]) :: VectorSpace (Int, Int)
+-- ((2,3) + (2,1) + (2,2))
+--
+-- Properties:
+--
+-- prop> v1 <> v2 == (v2 <> v1 :: VectorSpace (Int, Int))
+--
 instance (Term t) => Semigroup (VectorSpace t) where
     v1 <> v2 = Vector $ zipWithDefault addGradings (unVector v1) (unVector v2)
       where
@@ -170,15 +258,64 @@ instance (Term t) => Semigroup (VectorSpace t) where
 
         addGradings ts1 ts2 = foldr addTerm ts1 ts2
 
+-- | Vector space is a monoid with addition as the operation and the empty vector as the identity.
+--
+-- Examples:
+--
+-- >>> mempty :: VectorSpace (Int, Int)
+-- ()
+-- >>> vector [(1, 1), (1, 2)] <> mempty :: VectorSpace (Int, Int)
+-- ((1,1) + (1,2))
+--
+-- Properties:
+--
+-- prop> v <> mempty == (v :: VectorSpace (Int, Int))
+--
 instance (Term t) => Monoid (VectorSpace t) where
     mempty = Vector []
 
+-- | Vector space is a group with addition as the operation and negation as the inverse.
+--
+-- Examples:
+--
+-- >>> invert $ vector [(1, 1), (1, 2)] :: VectorSpace (Int, Int)
+-- ((-1,1) + (-1,2))
+-- >>> vector [(1, 1), (1, 2)] <> invert (vector [(1, 1), (1, 2)]) :: VectorSpace (Int, Int)
+-- ()
+--
+-- Properties:
+--
+-- prop> v <> invert v == (mempty :: VectorSpace (Int, Int))
+-- prop> invert v <> v == (mempty :: VectorSpace (Int, Int))
+-- prop> invert (invert v) == (v :: VectorSpace (Int, Int))
+--
 instance (Term t) => Group (VectorSpace t) where
     invert = fmap $ scale (-1)
 
+-- | Vector space is a functor. The function @f@ must be non-decreasing, i.e. @grading (f t) >= grading t@.
+-- TODO: 
+-- 1. Current implementation assumes that @f@ preserves the grading. This is not necessary.
+--
+-- Examples:
+--
+-- >>> fmap (scale 3) $ vector [(1, 1), (1, 2)] :: VectorSpace (Int, Int)
+-- ((3,1) + (3,2))
+--
+-- Properties:
+--
+-- prop> fmap id v == (v :: VectorSpace (Int, Int))
+--
 instance Functor VectorSpace where
+    fmap :: (t -> t0) -> VectorSpace t -> VectorSpace t0
     fmap f = Vector . (map $ map f) . unVector
 
+-- | Like @fmap@ but with a function that maps basis elements to basis elements.
+--
+-- Examples:
+-- 
+-- >>> linear (^ 2) $ vector [(1,1), (1,2), (1,3), (1,4), (1,5), (1,10) :: (Int, Int)] :: VectorSpace (Int, Int)
+-- ((1,1) + (1,4) + (1,9) + (1,16) + (1,25) + (1,100))
+--
 linear
     :: ( Term t
        , Term t0
@@ -241,6 +378,21 @@ instance (Term t) => Semigroup (TensorProduct t) where
 instance (Term t) => Monoid (TensorProduct t) where
     mempty = TensorProduct 1 []
 
+lengthTP :: TensorProduct t -> Int
+lengthTP (TensorProduct _ ts) = length ts
+
+zipProductWith
+    :: ( Term t2
+       , Scalar t0 ~ Scalar t1
+       , Scalar t0 ~ Scalar t2
+       )
+    => (Basis t0 -> Basis t1 -> Basis t2)
+    -> TensorProduct t0
+    -> TensorProduct t1
+    -> TensorProduct t2
+zipProductWith f (TensorProduct s1 ts1) (TensorProduct s2 ts2) =
+    TensorProduct (s1 * s2) $ zipWith f ts1 ts2
+
 productMorphism
     :: ( Scalar t ~ Scalar t0
        )
@@ -288,16 +440,3 @@ algebraMorphism
     -> TensorAlgebra t
     -> TensorAlgebra t0
 algebraMorphism f = linear $ map f
-
-algebraDerivation
-    :: ( Term t
-       , Term t0
-       , Scalar t ~ Scalar t0
-       )
-    => (Basis t -> Basis t0)
-    -> TensorAlgebra t
-    -> TensorAlgebra t0
-algebraDerivation f = flattenV . (linear (vector . listDerivation f))
-  where
-    listDerivation f [] = []
-    listDerivation f (t : ts) = ((f t) : ts) : (map (t :) $ listDerivation f ts)
