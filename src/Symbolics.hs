@@ -25,6 +25,8 @@ module Symbolics (
     basisTerm,
     scale,
     term,
+
+    -- * Graded vector space
     VectorSpace (Vector),
     vector,
     vectorG,
@@ -37,6 +39,8 @@ module Symbolics (
     takeWhileV,
     filterV,
     takeV,
+
+    -- * Tensor algebra
     TensorProduct (TensorProduct),
     lengthTP,
     zipProductWith,
@@ -44,7 +48,7 @@ module Symbolics (
     TensorAlgebra,
     algebraMorphism,
     addTerm,
-    unVector
+    unVector,
 ) where
 
 import Data.Group
@@ -61,17 +65,21 @@ import GradedList (
     groupByGrading,
  )
 
--- $setup
--- >>> import Test.QuickCheck (Arbitrary (arbitrary), Gen)
--- >>> import Test.QuickCheck.Function (Fun (Fun), apply)
--- >>> :{
--- instance Arbitrary (VectorSpace (Int, Int)) where
---    arbitrary = vector <$> (arbitrary :: Gen [(Int, Int)])
--- :}
+{- $setup
+>>> :set -XPatternSynonyms
+>>> import Test.QuickCheck (Arbitrary (arbitrary), Gen)
+>>> import Test.QuickCheck.Function (Fun (Fun), apply, pattern Fn)
+>>> :{
+instance Arbitrary (VectorSpace (Int, Int)) where
+   arbitrary = vector <$> (arbitrary :: Gen [(Int, Int)])
+:}
+-}
 
---------------------------------------------------------------------------------
+-----------------------------------------------------------------------------
+
 -- * Graded vector space
---------------------------------------------------------------------------------
+
+-----------------------------------------------------------------------------
 
 -- | A term of a sum that forms a vector. Contains a scalar and a basis element.
 class
@@ -81,6 +89,7 @@ class
     , Eq (Basis t)
     , Show (Basis t)
     , Graded t
+    , Show t
     ) =>
     Term t
     where
@@ -126,25 +135,26 @@ instance
     scalar = fst
     basisElement = snd
 
-
-{- | 
-    Vectors are nested lists of terms. The outer list is @[l0, l1, l2, ..]@ 
+{- |
+    Vectors are nested lists of terms. The outer list is @[l0, l1, l2, ..]@
     where @li@ is a list of terms with grading @i@.
 
-    NOT OPTIMAL: a vector with a single term with grading @N@ will have @N - 1@ empty lists in it.
-    Note: list are used because graphs are not @Ord@ and lists can be infinite.
+    /NOT OPTIMAL: a vector with a single term with grading @N@ will have @N - 1@ empty lists in it./
+
+    /Note: list are used because graphs are not @Ord@ and lists can be infinite./
 -}
 data VectorSpace t = Vector {unVector :: [Grading t]}
 
--- | A flat list of terms.
--- Examples:
---
--- >>> terms $ Vector [[], [(1, 1), (1, 2)]]
--- [(1,1),(1,2)]
---
--- Properties:
--- 
--- prop> terms (Vector ts) == concat ts
+{- | A flat list of terms.
+Examples:
+
+>>> terms $ Vector [[], [(1, 1), (1, 2)]]
+[(1,1),(1,2)]
+
+Properties:
+
+prop> terms (Vector ts) == concat ts
+-}
 terms :: VectorSpace t -> [t]
 terms = concat . unVector
 
@@ -161,19 +171,19 @@ instance (Graded t) => Graded (VectorSpace t) where
 instance (Show t) => Show (VectorSpace t) where
     show v = "(" ++ (L.intercalate " + " $ map show $ terms v) ++ ")"
 
--- | Internal function. Adds a term to a finite list. Grading ignorant.
---
--- Examples:
---
--- >>> addTerm (1, 1) [(1, 1), (1, 2)] :: [(Int, Int)]
--- [(2,1),(1,2)]
--- >>> addTerm (1, 3) [(1, 1), (1, 2)] :: [(Int, Int)]
--- [(1,3),(1,1),(1,2)]
---
--- Properties:
---
--- prop> (length $ addTerm t l) - 1 <= length (l :: [(Int, Int)])
---
+{- | Internal function. Adds a term to a finite list. Grading ignorant.
+
+Examples:
+
+>>> addTerm (1, 1) [(1, 1), (1, 2)] :: [(Int, Int)]
+[(2,1),(1,2)]
+>>> addTerm (1, 3) [(1, 1), (1, 2)] :: [(Int, Int)]
+[(1,3),(1,1),(1,2)]
+
+Properties:
+
+prop> (length $ addTerm t l) - 1 <= length (l :: [(Int, Int)])
+-}
 addTerm :: (Term t) => t -> [t] -> [t]
 addTerm t ts = case (span findTerm ts) of
     (pre, []) -> t : pre
@@ -187,45 +197,45 @@ addTerm t ts = case (span findTerm ts) of
       where
         scalarSum = (scalar t) + (scalar t0)
 
--- | Group terms with the same basis element. Grading ignorant.
---
--- Examples:
---
--- >>> groupTerms [(1, 1), (1, 2), (1, 1), (1, 2)] :: [(Int, Int)]
--- [(2,1),(2,2)]
--- >>> groupTerms [(1, 1), (1, 2), (1, 1), (1, 2), (1, 3)] :: [(Int, Int)]
--- [(2,1),(2,2),(1,3)]
---
--- Properties:
---
--- prop> (length $ groupTerms l) <= length (l :: [(Int, Int)])
---
+{- | Group terms with the same basis element. Grading ignorant.
+
+Examples:
+
+>>> groupTerms [(1, 1), (1, 2), (1, 1), (1, 2)] :: [(Int, Int)]
+[(2,1),(2,2)]
+>>> groupTerms [(1, 1), (1, 2), (1, 1), (1, 2), (1, 3)] :: [(Int, Int)]
+[(2,1),(2,2),(1,3)]
+
+Properties:
+
+prop> (length $ groupTerms l) <= length (l :: [(Int, Int)])
+-}
 groupTerms :: (Term t) => [t] -> [t]
 groupTerms = foldr addTerm mempty
 
--- | Construct a vector from a list of terms. The list must be finite.
---
--- Examples:
---
--- >>> vector [(1, 1), (1, 2), (1, 1), (1, 2)] :: VectorSpace (Int, Int)
--- ((2,1) + (2,2))
--- >>> vector [(1, 1), (1, 2), (1, 1), (-1, 2), (1, 3)] :: VectorSpace (Int, Int)
--- ((2,1) + (1,3))
---
+{- | Construct a vector from a list of terms. The list must be finite.
+
+Examples:
+
+>>> vector [(1, 1), (1, 2), (1, 1), (1, 2)] :: VectorSpace (Int, Int)
+((2,1) + (2,2))
+>>> vector [(1, 1), (1, 2), (1, 1), (-1, 2), (1, 3)] :: VectorSpace (Int, Int)
+((2,1) + (1,3))
+-}
 vector :: (Term t) => [t] -> VectorSpace t
 vector = vectorG . (L.sortBy compareGrading)
   where
     compareGrading x y = compare (grading x) (grading y)
 
--- |  Construct a vector from a list of terms. The list must be graded with finite number of terms having the same grading. The list itself may be infinite.
---
--- Examples:
---
--- >>> vectorG [(1, 1), (1, 2), (1, 1), (1, 2)] :: VectorSpace (Int, Int)
--- ((2,1) + (2,2))
--- >>> takeV 10 $ vectorG [(1, i) | i <- [1..]] :: VectorSpace (Int, Int)
--- ((1,1) + (1,2) + (1,3) + (1,4) + (1,5) + (1,6) + (1,7) + (1,8) + (1,9) + (1,10))
---
+{- |  Construct a vector from a list of terms. The list must be graded with finite number of terms having the same grading. The list itself may be infinite.
+
+Examples:
+
+>>> vectorG [(1, 1), (1, 2), (1, 1), (1, 2)] :: VectorSpace (Int, Int)
+((2,1) + (2,2))
+>>> takeV 10 $ vectorG [(1, i) | i <- [1..]] :: VectorSpace (Int, Int)
+((1,1) + (1,2) + (1,3) + (1,4) + (1,5) + (1,6) + (1,7) + (1,8) + (1,9) + (1,10))
+-}
 vectorG :: (Term t) => [t] -> VectorSpace t
 vectorG = Vector . (map groupTerms) . groupByGrading
 
@@ -237,17 +247,17 @@ basisVector = vector . (map basisTerm)
 basisVectorG :: (Term t) => [Basis t] -> VectorSpace t
 basisVectorG = vectorG . (map basisTerm)
 
--- | Vector space is a semigroup with addition as the operation.
---
--- Examples:
---
--- >>> vector [(1, 1), (1, 2)] <> (vector [(1, 1), (1, 2), (2, 3)]) :: VectorSpace (Int, Int)
--- ((2,3) + (2,1) + (2,2))
---
--- Properties:
---
--- prop> v1 <> v2 == (v2 <> v1 :: VectorSpace (Int, Int))
---
+{- | Vector space is a semigroup with addition as the operation.
+
+Examples:
+
+>>> vector [(1, 1), (1, 2)] <> (vector [(1, 1), (1, 2), (2, 3)]) :: VectorSpace (Int, Int)
+((2,3) + (2,1) + (2,2))
+
+Properties:
+
+prop> v1 <> v2 == (v2 <> v1 :: VectorSpace (Int, Int))
+-}
 instance (Term t) => Semigroup (VectorSpace t) where
     v1 <> v2 = Vector $ zipWithDefault addGradings (unVector v1) (unVector v2)
       where
@@ -258,64 +268,74 @@ instance (Term t) => Semigroup (VectorSpace t) where
 
         addGradings ts1 ts2 = foldr addTerm ts1 ts2
 
--- | Vector space is a monoid with addition as the operation and the empty vector as the identity.
---
--- Examples:
---
--- >>> mempty :: VectorSpace (Int, Int)
--- ()
--- >>> vector [(1, 1), (1, 2)] <> mempty :: VectorSpace (Int, Int)
--- ((1,1) + (1,2))
---
--- Properties:
---
--- prop> v <> mempty == (v :: VectorSpace (Int, Int))
---
+{- | Vector space is a monoid with addition as the operation and the empty vector as the identity.
+
+Examples:
+
+>>> mempty :: VectorSpace (Int, Int)
+()
+>>> vector [(1, 1), (1, 2)] <> mempty :: VectorSpace (Int, Int)
+((1,1) + (1,2))
+
+Properties:
+
+prop> v <> mempty == (v :: VectorSpace (Int, Int))
+-}
 instance (Term t) => Monoid (VectorSpace t) where
     mempty = Vector []
 
--- | Vector space is a group with addition as the operation and negation as the inverse.
---
--- Examples:
---
--- >>> invert $ vector [(1, 1), (1, 2)] :: VectorSpace (Int, Int)
--- ((-1,1) + (-1,2))
--- >>> vector [(1, 1), (1, 2)] <> invert (vector [(1, 1), (1, 2)]) :: VectorSpace (Int, Int)
--- ()
---
--- Properties:
---
--- prop> v <> invert v == (mempty :: VectorSpace (Int, Int))
--- prop> invert v <> v == (mempty :: VectorSpace (Int, Int))
--- prop> invert (invert v) == (v :: VectorSpace (Int, Int))
---
+{- | Vector space is a group with addition as the operation and negation as the inverse.
+
+Examples:
+
+>>> invert $ vector [(1, 1), (1, 2)] :: VectorSpace (Int, Int)
+((-1,1) + (-1,2))
+>>> vector [(1, 1), (1, 2)] <> invert (vector [(1, 1), (1, 2)]) :: VectorSpace (Int, Int)
+()
+
+Properties:
+
+prop> v <> invert v == (mempty :: VectorSpace (Int, Int))
+prop> invert v <> v == (mempty :: VectorSpace (Int, Int))
+prop> invert (invert v) == (v :: VectorSpace (Int, Int))
+-}
 instance (Term t) => Group (VectorSpace t) where
     invert = fmap $ scale (-1)
 
--- | Vector space is a functor. The function @f@ must be non-decreasing, i.e. @grading (f t) >= grading t@.
--- TODO: 
--- 1. Current implementation assumes that @f@ preserves the grading. This is not necessary.
---
--- Examples:
---
--- >>> fmap (scale 3) $ vector [(1, 1), (1, 2)] :: VectorSpace (Int, Int)
--- ((3,1) + (3,2))
---
--- Properties:
---
--- prop> fmap id v == (v :: VectorSpace (Int, Int))
---
+{- | Vector space is a functor. The function @f@ must preserve the grading, i.e. @grading (f t) == grading t@.
+
+Examples:
+
+>>> fmap (scale 3) $ vector [(1, 1), (1, 2)] :: VectorSpace (Int, Int)
+((3,1) + (3,2))
+
+Properties:
+
+prop> fmap id v == (v :: VectorSpace (Int, Int))
+-}
 instance Functor VectorSpace where
     fmap :: (t -> t0) -> VectorSpace t -> VectorSpace t0
     fmap f = Vector . (map $ map f) . unVector
 
--- | Like @fmap@ but with a function that maps basis elements to basis elements.
---
--- Examples:
--- 
--- >>> linear (^ 2) $ vector [(1,1), (1,2), (1,3), (1,4), (1,5), (1,10) :: (Int, Int)] :: VectorSpace (Int, Int)
--- ((1,1) + (1,4) + (1,9) + (1,16) + (1,25) + (1,100))
---
+{- | Takes a function @f@ that maps basis elements to basis elements and applies it to all terms in the vector. The function @f@ must be monotonically increasing with respect to the grading, that is,
+
+@(grading $ basisTerm b1) <= (grading $ basisTerm b2)@ implies @(grading $ basisTerm $ f b1) <= (grading $ basisTerm $ f b2)@.
+
+Examples:
+
+>>> linear (*10) $ vector [(1,100), (1,2), (1,23), (1,4), (1,5), (1,10) :: (Int, Int)] :: VectorSpace (Int, Int)
+((1,20) + (1,40) + (1,50) + (1,230) + (1,100) + (1,1000))
+>>> takeV 10 $ linear (*10) $ (basisVectorG [1..] :: VectorSpace (Int, Int)) :: VectorSpace (Int, Int)
+((1,10) + (1,20) + (1,30) + (1,40) + (1,50) + (1,60) + (1,70) + (1,80) + (1,90) + (1,100))
+
+Properties:
+
+prop> linear id v == (v :: VectorSpace (Int, Int))
+
+as well as @(linear f (linear g v)) == (linear (f . g) v)@ and @(linear f (v1 <> v2)) == ((linear f v1) <> (linear f v2))@.
+
+/__TODO:__ add property-tests for the last two properties above. Difficulty: how to generate functions that are monotonically increasing with respect to the grading?/
+-}
 linear
     :: ( Term t
        , Term t0
@@ -324,7 +344,9 @@ linear
     => (Basis t -> Basis t0)
     -> VectorSpace t
     -> VectorSpace t0
-linear f = fmap (\t -> term (scalar t) $ f $ basisElement t)
+linear f = vectorG . (map term_f) . terms
+  where
+    term_f t = term (scalar t) $ f $ basisElement t
 
 distributeScalar
     :: ( Term t
@@ -349,16 +371,20 @@ flattenV = mconcat . (map distributeScalar) . terms
 lengthV :: VectorSpace t -> Int
 lengthV = sum . (map length) . unVector
 
-takeWhileV :: (Graded t) => (t -> Bool) -> VectorSpace t -> VectorSpace t
+takeWhileV :: (Graded t, Show t) => (t -> Bool) -> VectorSpace t -> VectorSpace t
 takeWhileV f = Vector . groupByGrading . (takeWhile f) . concat . unVector
 
 filterV :: (t -> Bool) -> VectorSpace t -> VectorSpace t
 filterV f = Vector . (map $ filter f) . unVector
 
-takeV :: (Graded t) => Int -> VectorSpace t -> VectorSpace t
+takeV :: (Graded t, Show t) => Int -> VectorSpace t -> VectorSpace t
 takeV n = Vector . groupByGrading . (take n) . concat . unVector
 
--- Graded tensor algebra
+-----------------------------------------------------------------------------
+
+-- * Graded tensor algebra
+
+-----------------------------------------------------------------------------
 
 -- product of terms
 data TensorProduct t = TensorProduct (Scalar t) [Basis t]
