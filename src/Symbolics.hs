@@ -42,6 +42,8 @@ module Symbolics (
 
     -- * Tensor algebra
     TensorProduct (TensorProduct),
+    tensorProduct,
+    basisTensorProduct,
     lengthTP,
     zipProductWith,
     productMorphism,
@@ -72,6 +74,11 @@ import GradedList (
 >>> :{
 instance Arbitrary (VectorSpace (Int, Int)) where
    arbitrary = vector <$> (arbitrary :: Gen [(Int, Int)])
+:}
+
+>>> :{
+instance Arbitrary (TensorProduct (Int, Int)) where
+   arbitrary = TensorProduct <$> (arbitrary :: Gen Int) <*> (arbitrary :: Gen [Int])
 :}
 -}
 
@@ -361,7 +368,6 @@ Properties:
 
 prop> distributeScalar (1, v) == (v :: VectorSpace (Int, Int))
 prop> distributeScalar (k1, distributeScalar (k2, v)) == distributeScalar (k1 * k2, v :: VectorSpace (Int, Int))
-
 -}
 distributeScalar
     :: ( Term t
@@ -401,7 +407,6 @@ Examples:
 Properties:
 
 prop> lengthV v == length (terms v :: [(Int, Int)])
-
 -}
 lengthV :: VectorSpace t -> Int
 lengthV = sum . (map length) . unVector
@@ -419,7 +424,6 @@ Properties:
 
 prop> takeWhileV (\_ -> True) v == (v :: VectorSpace (Int, Int))
 prop> takeWhileV (\_ -> False) v == (mempty :: VectorSpace (Int, Int))
-
 -}
 takeWhileV :: (Graded t, Show t) => (t -> Bool) -> VectorSpace t -> VectorSpace t
 takeWhileV f = Vector . groupByGrading . (takeWhile f) . concat . unVector
@@ -435,7 +439,6 @@ Properties:
 
 prop> filterV (\_ -> True) v == (v :: VectorSpace (Int, Int))
 prop> filterV (\_ -> False) v == (mempty :: VectorSpace (Int, Int))
-
 -}
 filterV :: (t -> Bool) -> VectorSpace t -> VectorSpace t
 filterV f = Vector . (map $ filter f) . unVector
@@ -451,7 +454,6 @@ Properties:
 
 prop> takeV (lengthV v) v == (v :: VectorSpace (Int, Int))
 prop> takeV 0 v == (mempty :: VectorSpace (Int, Int))
-
 -}
 takeV :: (Graded t, Show t) => Int -> VectorSpace t -> VectorSpace t
 takeV n = Vector . groupByGrading . (take n) . concat . unVector
@@ -467,6 +469,37 @@ data TensorProduct t = TensorProduct (Scalar t) [Basis t]
 instance (Eq t, Term t) => Eq (TensorProduct t) where
     (TensorProduct s1 ts1) == (TensorProduct s2 ts2) = (s1 == s2) && (ts1 == ts2)
 
+{- | Construct a tensor product from a list of terms by taking the product of their scalars and the concatenation of their basis elements.
+
+Examples:
+
+>>> tensorProduct [(1, 1), (1, 2), (1, 1), (1, 2)] :: TensorProduct (Int, Int)
+1 1 * 2 * 1 * 2
+-}
+tensorProduct :: (Term t) => [t] -> TensorProduct t
+tensorProduct ts = TensorProduct (product $ map scalar ts) $ map basisElement ts
+
+{- | Construct a tensor product from a list of basis elements.
+
+Examples:
+
+>>> basisTensorProduct [1, 2, 1, 2] :: TensorProduct (Int, Int)
+1 1 * 2 * 1 * 2
+-}
+basisTensorProduct :: (Term t) => [Basis t] -> TensorProduct t
+basisTensorProduct = tensorProduct . (map basisTerm)
+
+{- | The grading of a tensor product is the sum of the gradings of its terms. If the tensor product is empty, the grading is @0@.
+
+Examples:
+
+>>> grading $ (TensorProduct 1 [1, 2, 1, 2] :: TensorProduct (Int, Int))
+4
+
+Properties:
+
+prop> grading (t1 <> t2 :: TensorProduct (Int, Int)) == (grading t1) + (grading t2)
+-}
 instance forall t. (Term t) => Graded (TensorProduct t) where
     gradingFunction :: TensorProduct t -> Int
     gradingFunction (TensorProduct _ ts) = sum $ map (grading . t_term) ts
@@ -482,6 +515,13 @@ instance (Term t) => Monoid (TensorProduct t) where
 lengthTP :: TensorProduct t -> Int
 lengthTP (TensorProduct _ ts) = length ts
 
+{- | Zip two tensor products with a function that takes two basis elements and returns a basis element.
+
+Examples:
+
+>>> zipProductWith (\b1 b2 -> b1 + b2) (basisTensorProduct [1, 2, 3, 4] :: TensorProduct (Int, Int)) (basisTensorProduct [40, 30, 20, 10] :: TensorProduct (Int, Int)) :: TensorProduct (Int, Int)
+1 41 * 32 * 23 * 14
+-}
 zipProductWith
     :: ( Term t2
        , Scalar t0 ~ Scalar t1
@@ -494,6 +534,13 @@ zipProductWith
 zipProductWith f (TensorProduct s1 ts1) (TensorProduct s2 ts2) =
     TensorProduct (s1 * s2) $ zipWith f ts1 ts2
 
+{- | Extends a function @f@ that maps basis elements to basis elements to a morphism that respect the tensor product.
+
+Examples:
+
+>>> productMorphism (\b -> b + 1) (basisTensorProduct [1, 2, 3, 4] :: TensorProduct (Int, Int)) :: TensorProduct (Int, Int)
+1 2 * 3 * 4 * 5
+-}
 productMorphism
     :: ( Scalar t ~ Scalar t0
        )
@@ -514,23 +561,42 @@ instance (Term t) => Term (TensorProduct t) where
     scalar (TensorProduct s _) = s
     basisElement (TensorProduct _ v) = v
 
+-- | A graded tensor algebra is defined as a graded vector space with the tensor product as the term.
 type TensorAlgebra t = VectorSpace (TensorProduct t)
 
+{- | Tensor algebra is has an instance of the @Num@ class since both addition and multiplication are defined on it. To ensure that the product of two vectors in the tensor algebra is also in the tensor algebra, the product is distributed over the basis elements of the two vectors. 
+
+Examples:
+
+>>> (vector [basisTensorProduct [1, 2], basisTensorProduct [3, 4] :: TensorProduct (Int, Int)] :: TensorAlgebra (Int, Int)) * (vector [basisTensorProduct [11, 12], basisTensorProduct [13, 14] :: TensorProduct (Int, Int)] :: TensorAlgebra (Int, Int))
+(1 1 * 2 * 11 * 12 + 1 3 * 4 * 11 * 12 + 1 1 * 2 * 13 * 14 + 1 3 * 4 * 13 * 14)
+-}
 instance (Term t, Eq t) => Num (TensorAlgebra t) where
     (+) = (<>)
+
 
     (Vector ts1) * (Vector ts2) = Vector $ map (map mconcat) distributed
       where
         distributed = distributeGradedLists [ts1, ts2]
 
+    -- | Absolute value of a vector makes no sense.
     abs = id
 
+    -- | Signum of a vector makes no sense either.
     signum _ = 1
 
+    -- | Inject integers into the tensor algebra.
     fromInteger i = Vector [[TensorProduct (fromInteger i) []]]
 
     negate = invert
 
+{- | Take a function @f@ that maps basis elements to basis elements and extends it to a morphism of the tensor algebra.
+
+Examples:
+
+>>> algebraMorphism (\b -> b + 1) $ vector [basisTensorProduct [1, 2, 3, 4], basisTensorProduct [11, 12, 13, 14] :: TensorProduct (Int, Int)] :: TensorAlgebra (Int, Int)
+(1 2 * 3 * 4 * 5 + 1 12 * 13 * 14 * 15)
+-}
 algebraMorphism
     :: ( Term t
        , Term t0
