@@ -348,6 +348,21 @@ linear f = vectorG . (map term_f) . terms
   where
     term_f t = term (scalar t) $ f $ basisElement t
 
+{- | Distribute a scalar over a vector. The scalar is multiplied with each term in the vector.
+
+Examples:
+
+>>> distributeScalar (3, vector [(1,1), (1,2), (1,3), (1,10), (1,31)]) :: VectorSpace (Int, Int)
+((3,1) + (3,2) + (3,3) + (3,10) + (3,31))
+>>> takeV 10 $ distributeScalar (3, (basisVectorG [1..] :: VectorSpace (Int, Int))) :: VectorSpace (Int, Int)
+((3,1) + (3,2) + (3,3) + (3,4) + (3,5) + (3,6) + (3,7) + (3,8) + (3,9) + (3,10))
+
+Properties:
+
+prop> distributeScalar (1, v) == (v :: VectorSpace (Int, Int))
+prop> distributeScalar (k1, distributeScalar (k2, v)) == distributeScalar (k1 * k2, v :: VectorSpace (Int, Int))
+
+-}
 distributeScalar
     :: ( Term t
        , Term t0
@@ -358,6 +373,14 @@ distributeScalar
     -> VectorSpace t0
 distributeScalar t = fmap (scale $ scalar t) $ basisElement t
 
+{-- | Flatten a nested vector by one level.
+
+Examples:
+
+>>> flattenV $ vector [vector [(1,1), (1,2)], vector [(1,3), (1,4)]] :: VectorSpace (Int, Int)
+((1,1) + (1,2) + (1,3) + (1,4))
+
+-}
 flattenV
     :: ( Term t
        , Term t0
@@ -368,15 +391,68 @@ flattenV
     -> VectorSpace t0
 flattenV = mconcat . (map distributeScalar) . terms
 
+{- | The length of a vector is the number of terms in it.
+
+Examples:
+
+>>> lengthV $ vector [(1,1), (1,2), (1,3), (1,4) :: (Int, Int)]
+4
+
+Properties:
+
+prop> lengthV v == length (terms v :: [(Int, Int)])
+
+-}
 lengthV :: VectorSpace t -> Int
 lengthV = sum . (map length) . unVector
 
+{- | Take terms from a vector until the first term that does not satisfy the condition given by @f@.
+
+Examples:
+
+>>> takeWhileV (\(i, j) -> j < 3) $ vector [(1,1), (1,2), (1,3), (1,4) :: (Int, Int)]
+((1,1) + (1,2))
+>>> takeWhileV (\(i, j) -> j < 5) $ (basisVectorG [1..] :: VectorSpace (Int, Int))
+((1,1) + (1,2) + (1,3) + (1,4))
+
+Properties:
+
+prop> takeWhileV (\_ -> True) v == (v :: VectorSpace (Int, Int))
+prop> takeWhileV (\_ -> False) v == (mempty :: VectorSpace (Int, Int))
+
+-}
 takeWhileV :: (Graded t, Show t) => (t -> Bool) -> VectorSpace t -> VectorSpace t
 takeWhileV f = Vector . groupByGrading . (takeWhile f) . concat . unVector
 
+{- | Filter terms from a vector that satisfy the condition given by @f@.
+
+Examples:
+
+>>> takeV 10 $ filterV (\(_, j) -> j `mod` 3 == 0) $ basisVectorG [1..] :: VectorSpace (Int, Int)
+((1,3) + (1,6) + (1,9) + (1,12) + (1,15) + (1,18) + (1,21) + (1,24) + (1,27) + (1,30))
+
+Properties:
+
+prop> filterV (\_ -> True) v == (v :: VectorSpace (Int, Int))
+prop> filterV (\_ -> False) v == (mempty :: VectorSpace (Int, Int))
+
+-}
 filterV :: (t -> Bool) -> VectorSpace t -> VectorSpace t
 filterV f = Vector . (map $ filter f) . unVector
 
+{- | Take the first @n@ terms from a vector.
+
+Examples:
+
+>>> takeV 10 $ (basisVectorG [1..] :: VectorSpace (Int, Int))
+((1,1) + (1,2) + (1,3) + (1,4) + (1,5) + (1,6) + (1,7) + (1,8) + (1,9) + (1,10))
+
+Properties:
+
+prop> takeV (lengthV v) v == (v :: VectorSpace (Int, Int))
+prop> takeV 0 v == (mempty :: VectorSpace (Int, Int))
+
+-}
 takeV :: (Graded t, Show t) => Int -> VectorSpace t -> VectorSpace t
 takeV n = Vector . groupByGrading . (take n) . concat . unVector
 
@@ -386,7 +462,6 @@ takeV n = Vector . groupByGrading . (take n) . concat . unVector
 
 -----------------------------------------------------------------------------
 
--- product of terms
 data TensorProduct t = TensorProduct (Scalar t) [Basis t]
 
 instance (Eq t, Term t) => Eq (TensorProduct t) where
@@ -430,7 +505,6 @@ productMorphism f (TensorProduct s ts) = TensorProduct s $ map f ts
 instance (Term t) => Show (TensorProduct t) where
     show (TensorProduct s ts) = (show s) ++ " " ++ (L.intercalate " * " $ map show ts)
 
--- product of terms is a term
 instance (Term t) => Term (TensorProduct t) where
     type Scalar (TensorProduct t) = Scalar t
     type Basis (TensorProduct t) = [Basis t]
