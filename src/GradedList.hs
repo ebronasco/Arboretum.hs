@@ -29,6 +29,12 @@ class Graded t where
 
     gradingFunction :: t -> Int
 
+instance Graded Int where
+  gradingFunction 0 = 0
+  gradingFunction n = 1 + (grading $ abs_n `div` 10)
+    where
+      abs_n = abs n
+
 instance (Graded a) => Graded (k, a) where
     gradingFunction (_, x) = gradingFunction x
 
@@ -83,19 +89,19 @@ _flattenTree tree_ = concat $ takeWhile (/= []) $ map (\i -> getElementsFromLeve
 distributeLists :: (Eq a) => [[a]] -> [[a]]
 distributeLists = _flattenTree . (_buildTree 1)
 
-distributeGradedLists :: (Eq a, Graded a) => [[Grading a]] -> [[Grading a]]
+distributeGradedLists :: (Eq a, Graded a, Show a) => [[Grading a]] -> [[Grading a]]
 distributeGradedLists = (groupByGradingWith listGrading) . (concatMap distributeLists) . distributeLists
   where
     listGrading = sum . (map grading)
 
 -- break a graded list into the list of gradings
-groupByGrading :: (Graded a) => [a] -> [Grading a]
+groupByGrading :: (Graded a, Show a) => [a] -> [Grading a]
 groupByGrading = groupByGradingWith grading
 
-groupByGradingWith :: (a -> Int) -> [a] -> [Grading a]
+groupByGradingWith :: Show a => (a -> Int) -> [a] -> [Grading a]
 groupByGradingWith = groupByGradingWith' 0
 
-groupByGradingWith' :: Int -> (a -> Int) -> [a] -> [Grading a]
+groupByGradingWith' :: Show a => Int -> (a -> Int) -> [a] -> [Grading a]
 groupByGradingWith' _ _ [] = []
 groupByGradingWith' k f l@(h : _) =
     if (f h) == k
@@ -103,4 +109,7 @@ groupByGradingWith' k f l@(h : _) =
             ( (\(g, t) -> g : (groupByGradingWith' (k + 1) f t)) $
                 span (\x -> (f x) == k) l
             )
-        else [] : (groupByGradingWith' (k + 1) f l)
+        else if (f h) > k
+            then
+                [] : (groupByGradingWith' (k + 1) f l)
+            else error $ "The list given to @groupByGradingWith@ is not graded, therefore, the grading of the element " ++ (show h) ++ " is less than the expected grading " ++ (show k) ++ "."

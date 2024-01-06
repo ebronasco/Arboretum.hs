@@ -22,4 +22,4 @@ addChild :: RootedTree a -> RootedTree a -> RootedTree a
 addChild t (RootedTree x xs) = RootedTree x (t:xs)
 
 graft :: (Eq a, Show a) => RootedTree a -> RootedTree a -> RootedTreeSpace Integer a
-graft t1 t2 = vect $ (basisTerm $ addChild t1 t2) : (map (basisTerm . (addChild t1)) (children t2))
+graft t1 t2 = vector $ (basisTerm $ addChild t1 t2) : (map (basisTerm . (addChild t1)) (children t2))
