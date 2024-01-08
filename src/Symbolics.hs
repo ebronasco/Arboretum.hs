@@ -46,9 +46,20 @@ module Symbolics (
     basisTensorProduct,
     lengthTP,
     zipProductWith,
-    productMorphism,
+    morphismTP,
     TensorAlgebra,
-    algebraMorphism,
+    morphismTA,
+
+    -- * Symmetric algebra
+    SymmetricProduct (SymmetricProduct),
+    symmetricProduct,
+    basisSymmetricProduct,
+    lengthSP,
+    morphismSP,
+    SymmetricAlgebra,
+    morphismSA,
+
+    -- * Debug
     addTerm,
     unVector,
 ) where
@@ -538,16 +549,16 @@ zipProductWith f (TensorProduct s1 ts1) (TensorProduct s2 ts2) =
 
 Examples:
 
->>> productMorphism (\b -> b + 1) (basisTensorProduct [1, 2, 3, 4] :: TensorProduct (Int, Int)) :: TensorProduct (Int, Int)
+>>> morphismP (\b -> b + 1) (basisTensorProduct [1, 2, 3, 4] :: TensorProduct (Int, Int)) :: TensorProduct (Int, Int)
 1 2 * 3 * 4 * 5
 -}
-productMorphism
+morphismTP
     :: ( Scalar t ~ Scalar t0
        )
     => (Basis t -> Basis t0)
     -> TensorProduct t
     -> TensorProduct t0
-productMorphism f (TensorProduct s ts) = TensorProduct s $ map f ts
+morphismTP f (TensorProduct s ts) = TensorProduct s $ map f ts
 
 instance (Term t) => Show (TensorProduct t) where
     show (TensorProduct s ts) = (show s) ++ " " ++ (L.intercalate " * " $ map show ts)
@@ -564,7 +575,7 @@ instance (Term t) => Term (TensorProduct t) where
 -- | A graded tensor algebra is defined as a graded vector space with the tensor product as the term.
 type TensorAlgebra t = VectorSpace (TensorProduct t)
 
-{- | Tensor algebra is has an instance of the @Num@ class since both addition and multiplication are defined on it. To ensure that the product of two vectors in the tensor algebra is also in the tensor algebra, the product is distributed over the basis elements of the two vectors. 
+{- | Tensor algebra is has an instance of the @Num@ class since both addition and multiplication are defined on it. To ensure that the product of two vectors in the tensor algebra is also in the tensor algebra, the product is distributed over the basis elements of the two vectors.
 
 Examples:
 
@@ -574,18 +585,17 @@ Examples:
 instance (Term t, Eq t) => Num (TensorAlgebra t) where
     (+) = (<>)
 
-
     (Vector ts1) * (Vector ts2) = Vector $ map (map mconcat) distributed
       where
         distributed = distributeGradedLists [ts1, ts2]
 
-    -- | Absolute value of a vector makes no sense.
+    -- \| Absolute value of a vector makes no sense.
     abs = id
 
-    -- | Signum of a vector makes no sense either.
+    -- \| Signum of a vector makes no sense either.
     signum _ = 1
 
-    -- | Inject integers into the tensor algebra.
+    -- \| Inject integers into the tensor algebra.
     fromInteger i = Vector [[TensorProduct (fromInteger i) []]]
 
     negate = invert
@@ -594,10 +604,10 @@ instance (Term t, Eq t) => Num (TensorAlgebra t) where
 
 Examples:
 
->>> algebraMorphism (\b -> b + 1) $ vector [basisTensorProduct [1, 2, 3, 4], basisTensorProduct [11, 12, 13, 14] :: TensorProduct (Int, Int)] :: TensorAlgebra (Int, Int)
+>>> morphismTP (\b -> b + 1) $ vector [basisTensorProduct [1, 2, 3, 4], basisTensorProduct [11, 12, 13, 14] :: TensorProduct (Int, Int)] :: TensorAlgebra (Int, Int)
 (1 2 * 3 * 4 * 5 + 1 12 * 13 * 14 * 15)
 -}
-algebraMorphism
+morphismTA
     :: ( Term t
        , Term t0
        , Scalar t ~ Scalar t0
@@ -605,4 +615,71 @@ algebraMorphism
     => (Basis t -> Basis t0)
     -> TensorAlgebra t
     -> TensorAlgebra t0
-algebraMorphism f = linear $ map f
+morphismTA f = linear $ map f
+
+-----------------------------------------------------------------------------
+
+-- * Graded symmetric algebra
+
+-----------------------------------------------------------------------------
+
+-- | The @scalar t@ represents the multiplicity of the basis element @basisElement t@ in the symmetric product.
+data SymmetricProduct t = SymmetricProduct (Scalar t) [t]
+
+instance (Term t) => Eq (SymmetricProduct t) where
+    (SymmetricProduct s1 ts1) == (SymmetricProduct s2 ts2) =
+        (s1 == s2) && ((vector ts1) == (vector ts2))
+
+{- | Construct a symmetric product from a list of terms by taking the product of their scalars and the concatenation of their basis elements.
+
+Examples:
+
+>>> symmetricProduct [(1, 1), (1, 2), (1, 1), (1, 2)] :: SymmetricProduct (Int, Int)
+1 1^2 * 2^2
+-}
+symmetricProduct :: (Term t) => [t] -> SymmetricProduct t
+symmetricProduct ts =
+    SymmetricProduct
+        (product $ map scalar ts)
+        $ terms
+        $ vector ts
+
+{- | Construct a symmetric product from a list of basis elements.
+
+Examples:
+
+>>> basisSymmetricProduct [1, 2, 1, 2] :: SymmetricProduct (Int, Int)
+1 1^2 * 2^2
+-}
+basisSymmetricProduct :: (Term t) => [Basis t] -> SymmetricProduct t
+basisSymmetricProduct = symmetricProduct . (map basisTerm)
+
+{- | The grading of a symmetric product is the sum of the gradings of its terms. If the symmetric product is empty, the grading is @0@.
+
+Examples:
+
+>>> grading $ (basisSymmetricProduct [1, 2, 1, 2] :: SymmetricProduct (Int, Int))
+4
+
+Properties:
+
+prop> grading (t1 <> t2 :: SymmetricProduct (Int, Int)) == (grading t1) + (grading t2)
+
+TODO: rewrite as a morphism.
+-}
+instance forall t. (Term t) => Graded (SymmetricProduct t) where
+    gradingFunction :: SymmetricProduct t -> Int
+    gradingFunction (SymmetricProduct _ ts) = sum $ map (grading . t_term) ts
+      where
+        t_term b = (basisTerm b) :: t
+
+instance (Term t) => Semigroup (SymmetricProduct t) where
+    (SymmetricProduct s1 ts1) <> (SymmetricProduct s2 ts2) =
+        SymmetricProduct (s1 * s2) $ terms $ (vector ts1) <> (vector ts2)
+
+instance (Term t) => Monoid (SymmetricProduct t) where
+    mempty = SymmetricProduct 1 []
+
+-- DOTO: rewrite as morphism.
+lengthSP :: SymmetricProduct t -> Int
+lengthSP (SymmetricProduct _ ts) = length ts
