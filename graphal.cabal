@@ -39,6 +39,7 @@ library
   build-depends:
       base >=4.7 && <5
     , groups
+    , multiset
   default-language: Haskell2010
 
 executable graphal-exe
@@ -50,6 +51,7 @@ executable graphal-exe
       base >=4.7 && <5
     , graphal
     , groups
+    , multiset
   default-language: Haskell2010
 
 test-suite graphal-test
@@ -68,4 +70,5 @@ test-suite graphal-test
     , doctest
     , graphal
     , groups
+    , multiset
   default-language: Haskell2010
