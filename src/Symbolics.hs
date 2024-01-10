@@ -298,22 +298,52 @@ as well as @(linear f (linear g v)) == (linear (f . g) v)@ and @(linear f (v1 <>
 
 /__TODO:__ add property-tests for the last two properties above. Difficulty: how to generate functions that are monotonically increasing with respect to the grading?/
 -}
-instance (Scalar k, Basis a) => Functor (VectorSpace k) where
+instance (Scalar k) => Functor (VectorSpace k) where
     fmap f = vector . (map $ fmap f) . terms
 
-linear :: (Scalar k, Basis a, Basis b) => (a -> b) -> VectorSpace k a -> VectorSpace k b
-linear = fmap
+{- | The same as @fmap@, but the function @f@ must be monotonically increasing with respect to the grading, that is,
 
-{- | The same as @linear@, but the function @f@ must be monotonically increasing with respect to the grading, that is,
+@(grading b1) <= (grading b2)@ implies @(grading $ f b1) <= (grading $ f b2)@.
 
-@(grading b1) <= (grading b2)@ implies @(grading $ f b1) <= (grading $ f b2)@,
-
-and the resulting function accepts infinite vectors.
+The resulting function accepts infinite vectors.
 
 Examples:
 
->>> takeV 10 $ linearG (*10) $ (basisVectorG [1..] :: VectorSpace Int Int) 
+>>> takeV 10 $ fmapG (*10) $ (basisVectorG [1..] :: VectorSpace Int Int)
 ((1,10) + (1,20) + (1,30) + (1,40) + (1,50) + (1,60) + (1,70) + (1,80) + (1,90) + (1,100))
+-}
+fmapG :: (Scalar k, Basis a, Basis b) => (a -> b) -> VectorSpace k a -> VectorSpace k b
+fmapG f = vectorG . (map $ fmap f) . terms
+
+{- | Takes a function from the basis to a vector space and extends it to a linear map. The resulting function accepts only finite vectors.
+
+Examples:
+
+>>> linear (\b -> vector [(1, b), (1, b + 1)]) $ vector [(1, 1), (1, 2), (1, 3), (1, 4)]
+((1,1) + (2,2) + (2,3) + (2,4) + (1,5))
+-}
+linear
+    :: ( Scalar k
+       , Basis a
+       , Basis b
+       )
+    => (a -> VectorSpace k b)
+    -> VectorSpace k a
+    -> VectorSpace k b
+linear f = vector . (map distributeScalar) . (map $ fmap f) . terms
+  where
+    distributeScalar t = scale (scalar t) $ basisElement t
+
+{- | The same as @linear@, but the function @f@ must be monotonically increasing with respect to the grading, that is,
+
+@(grading b1) <= (grading b2)@ implies @(grading $ f b1) <= (grading $ f b2)@.
+
+The resulting function accepts infinite vectors.
+
+Examples:
+
+>>> takeV 10 $ linearG (\b -> basisVectorG [b..]) $ (basisVectorG [1..] :: VectorSpace Int Int)
+((1,1) + (2,2) + (3,3) + (4,4) + (5,5) + (6,6) + (7,7) + (8,8) + (9,9) + (10,10))
 -}
 linearG
     :: ( Scalar k
@@ -323,7 +353,9 @@ linearG
     => (a -> b)
     -> VectorSpace k a
     -> VectorSpace k b
-linearG f = vectorG . (map $ fmap f) . terms
+linearG f = vectorG . (map distributeScalar) . (map $ fmap f) . terms
+  where
+    distributeScalar t = scale (scalar t) $ basisElement t
 
 {- | Change the coefficients in a vector using a function @f@ that takes the scalar and the basis element of a term and returns a new scalar.
 
@@ -332,7 +364,15 @@ Examples:
 >>> renormalize (\s b -> s + 1) $ vector [(1, 1), (1, 2), (1, 3), (1, 4) :: (Int, Int)]
 ((2,1) + (2,2) + (2,3) + (2,4))
 -}
-renormalize :: (Scalar k1, Scalar k2, Basis a) => (k1 -> a -> k2) -> VectorSpace k1 a -> VectorSpace k2 a
+renormalize
+    :: ( Scalar k1
+       , Scalar k2
+       , Basis a
+       )
+    => (k1 -> a -> k2)
+    -> VectorSpace k1 a
+    -> VectorSpace k2 a
+
 renormilize f = vectorG . (map renormalizeTerm) . terms
   where
     renormalizeTerm t = term (f (scalar t) (basisElement t)) $ basisElement t
@@ -349,48 +389,6 @@ collapseV = sum . (map collapseTerm) . terms
   where
     collapseTerm t = (scalar t) * (basisElement t)
 
-{- | Distribute a scalar over a vector. The scalar is multiplied with each term in the vector.
-
-Examples:
-
->>> distributeScalar (3, vector [(1,1), (1,2), (1,3), (1,10), (1,31)]) :: VectorSpace (Int, Int)
-((3,1) + (3,2) + (3,3) + (3,10) + (3,31))
->>> takeV 10 $ distributeScalar (3, (basisVectorG [1..] :: VectorSpace (Int, Int))) :: VectorSpace (Int, Int)
-((3,1) + (3,2) + (3,3) + (3,4) + (3,5) + (3,6) + (3,7) + (3,8) + (3,9) + (3,10))
-
-Properties:
-
-prop> distributeScalar (1, v) == (v :: VectorSpace (Int, Int))
-prop> distributeScalar (k1, distributeScalar (k2, v)) == distributeScalar (k1 * k2, v :: VectorSpace (Int, Int))
--}
-distributeScalar
-    :: ( Term t
-       , Term t0
-       , Scalar t ~ Scalar t0
-       , Basis t ~ VectorSpace t0
-       )
-    => t
-    -> VectorSpace t0
-distributeScalar t = fmap (scale $ scalar t) $ basisElement t
-
-{-- | Flatten a nested vector by one level.
-
-Examples:
-
->>> flattenV $ vector [vector [(1,1), (1,2)], vector [(1,3), (1,4)]] :: VectorSpace (Int, Int)
-((1,1) + (1,2) + (1,3) + (1,4))
-
--}
-flattenV
-    :: ( Term t
-       , Term t0
-       , Scalar t ~ Scalar t0
-       , Basis t ~ VectorSpace t0
-       )
-    => VectorSpace t
-    -> VectorSpace t0
-flattenV = mconcat . (map distributeScalar) . terms
-
 {- | The length of a vector is the number of terms in it.
 
 Examples:
@@ -402,7 +400,7 @@ Properties:
 
 prop> lengthV v == length (terms v :: [(Int, Int)])
 -}
-lengthV :: VectorSpace t -> Int
+lengthV :: (Scalar k, Basis a) => VectorSpace k a -> Int
 lengthV = sum . (map length) . unVector
 
 {- | Take terms from a vector until the first term that does not satisfy the condition given by @f@.
@@ -419,7 +417,7 @@ Properties:
 prop> takeWhileV (\_ -> True) v == (v :: VectorSpace (Int, Int))
 prop> takeWhileV (\_ -> False) v == (mempty :: VectorSpace (Int, Int))
 -}
-takeWhileV :: (Graded t, Show t) => (t -> Bool) -> VectorSpace t -> VectorSpace t
+takeWhileV :: (Scalar k, Basis a) => (Term k a -> Bool) -> VectorSpace k a -> VectorSpace k a
 takeWhileV f = Vector . groupByGrading . (takeWhile f) . concat . unVector
 
 {- | Filter terms from a vector that satisfy the condition given by @f@.
@@ -434,7 +432,7 @@ Properties:
 prop> filterV (\_ -> True) v == (v :: VectorSpace (Int, Int))
 prop> filterV (\_ -> False) v == (mempty :: VectorSpace (Int, Int))
 -}
-filterV :: (t -> Bool) -> VectorSpace t -> VectorSpace t
+filterV :: (Scalar k, Basis a) => (Term k a -> Bool) -> VectorSpace t -> VectorSpace t
 filterV f = Vector . (map $ filter f) . unVector
 
 {- | Take the first @n@ terms from a vector.
@@ -449,7 +447,7 @@ Properties:
 prop> takeV (lengthV v) v == (v :: VectorSpace (Int, Int))
 prop> takeV 0 v == (mempty :: VectorSpace (Int, Int))
 -}
-takeV :: (Graded t, Show t) => Int -> VectorSpace t -> VectorSpace t
+takeV :: (Scalar k, Basis a) => Int -> VectorSpace k a -> VectorSpace k a
 takeV n = Vector . groupByGrading . (take n) . concat . unVector
 
 -----------------------------------------------------------------------------
@@ -458,7 +456,7 @@ takeV n = Vector . groupByGrading . (take n) . concat . unVector
 
 -----------------------------------------------------------------------------
 
-data TensorProduct t = TensorProduct (Scalar t) [Basis t]
+data TensorProduct k a = TensorProduct k [a]
 
 instance (Eq t, Term t) => Eq (TensorProduct t) where
     (TensorProduct s1 ts1) == (TensorProduct s2 ts2) = (s1 == s2) && (ts1 == ts2)

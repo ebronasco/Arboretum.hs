@@ -35,6 +35,10 @@ instance Graded Integer where
     where
       abs_n = abs n
 
+instance Graded a => Graded [a] where
+  grading [] = 0
+  grading (h : t) = (grading h) + (grading t)
+
 functionFromAssocList :: (Eq a) => [(a, b)] -> (a -> b)
 functionFromAssocList assocList x = snd $ head $ filter ((== x) . fst) assocList
 
@@ -87,9 +91,7 @@ distributeLists :: (Eq a) => [[a]] -> [[a]]
 distributeLists = _flattenTree . (_buildTree 1)
 
 distributeGradedLists :: (Eq a, Graded a, Show a) => [[Grading a]] -> [[Grading a]]
-distributeGradedLists = (groupByGradingWith listGrading) . (concatMap distributeLists) . distributeLists
-  where
-    listGrading = sum . (map (fromInteger . grading))
+distributeGradedLists = groupByGrading . (concatMap distributeLists) . distributeLists
 
 -- break a graded list into the list of gradings
 groupByGrading :: (Graded a, Show a) => [a] -> [Grading a]
