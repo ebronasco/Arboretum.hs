@@ -2,7 +2,6 @@ module GradedList (
     Grading,
     Graded,
     grading,
-    gradingFunction,
     functionFromAssocList,
     bijections,
     unorderedEqualityOfLists,

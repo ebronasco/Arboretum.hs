@@ -1,10 +1,4 @@
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE InstanceSigs #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 
 {- |
 Module      : Symbolics
@@ -33,6 +27,8 @@ module Symbolics (
     basisVectorG,
     terms,
     linear,
+    linearG,
+    renormalize,
     flattenV,
     lengthV,
     takeWhileV,
@@ -40,23 +36,8 @@ module Symbolics (
     takeV,
 
     -- * Tensor algebra
-    TensorProduct,
-    tensorProduct,
-    basisTensorProduct,
-    lengthTP,
-    zipProductWith,
-    morphismTP,
     TensorAlgebra,
-    morphismTA,
-
-    -- * Symmetric algebra
-    SymmetricProduct,
-    symmetricProduct,
-    basisSymmetricProduct,
-    lengthSP,
-    morphismSP,
-    SymmetricAlgebra,
-    morphismSA,
+    morphism,
 
     -- * Debug
     addTerm,
@@ -73,7 +54,6 @@ import GradedList (
     Grading,
     distributeGradedLists,
     grading,
-    gradingFunction,
     groupByGrading,
  )
 
@@ -103,6 +83,8 @@ type Term k a = (k, a)
 class (Num k, Eq k, Show k) => Scalar k
 
 class (Eq a, Show a, Graded a) => Basis a
+
+instance (Basis a) => Basis [a]
 
 term :: (Scalar k, Basis a) => k -> a -> Term k a
 term = (,)
@@ -281,25 +263,25 @@ prop> invert v <> v == (mempty :: VectorSpace (Int, Int))
 prop> invert (invert v) == (v :: VectorSpace (Int, Int))
 -}
 instance (Scalar k, Basis a) => Group (VectorSpace k a) where
-    invert = fmap $ scale (-1)
+    invert = renormalize (\s _ -> negate s)
 
 {- | Extends a function @f@ that maps basis elements to basis elements to a linear map. The resulting function accepts only finite vectors.
 
 Examples:
 
->>> linear (\b -> b + 1) $ vector [(1, 1), (1, 2), (1, 3), (1, 4)]
+>>> mapV (\b -> b + 1) $ vector [(1, 1), (1, 2), (1, 3), (1, 4)]
 ((1,2) + (1,3) + (1,4) + (1,5))
 
 Properties:
 
-prop> linear id v == (v :: VectorSpace (Int, Int))
+prop> mapV id v == (v :: VectorSpace (Int, Int))
 
-as well as @(linear f (linear g v)) == (linear (f . g) v)@ and @(linear f (v1 <> v2)) == ((linear f v1) <> (linear f v2))@.
+as well as @(mapV f (fmap g v)) == (map (f . g) v)@ and @(mapV f (v1 <> v2)) == ((mapV f v1) <> (mapV f v2))@.
 
-/__TODO:__ add property-tests for the last two properties above. Difficulty: how to generate functions that are monotonically increasing with respect to the grading?/
+/__TODO:__ add property-tests for the last two properties above. Difficulty: how to generate functions that are monotonically increasing with respect to the grading? Use suchThat function of QuickCheck./
 -}
-instance (Scalar k) => Functor (VectorSpace k) where
-    fmap f = vector . (map $ fmap f) . terms
+mapV :: (Scalar k, Basis a, Basis b) => (a -> b) -> VectorSpace k a -> VectorSpace k b
+mapV f = vector . (map $ fmap f) . terms
 
 {- | The same as @fmap@, but the function @f@ must be monotonically increasing with respect to the grading, that is,
 
@@ -309,11 +291,11 @@ The resulting function accepts infinite vectors.
 
 Examples:
 
->>> takeV 10 $ fmapG (*10) $ (basisVectorG [1..] :: VectorSpace Int Int)
+>>> takeV 10 $ mapVG (*10) $ (basisVectorG [1..] :: VectorSpace Int Int)
 ((1,10) + (1,20) + (1,30) + (1,40) + (1,50) + (1,60) + (1,70) + (1,80) + (1,90) + (1,100))
 -}
-fmapG :: (Scalar k, Basis a, Basis b) => (a -> b) -> VectorSpace k a -> VectorSpace k b
-fmapG f = vectorG . (map $ fmap f) . terms
+mapVG :: (Scalar k, Basis a, Basis b) => (a -> b) -> VectorSpace k a -> VectorSpace k b
+mapVG f = vectorG . (map $ fmap f) . terms
 
 {- | Takes a function from the basis to a vector space and extends it to a linear map. The resulting function accepts only finite vectors.
 
@@ -373,7 +355,7 @@ renormalize
     -> VectorSpace k1 a
     -> VectorSpace k2 a
 
-renormilize f = vectorG . (map renormalizeTerm) . terms
+renormalize f = vectorG . (map renormalizeTerm) . terms
   where
     renormalizeTerm t = term (f (scalar t) (basisElement t)) $ basisElement t
 
@@ -432,7 +414,7 @@ Properties:
 prop> filterV (\_ -> True) v == (v :: VectorSpace (Int, Int))
 prop> filterV (\_ -> False) v == (mempty :: VectorSpace (Int, Int))
 -}
-filterV :: (Scalar k, Basis a) => (Term k a -> Bool) -> VectorSpace t -> VectorSpace t
+filterV :: (Scalar k, Basis a) => (Term k a -> Bool) -> VectorSpace k a -> VectorSpace k a
 filterV f = Vector . (map $ filter f) . unVector
 
 {- | Take the first @n@ terms from a vector.
@@ -456,113 +438,17 @@ takeV n = Vector . groupByGrading . (take n) . concat . unVector
 
 -----------------------------------------------------------------------------
 
-data TensorProduct k a = TensorProduct k [a]
-
-instance (Eq t, Term t) => Eq (TensorProduct t) where
-    (TensorProduct s1 ts1) == (TensorProduct s2 ts2) = (s1 == s2) && (ts1 == ts2)
-
-{- | Construct a tensor product from a list of terms by taking the product of their scalars and the concatenation of their basis elements.
-
-Examples:
-
->>> tensorProduct [(1, 1), (1, 2), (1, 1), (1, 2)] :: TensorProduct (Int, Int)
-1 1 * 2 * 1 * 2
--}
-tensorProduct :: (Term t) => [t] -> TensorProduct t
-tensorProduct ts = TensorProduct (product $ map scalar ts) $ map basisElement ts
-
-{- | Construct a tensor product from a list of basis elements.
-
-Examples:
-
->>> basisTensorProduct [1, 2, 1, 2] :: TensorProduct (Int, Int)
-1 1 * 2 * 1 * 2
--}
-basisTensorProduct :: (Term t) => [Basis t] -> TensorProduct t
-basisTensorProduct = tensorProduct . (map basisTerm)
-
-{- | The grading of a tensor product is the sum of the gradings of its terms. If the tensor product is empty, the grading is @0@.
-
-Examples:
-
->>> grading $ (TensorProduct 1 [1, 2, 1, 2] :: TensorProduct (Int, Int))
-4
-
-Properties:
-
-prop> grading (t1 <> t2 :: TensorProduct (Int, Int)) == (grading t1) + (grading t2)
--}
-instance forall t. (Term t) => Graded (TensorProduct t) where
-    gradingFunction (TensorProduct _ ts) = sum $ map (grading . t_term) ts
-      where
-        t_term b = (basisTerm b) :: t
-
-instance (Term t) => Semigroup (TensorProduct t) where
-    (TensorProduct s1 ts1) <> (TensorProduct s2 ts2) = TensorProduct (s1 * s2) $ ts1 ++ ts2
-
-instance (Term t) => Monoid (TensorProduct t) where
-    mempty = TensorProduct 1 []
-
-lengthTP :: TensorProduct t -> Int
-lengthTP (TensorProduct _ ts) = length ts
-
-{- | Zip two tensor products with a function that takes two basis elements and returns a basis element.
-
-Examples:
-
->>> zipProductWith (\b1 b2 -> b1 + b2) (basisTensorProduct [1, 2, 3, 4] :: TensorProduct (Int, Int)) (basisTensorProduct [40, 30, 20, 10] :: TensorProduct (Int, Int)) :: TensorProduct (Int, Int)
-1 41 * 32 * 23 * 14
--}
-zipProductWith
-    :: ( Term t2
-       , Scalar t0 ~ Scalar t1
-       , Scalar t0 ~ Scalar t2
-       )
-    => (Basis t0 -> Basis t1 -> Basis t2)
-    -> TensorProduct t0
-    -> TensorProduct t1
-    -> TensorProduct t2
-zipProductWith f (TensorProduct s1 ts1) (TensorProduct s2 ts2) =
-    TensorProduct (s1 * s2) $ zipWith f ts1 ts2
-
-{- | Extends a function @f@ that maps basis elements to basis elements to a morphism that respect the tensor product.
-
-Examples:
-
->>> morphismP (\b -> b + 1) (basisTensorProduct [1, 2, 3, 4] :: TensorProduct (Int, Int)) :: TensorProduct (Int, Int)
-1 2 * 3 * 4 * 5
--}
-morphismTP
-    :: ( Scalar t ~ Scalar t0
-       )
-    => (Basis t -> Basis t0)
-    -> TensorProduct t
-    -> TensorProduct t0
-morphismTP f (TensorProduct s ts) = TensorProduct s $ map f ts
-
-instance (Term t) => Show (TensorProduct t) where
-    show (TensorProduct s ts) = (show s) ++ " " ++ (L.intercalate " * " $ map show ts)
-
-instance (Term t) => Term (TensorProduct t) where
-    type Scalar (TensorProduct t) = Scalar t
-    type Basis (TensorProduct t) = [Basis t]
-
-    term = TensorProduct
-
-    scalar (TensorProduct s _) = s
-    basisElement (TensorProduct _ v) = v
-
--- | A graded tensor algebra is defined as a graded vector space with the tensor product as the term.
-type TensorAlgebra t = VectorSpace (TensorProduct t)
+-- | A graded tensor algebra is defined as a graded vector space with the tensor product as the term. A tensor product is represented by a list of basis elements.
+type TensorAlgebra k a = VectorSpace k [a]
 
 {- | Tensor algebra is has an instance of the @Num@ class since both addition and multiplication are defined on it. To ensure that the product of two vectors in the tensor algebra is also in the tensor algebra, the product is distributed over the basis elements of the two vectors.
 
 Examples:
 
->>> (vector [basisTensorProduct [1, 2], basisTensorProduct [3, 4] :: TensorProduct (Int, Int)] :: TensorAlgebra (Int, Int)) * (vector [basisTensorProduct [11, 12], basisTensorProduct [13, 14] :: TensorProduct (Int, Int)] :: TensorAlgebra (Int, Int))
-(1 1 * 2 * 11 * 12 + 1 3 * 4 * 11 * 12 + 1 1 * 2 * 13 * 14 + 1 3 * 4 * 13 * 14)
+>>> (vector [term 1 [1, 2], term 1 [3, 4]]) * (vector [term 1 [11, 12], term 1 [13, 14]])
+(1 [1,2,11,12] + 1 [3,4,11,12] + 1 [1,2,13,14] + 1 [3,4,13,14])
 -}
-instance (Term t, Eq t) => Num (TensorAlgebra t) where
+instance (Scalar k, Basis a) => Num (TensorAlgebra k a) where
     (+) = (<>)
 
     (Vector ts1) * (Vector ts2) = Vector $ map (map mconcat) distributed
@@ -576,7 +462,7 @@ instance (Term t, Eq t) => Num (TensorAlgebra t) where
     signum _ = 1
 
     -- \| Inject integers into the tensor algebra.
-    fromInteger i = Vector [[TensorProduct (fromInteger i) []]]
+    fromInteger i = vector [term (fromInteger i) []]
 
     negate = invert
 
@@ -587,76 +473,14 @@ Examples:
 >>> morphismTP (\b -> b + 1) $ vector [basisTensorProduct [1, 2, 3, 4], basisTensorProduct [11, 12, 13, 14] :: TensorProduct (Int, Int)] :: TensorAlgebra (Int, Int)
 (1 2 * 3 * 4 * 5 + 1 12 * 13 * 14 * 15)
 -}
-morphismTA
-    :: ( Term t
-       , Term t0
-       , Scalar t ~ Scalar t0
+morphism
+    :: ( Scalar k
+       , Basis a
+       , Basis b
        )
-    => (Basis t -> Basis t0)
-    -> TensorAlgebra t
-    -> TensorAlgebra t0
-morphismTA f = linear $ map f
+    => (a -> VectorSpace k b)
+    -> TensorAlgebra k a
+    -> TensorAlgebra k b
+morphism f = linear $ product . (map $ (mapVG (: [])) . f)
 
------------------------------------------------------------------------------
-
--- * Graded symmetric algebra
-
------------------------------------------------------------------------------
-
-{- | The @scalar t@ is the multiplicity of the basis element @basisElement t@ in the symmetric product.
-                                                    |
--}
-data SymmetricProduct t = SymmetricProduct (Scalar t) [t]
-
-instance (Term t) => Eq (SymmetricProduct t) where
-    (SymmetricProduct s1 ts1) == (SymmetricProduct s2 ts2) =
-        (s1 == s2) && ((vector ts1) == (vector ts2))
-
-{- | Construct a symmetric product from a list of terms by taking the product of their scalars and the concatenation of their basis elements.
-
-Examples:
-
->>> symmetricProduct [(1, 1), (1, 2), (1, 1), (1, 2), (2, 3)] :: SymmetricProduct (Int, Int)
-2 1^2 * 2^2 * 3
--}
-symmetricProduct :: (Term t) => [t] -> SymmetricProduct t
-symmetricProduct ts =
-    scale (product $ map scalar ts) $ basisSymmetricProduct $ map basisElement ts
-
-{- | Construct a symmetric product from a list of basis elements.
-
-Examples:
-
->>> basisSymmetricProduct [1, 2, 1, 2] :: SymmetricProduct (Int, Int)
-1 1^2 * 2^2
--}
-basisSymmetricProduct :: (Term t) => [Basis t] -> SymmetricProduct t
-basisSymmetricProduct = SymmetricProduct 1 . groupTerms . (map basisTerm)
-
-{- | The grading of a symmetric product is the sum of the gradings of its terms. If the symmetric product is empty, the grading is @0@.
-
-Examples:
-
->>> grading $ (basisSymmetricProduct [1, 2, 1, 2] :: SymmetricProduct (Int, Int))
-4
-
-Properties:
-
-prop> grading (t1 <> t2 :: SymmetricProduct (Int, Int)) == (grading t1) + (grading t2)
--}
-instance forall t. (Term t) => Graded (SymmetricProduct t) where
-    gradingFunction (SymmetricProduct _ ts) =
-        foldr
-            (\t acc -> acc + ((scalar t) * (grading t)))
-            0
-            ts
-
-instance (Term t) => Semigroup (SymmetricProduct t) where
-    (SymmetricProduct s1 ts1) <> (SymmetricProduct s2 ts2) =
-        SymmetricProduct (s1 * s2) $ terms $ (vector ts1) <> (vector ts2)
-
-instance (Term t) => Monoid (SymmetricProduct t) where
-    mempty = SymmetricProduct 1 []
-
-lengthSP :: forall t. (Term t) => SymmetricProduct t -> Int
-lengthSP (SymmetricProduct _ ts) = foldr (\t acc -> acc + (scalar t)) 0 ts
+-- TODO: define a product class with projections from and injections to the tensor algebra? This way the num and morphisms can be defined through those.
