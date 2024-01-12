@@ -13,8 +13,8 @@ data RootedTree a = RootedTree {
 } deriving (Show, Eq)
 
 instance Graded (RootedTree a) where
-    gradingFunction (RootedTree _ []) = 0
-    gradingFunction (RootedTree _ xs) = 1 + sum (map grading xs)
+    grading (RootedTree _ []) = 0
+    grading (RootedTree _ xs) = 1 + sum (map grading xs)
 
 type RootedTreeSpace k a = VectorSpace (k, RootedTree a)
 

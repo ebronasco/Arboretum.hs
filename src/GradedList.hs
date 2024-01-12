@@ -2,7 +2,6 @@ module GradedList (
     Grading,
     Graded,
     grading,
-    gradingFunction,
     functionFromAssocList,
     bijections,
     unorderedEqualityOfLists,
@@ -18,25 +17,26 @@ import qualified Data.List as L (
 -- a list of elements with the same grading
 type Grading t = [t]
 
+-- | Use @Integer@ since it can be converted to any numeric type using @fromInteger@.
 class Graded t where
-    grading :: t -> Int
-    grading = checkNonnegative . gradingFunction
-      where
-        checkNonnegative i =
-            if i < 0
-                then (error $ "Grading cannot be negative: " ++ (show i))
-                else i
+    grading :: t -> Integer
 
-    gradingFunction :: t -> Int
-
+-- | Used for testing purposes.
 instance Graded Int where
-  gradingFunction 0 = 0
-  gradingFunction n = 1 + (grading $ abs_n `div` 10)
+  grading 0 = 0
+  grading n = 1 + (grading $ abs_n `div` 10)
     where
       abs_n = abs n
 
-instance (Graded a) => Graded (k, a) where
-    gradingFunction (_, x) = gradingFunction x
+instance Graded Integer where
+  grading 0 = 0
+  grading n = 1 + (grading $ abs_n `div` 10)
+    where
+      abs_n = abs n
+
+instance Graded a => Graded [a] where
+  grading [] = 0
+  grading (h : t) = (grading h) + (grading t)
 
 functionFromAssocList :: (Eq a) => [(a, b)] -> (a -> b)
 functionFromAssocList assocList x = snd $ head $ filter ((== x) . fst) assocList
@@ -90,13 +90,11 @@ distributeLists :: (Eq a) => [[a]] -> [[a]]
 distributeLists = _flattenTree . (_buildTree 1)
 
 distributeGradedLists :: (Eq a, Graded a, Show a) => [[Grading a]] -> [[Grading a]]
-distributeGradedLists = (groupByGradingWith listGrading) . (concatMap distributeLists) . distributeLists
-  where
-    listGrading = sum . (map grading)
+distributeGradedLists = groupByGrading . (concatMap distributeLists) . distributeLists
 
 -- break a graded list into the list of gradings
 groupByGrading :: (Graded a, Show a) => [a] -> [Grading a]
-groupByGrading = groupByGradingWith grading
+groupByGrading = groupByGradingWith (fromInteger . grading)
 
 groupByGradingWith :: Show a => (a -> Int) -> [a] -> [Grading a]
 groupByGradingWith = groupByGradingWith' 0
