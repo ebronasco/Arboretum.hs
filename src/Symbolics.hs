@@ -29,7 +29,8 @@ module Symbolics (
     linear,
     linearG,
     renormalize,
-    flattenV,
+    scaleV,
+    functional,
     lengthV,
     takeWhileV,
     filterV,
@@ -48,6 +49,9 @@ import Data.Group
 import qualified Data.List as L (
     intercalate,
     sortBy,
+ )
+import qualified Data.Monoid as M (
+    Product (..),
  )
 import GradedList (
     Graded,
@@ -312,9 +316,9 @@ linear
     => (a -> VectorSpace k b)
     -> VectorSpace k a
     -> VectorSpace k b
-linear f = vector . (map distributeScalar) . (map $ fmap f) . terms
+linear f = vector . (concatMap applyf) . terms
   where
-    distributeScalar t = scale (scalar t) $ basisElement t
+    applyf t = terms $ scaleV (scalar t) $ f $ basisElement t
 
 {- | The same as @linear@, but the function @f@ must be monotonically increasing with respect to the grading, that is,
 
@@ -332,12 +336,12 @@ linearG
        , Basis a
        , Basis b
        )
-    => (a -> b)
+    => (a -> VectorSpace k b)
     -> VectorSpace k a
     -> VectorSpace k b
-linearG f = vectorG . (map distributeScalar) . (map $ fmap f) . terms
+linearG f = vectorG . (concatMap applyf) . terms
   where
-    distributeScalar t = scale (scalar t) $ basisElement t
+    applyf t = terms $ scaleV (scalar t) $ f $ basisElement t
 
 {- | Change the coefficients in a vector using a function @f@ that takes the scalar and the basis element of a term and returns a new scalar.
 
@@ -354,22 +358,15 @@ renormalize
     => (k1 -> a -> k2)
     -> VectorSpace k1 a
     -> VectorSpace k2 a
-
 renormalize f = vectorG . (map renormalizeTerm) . terms
   where
     renormalizeTerm t = term (f (scalar t) (basisElement t)) $ basisElement t
 
-{- | Collapse a vector whose basis and scalars are of the same type to a scalar by summing all terms. The vector must be finite.
+scaleV :: (Scalar k, Basis a) => k -> VectorSpace k a -> VectorSpace k a
+scaleV s = renormalize (\s0 x -> s * s0)
 
-Examples:
-
->>> collapseV $ vector [(1,1), (3,2), (1,3), (5,4)]
-30
--}
-collapseV :: (Scalar k) => VectorSpace k k -> k
-collapseV = sum . (map collapseTerm) . terms
-  where
-    collapseTerm t = (scalar t) * (basisElement t)
+functional :: (Scalar k, Basis a) => (a -> k) -> VectorSpace k a -> k
+functional f = sum . (map $ \t -> (scalar t) * (f $ basisElement t)) . terms
 
 {- | The length of a vector is the number of terms in it.
 
@@ -451,9 +448,16 @@ Examples:
 instance (Scalar k, Basis a) => Num (TensorAlgebra k a) where
     (+) = (<>)
 
-    (Vector ts1) * (Vector ts2) = Vector $ map (map mconcat) distributed
+    v1 * v2 =
+        Vector $
+            map (map mconcatProductMonoid) $
+                distributeGradedLists $
+                    map unVector $
+                        [v1, v2]
       where
-        distributed = distributeGradedLists [ts1, ts2]
+        productMonoidScalars t = (M.Product $ scalar t, basisElement t)
+        unProductMonoidScalars t = term (M.getProduct $ fst t) (snd t)
+        mconcatProductMonoid = unProductMonoidScalars . mconcat . (map productMonoidScalars)
 
     -- \| Absolute value of a vector makes no sense.
     abs = id
@@ -482,5 +486,7 @@ morphism
     -> TensorAlgebra k a
     -> TensorAlgebra k b
 morphism f = linear $ product . (map $ (mapVG (: [])) . f)
+
+
 
 -- TODO: define a product class with projections from and injections to the tensor algebra? This way the num and morphisms can be defined through those.
