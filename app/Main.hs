@@ -4,6 +4,7 @@
 import GradedList
 import Graph
 import Symbolics
+import Output
 
 import qualified Data.MultiSet as MS
 import qualified Data.List as L

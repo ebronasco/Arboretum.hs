@@ -1,0 +1,24 @@
+%Last time of file creation:  1685024729.9396122
+
+\pytx@SVMCR{pytx@MCR@py@default@default@1}
+\tikz[planar forest] {
+
+\node [lc] at (0.0, 0.0) { 2 } 
+child {node [lc] at (-0.5, 1.0) { 1 }  
+}
+child {node [lc] at (0.5, 1.0) { 1 }  
+}
+;
+}\endpytx@SVMCR
+
+\pytx@SVMCR{pytx@MCR@py@default@default@2}
+\tikz[planar forest] {
+
+\node [lc] at (0.0, 0.0) { 2 } 
+child {node [lc] at (0.0, 1.0) { 1 }  
+child {node [lc] at (0.0, 1.0) { 1 }  
+}
+}
+;
+}\endpytx@SVMCR
+

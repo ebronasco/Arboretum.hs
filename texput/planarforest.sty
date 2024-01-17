@@ -1,0 +1,35 @@
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{planarforest}[2014/03/18 Draw planar forests using TikZ and PythonTeX]
+\RequirePackage{tikz}
+\RequirePackage{pythontex}
+
+% planarforest is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+% planarforest is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+% See the GNU General Public License for more details.
+
+% You should have received a copy of the GNU General Public License along with planarforest.
+% If not, see <http://www.gnu.org/licenses/>.
+
+\tikzstyle planar forest=[scale=0.28, baseline=0mm, sibling distance=0, level distance=0, semithick] %original scale=0.17
+\tikzstyle planar forest node=[scale=0.28, shape=circle, semithick, draw]
+\tikzstyle planar forest node big=[scale=0.6, inner sep=1, shape=circle, semithick, draw]
+\tikzstyle planar forest node square=[scale=0.35, shape=rectangle, semithick, draw]
+
+% Default colors
+\tikzstyle b=[style=planar forest node, fill=black]
+\tikzstyle w=[style=planar forest node, fill=white]
+\tikzstyle a=[style=planar forest node square, fill=white]
+
+\tikzstyle l=[scale=0.6,inner sep=1, fill=white]
+\tikzstyle lc=[style=planar forest node big, fill=white]
+
+\begin{pycode}
+import planarforest as pf
+\end{pycode}
+
+\newcommand{\forest}[1]{\py{pf.generate_forest("#1")}}
+
+\newcommand{\newnodecolor}[2]{\tikzstyle #1=[style=planar forest node, fill=#2]}
+
+\endinput
