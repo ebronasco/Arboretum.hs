@@ -26,6 +26,8 @@ module Symbolics (
     basisVector,
     basisVectorG,
     terms,
+    mapV,
+    mapVG,
     linear,
     linearG,
     renormalize,
@@ -367,9 +369,23 @@ renormalize f = vectorG . (map renormalizeTerm) . terms
   where
     renormalizeTerm t = term (f (scalar t) (basisElement t)) $ basisElement t
 
+{- | Scale a vector by a scalar.
+
+Examples:
+
+>>> scaleV 2 $ vector [(1, 1), (1, 2), (1, 3), (1, 4) :: (Int, Int)]
+((2,1) + (2,2) + (2,3) + (2,4))
+-}
 scaleV :: (Scalar k, Basis a) => k -> VectorSpace k a -> VectorSpace k a
 scaleV s = renormalize (\s0 x -> s * s0)
 
+{- | Extends a function @f@ that maps basis elements to scalars to a linear functional. The resulting function accepts only finite vectors.
+
+Examples:
+
+>>> functional (\b -> fromInteger $ grading b) $ vector [(1, 1), (1, 2), (1, 3), (1, 4) :: (Int, Int)]
+4
+-}
 functional :: (Scalar k, Basis a) => (a -> k) -> VectorSpace k a -> k
 functional f = sum . (map $ \t -> (scalar t) * (f $ basisElement t)) . terms
 
@@ -492,6 +508,13 @@ morphism
     -> TensorAlgebra k b
 morphism f = linear $ product . (map $ (mapVG (: [])) . f)
 
+{- | Takes a product of basis elements and returns a tensor product of the corresponding basis vectors.
+
+Examples:
+
+>>> tensorCoproduct [1,2,3] :: TensorAlgebra Int [Int]
+((1,[[1,2,3],[]]) + (1,[[1,2],[3]]) + (1,[[1,3],[2]]) + (1,[[1],[2,3]]) + (1,[[2,3],[1]]) + (1,[[2],[1,3]]) + (1,[[3],[1,2]]) + (1,[[],[1,2,3]]))
+-}
 tensorCoproduct :: (Scalar k, Basis a) => [a] -> TensorAlgebra k [a]
 --tensorCoproduct = product . (map (\b -> basisVector [([b],[]), ([],[b])]))
 tensorCoproduct = basisVector . listCoproduct
