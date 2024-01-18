@@ -1,11 +1,15 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module RootedTree (
     PRTree (..),
-    vertices,
-    graft,
-    graftTo,
+    graftFF,
+    graftFT,
+    gl,
 ) where
 
 import Data.List (intersperse)
+import Data.List.Split (splitOn)
+import Data.Char (digitToInt)
 import GradedList
 import Output
 import Symbolics
@@ -41,13 +45,19 @@ instance (Basis a) => Graded (PRTree a) where
 
 instance (Basis a) => Basis (PRTree a)
 
-vertices :: (Basis a) => PRTree a -> [a]
-vertices (PRTree x xs) = x : concatMap vertices xs
+graftFF :: forall a. (Basis a) => [PRTree a] -> [PRTree a] -> VectorSpace Integer [PRTree a]
+graftFF [] [] = basisVector [[]] :: VectorSpace Integer [PRTree a]
+graftFF f1 [] = mempty
+graftFF [] f2 = basisVector [f2]
+graftFF f1 (t:f2) = linear perCoproductTerm $ tensorCoproduct f1
+  where
+    perCoproductTerm [f11, f12] = (mapV (:[]) $ graftFT f11 t) * (graftFF f12 f2)
 
-graft :: (Basis a) => PRTree a -> PRTree a -> VectorSpace Integer (PRTree a)
-graft t1 t2 = basisVector $ map (graftTo t1 t2) $ vertices t2
+graftFT ::(Basis a) => [PRTree a] -> PRTree a -> VectorSpace Integer (PRTree a)
+graftFT f (PRTree r ts) = mapV (PRTree r) $ gl f ts
 
-graftTo :: (Basis a) => PRTree a -> PRTree a -> a -> PRTree a
-graftTo t1 (PRTree r xs) v
-    | v == r = PRTree v (t1 : xs)
-    | otherwise = PRTree r (map (\x -> graftTo t1 x v) xs)
+gl :: (Basis a) => [PRTree a] -> [PRTree a] -> VectorSpace Integer [PRTree a]
+gl f1 f2 = linear perCoproductTerm $ tensorCoproduct f1
+  where
+    perCoproductTerm [f11, f12] = (basisVector [f11]) * (graftFF f12 f2)
+

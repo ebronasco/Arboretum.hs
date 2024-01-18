@@ -25,6 +25,7 @@ dependencies:
 - multiset
 - directory
 - typed-process
+- split
 
 ghc-options:
 - -Wall
