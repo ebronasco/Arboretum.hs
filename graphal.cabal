@@ -30,6 +30,7 @@ library
       Output
       RootedTree
       Symbolics
+      VectorSpace
   other-modules:
       Paths_graphal
   autogen-modules:
