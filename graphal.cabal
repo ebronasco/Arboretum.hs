@@ -42,7 +42,6 @@ library
     , directory
     , groups
     , multiset
-    , split
     , typed-process
   default-language: Haskell2010
 
@@ -57,7 +56,6 @@ executable graphal-exe
     , graphal
     , groups
     , multiset
-    , split
     , typed-process
   default-language: Haskell2010
 
@@ -79,6 +77,5 @@ test-suite graphal-test
     , graphal
     , groups
     , multiset
-    , split
     , typed-process
   default-language: Haskell2010

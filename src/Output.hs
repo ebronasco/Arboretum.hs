@@ -7,7 +7,7 @@ module Output (
     displayDebug,
 ) where
 
-import Data.List
+import Data.List (intercalate)
 import System.Process.Typed
 import System.Directory(copyFile)
 import Text.Printf
@@ -18,13 +18,13 @@ class Texifiable a where
     texify :: a -> String          -- use texify or texifyP for recursion when defining this
     
     texifyParentheses :: a -> (String, String)
-    texifyParentheses x = ("", "")
+    texifyParentheses _ = ("", "")
 
     texifyID :: a -> String
     texifyID _ = ""
 
     texifyDebug :: Integer -> Integer -> a -> String -- use texifyD i j for recursion when defining this
-    texifyDebug i j = texifyP
+    texifyDebug _ _ = texifyP
 
     -- returns tex code with parentheses
     texifyP :: a -> String
@@ -34,6 +34,7 @@ class Texifiable a where
     texifyD :: Integer -> Integer -> a -> String
     texifyD i j x = underbrace i j (texifyID x) $ (fst $ texifyParentheses x) ++ (texifyDebug (i-1) (j-1) x) ++ (snd $ texifyParentheses x)
 
+underbrace :: Integer -> Integer -> String -> String -> String
 underbrace i j name str = if (i <= 0 && j > 0 && (length name > 0)) 
                           then ("\\underbracket[0.1ex]{" ++ str ++ "}_{\\text{" ++ name ++ "}}") 
                           else str

@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023) (preloaded format=pdflatex 2023.11.13)  18 JAN 2024 14:58
+This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023) (preloaded format=pdflatex 2023.11.13)  18 JAN 2024 15:37
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -662,16 +662,16 @@ L3 programming layer <2023-11-09>
  ***********
  ) 
 Here is how much of TeX's memory you used:
- 19912 strings out of 474267
- 397159 string characters out of 5722291
- 2126555 words of memory out of 5000000
- 41807 multiletter control sequences out of 15000+600000
+ 18349 strings out of 474267
+ 362612 string characters out of 5722291
+ 1983555 words of memory out of 5000000
+ 40244 multiletter control sequences out of 15000+600000
  564405 words of font info for 62 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 102i,17n,107p,2755b,1489s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 102i,15n,107p,1187b,1277s stack positions out of 10000i,1000n,20000p,200000b,200000s
 </opt/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmr17.pfb></opt/
 texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb>
-Output written on tmp.pdf (1 page, 30003 bytes).
+Output written on tmp.pdf (1 page, 22061 bytes).
 PDF statistics:
  21 PDF objects out of 1000 (max. 8388607)
  13 compressed objects within 1 object stream
