@@ -23,6 +23,8 @@ dependencies:
 - base >= 4.7 && < 5
 - groups
 - multiset
+- directory
+- typed-process
 
 ghc-options:
 - -Wall

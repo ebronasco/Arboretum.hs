@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -fno-warn-redundant-constraints #-}
+
 {-# LANGUAGE FlexibleInstances #-}
 
 {- |
@@ -51,7 +53,6 @@ module Symbolics (
 import Data.Group
 import qualified Data.List as L (
     intercalate,
-    singleton,
     sortBy,
  )
 import qualified Data.Monoid as M (
@@ -377,7 +378,7 @@ Examples:
 ((2,1) + (2,2) + (2,3) + (2,4))
 -}
 scaleV :: (Scalar k, Basis a) => k -> VectorSpace k a -> VectorSpace k a
-scaleV s = renormalize (\s0 x -> s * s0)
+scaleV s = renormalize (\s0 _ -> s * s0)
 
 {- | Extends a function @f@ that maps basis elements to scalars to a linear functional. The resulting function accepts only finite vectors.
 

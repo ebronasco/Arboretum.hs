@@ -27,6 +27,7 @@ library
   exposed-modules:
       GradedList
       Graph
+      Output
       RootedTree
       Symbolics
   other-modules:
@@ -38,8 +39,10 @@ library
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
       base >=4.7 && <5
+    , directory
     , groups
     , multiset
+    , typed-process
   default-language: Haskell2010
 
 executable graphal-exe
@@ -49,9 +52,11 @@ executable graphal-exe
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
+    , directory
     , graphal
     , groups
     , multiset
+    , typed-process
   default-language: Haskell2010
 
 test-suite graphal-test
@@ -67,8 +72,10 @@ test-suite graphal-test
   build-depends:
       QuickCheck
     , base >=4.7 && <5
+    , directory
     , doctest
     , graphal
     , groups
     , multiset
+    , typed-process
   default-language: Haskell2010
