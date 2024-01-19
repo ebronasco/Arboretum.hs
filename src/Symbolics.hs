@@ -13,14 +13,6 @@ Stability   : experimental
 An implementation of symbolic algebra using graded vector spaces with the aim of being able to represent and manipulate algebras over the vector spaces of graphs.
 -}
 module Symbolics (
-    Scalar,
-    Basis,
-    scalar,
-    basisElement,
-    basisTerm,
-    scale,
-    term,
-
     -- * Graded vector space
     VectorSpace,
     vector,
@@ -66,6 +58,17 @@ import GradedList (
     groupByGrading,
  )
 
+import VectorSpace (
+    Basis,
+    Scalar,
+    Term,
+    basisElement,
+    basisTerm,
+    scale,
+    scalar,
+    term,
+ )
+
 {- $setup
 >>> :set -XPatternSynonyms
 >>> import Test.QuickCheck (Arbitrary (arbitrary), Gen)
@@ -81,40 +84,6 @@ instance Arbitrary (VectorSpace Int Int) where
 -- * Graded vector space
 
 -----------------------------------------------------------------------------
-
-type Term k a = (k, a)
-
-class (Num k, Eq k, Show k) => Scalar k
-
-instance Scalar Int
-
-instance Scalar Integer
-
-class (Eq a, Show a, Graded a) => Basis a
-
-instance Basis Int
-
-instance Basis Integer
-
-instance (Basis a) => Basis [a]
-
-term :: (Scalar k, Basis a) => k -> a -> Term k a
-term = (,)
-
-scalar :: (Scalar k, Basis a) => Term k a -> k
-scalar = fst
-
-basisElement :: (Scalar k, Basis a) => Term k a -> a
-basisElement = snd
-
-scale :: (Scalar k, Basis a) => k -> Term k a -> Term k a
-scale c1 (c2, x) = (c1 * c2, x)
-
-basisTerm :: (Scalar k, Basis a) => a -> Term k a
-basisTerm x = (fromInteger 1, x)
-
-instance (Scalar k, Basis a) => Graded (Term k a) where
-    grading = grading . basisElement
 
 {- |
     Vectors are nested lists of terms. The outer list is @[l0, l1, l2, ..]@

@@ -21,6 +21,7 @@ import Data.List (intersperse)
 import GradedList
 import Output
 import Symbolics
+import VectorSpace
 
 -- | Planar rooted trees are represented as a tree with a root and a list of children which are planar rooted trees themselves.
 data PRTree a = PRTree
@@ -87,11 +88,11 @@ Example:
 -}
 graftFF :: forall a. (Basis a) => [PRTree a] -> [PRTree a] -> VectorSpace Integer [PRTree a]
 graftFF [] [] = basisVector [[]] :: VectorSpace Integer [PRTree a]
-graftFF _  [] = mempty
+graftFF _ [] = mempty
 graftFF [] f2 = basisVector [f2]
-graftFF f1 (t:f2) = linear perCoproductTerm $ tensorCoproduct f1
+graftFF f1 (t : f2) = linear perCoproductTerm $ tensorCoproduct f1
   where
-    perCoproductTerm [f11, f12] = (mapV (:[]) $ graftFT f11 t) * (graftFF f12 f2)
+    perCoproductTerm [f11, f12] = (mapV (: []) $ graftFT f11 t) * (graftFF f12 f2)
 
 {- | Graft a forest onto a tree using the Grossman-Larson product implemented by the @gl@ function.
 
@@ -100,7 +101,7 @@ Example:
 >>> graftFT [PRTree 1 [PRTree 2 []]] (PRTree 3 [PRTree 4 []])
 ((1,3[1[2],4]) + (1,3[4[1[2]]]))
 -}
-graftFT ::(Basis a) => [PRTree a] -> PRTree a -> VectorSpace Integer (PRTree a)
+graftFT :: (Basis a) => [PRTree a] -> PRTree a -> VectorSpace Integer (PRTree a)
 graftFT f (PRTree r ts) = mapV (PRTree r) $ gl f ts
 
 {- | Grossman-Larson product of two forests.

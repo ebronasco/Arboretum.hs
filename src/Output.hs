@@ -12,6 +12,7 @@ import System.Process.Typed
 import System.Directory(copyFile)
 import Text.Printf
 
+import VectorSpace
 import Symbolics
 
 class Texifiable a where

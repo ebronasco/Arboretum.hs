@@ -34,6 +34,9 @@ instance Graded Integer where
     where
       abs_n = abs n
 
+instance Graded Char where
+  grading _ = 1
+
 instance Graded a => Graded [a] where
   grading [] = 0
   grading (h : t) = (grading h) + (grading t)
