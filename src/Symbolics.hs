@@ -58,15 +58,14 @@ import GradedList (
     groupByGrading,
  )
 
-import VectorSpace (
+import SymLists (
     Basis,
     Scalar,
-    Term,
+    Term (..),
     basisElement,
     basisTerm,
     scale,
     scalar,
-    term,
  )
 
 {- $setup
@@ -136,7 +135,7 @@ addTerm t ts = case (span findTerm ts) of
     findTerm t0 = (basisElement t0) /= (basisElement t)
     addToTerm t0 =
         if scalarSum /= 0
-            then [term scalarSum $ basisElement t]
+            then [Term scalarSum $ basisElement t]
             else []
       where
         scalarSum = (scalar t) + (scalar t0)
@@ -337,7 +336,7 @@ renormalize
     -> VectorSpace k2 a
 renormalize f = vectorG . (map renormalizeTerm) . terms
   where
-    renormalizeTerm t = term (f (scalar t) (basisElement t)) $ basisElement t
+    renormalizeTerm t = Term (f (scalar t) (basisElement t)) $ basisElement t
 
 {- | Scale a vector by a scalar.
 
@@ -433,7 +432,7 @@ type TensorAlgebra k a = VectorSpace k [a]
 
 Examples:
 
->>> (vector [term 1 [1, 2], term 1 [3, 4]]) * (vector [term 1 [11, 12], term 1 [13, 14]])
+>>> (vector [Term 1 [1, 2], Term 1 [3, 4]]) * (vector [Term 1 [11, 12], Term 1 [13, 14]])
 ((1,[1,2,11,12]) + (1,[3,4,11,12]) + (1,[1,2,13,14]) + (1,[3,4,13,14]))
 -}
 instance (Scalar k, Basis a) => Num (TensorAlgebra k a) where
@@ -447,7 +446,7 @@ instance (Scalar k, Basis a) => Num (TensorAlgebra k a) where
                         [v1, v2]
       where
         productMonoidScalars t = (M.Product $ scalar t, basisElement t)
-        unProductMonoidScalars t = term (M.getProduct $ fst t) (snd t)
+        unProductMonoidScalars t = Term (M.getProduct $ fst t) (snd t)
         mconcatProductMonoid = unProductMonoidScalars . mconcat . (map productMonoidScalars)
 
     -- \| Absolute value of a vector makes no sense.
@@ -457,7 +456,7 @@ instance (Scalar k, Basis a) => Num (TensorAlgebra k a) where
     signum _ = 1
 
     -- \| Inject integers into the tensor algebra.
-    fromInteger i = vector [term (fromInteger i) []]
+    fromInteger i = vector [Term (fromInteger i) []]
 
     negate = invert
 
@@ -465,7 +464,7 @@ instance (Scalar k, Basis a) => Num (TensorAlgebra k a) where
 
 Examples:
 
->>> morphism (\b -> basisVector [b + 1]) $ vector [term 1 [1, 2, 3, 4], term 1 [11, 12, 13, 14]] :: TensorAlgebra Int Int
+>>> morphism (\b -> basisVector [b + 1]) $ vector [Term 1 [1, 2, 3, 4], Term 1 [11, 12, 13, 14]] :: TensorAlgebra Int Int
 ((1,[2,3,4,5]) + (1,[12,13,14,15]))
 -}
 morphism

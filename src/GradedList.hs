@@ -5,6 +5,7 @@ module GradedList (
     functionFromAssocList,
     bijections,
     unorderedEqualityOfLists,
+    distributeLists,
     distributeGradedLists,
     groupByGrading,
 ) where
