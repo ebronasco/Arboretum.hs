@@ -42,13 +42,8 @@ module Symbolics (
     unVector,
 ) where
 
-import Data.Group
 import qualified Data.List as L (
-    intercalate,
     sortBy,
- )
-import qualified Data.Monoid as M (
-    Product (..),
  )
 import GradedList (
     Graded,
@@ -64,6 +59,7 @@ import SymLists (
     basisTerm,
     scale,
     scalar,
+    GradedAlgebra,
  )
 
 {- $setup

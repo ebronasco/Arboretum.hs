@@ -15,9 +15,16 @@ module SymLists (
     Sum,
     (+:),
     pattern (:+),
+    fromListS,
+    toListS,
     Product (..),
+    fromListP,
+    toListP,
     Algebra,
     PowerSeries (..),
+    fromListPS,
+    toListPS,
+    GradedAlgebra,
 ) where
 
 
@@ -62,6 +69,7 @@ instance (Scalar k, Basis a) => Graded (Term k a) where
 instance (Scalar k, Eq a, Show a) => Show (Term k a) where
     show (Term k b) = show k ++ " *^ " ++ show b
 
+-- Choose the Product monoid of Num for the scalars.
 instance (Scalar k, Eq a, Semigroup a) => Semigroup (Term k a) where
     (Term k1 b1) <> (Term k2 b2) = term (k1 * k2) (b1 <> b2)
 
