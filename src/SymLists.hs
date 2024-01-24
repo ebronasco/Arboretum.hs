@@ -7,7 +7,6 @@
 module SymLists (
     Scalar,
     Basis,
-    Term,
     term,
     scalar,
     basisElement,
@@ -82,11 +81,11 @@ data Sum k a = Sum (Term k a) (Sum k a) | Zero
 
 fromListS :: (Scalar k, Eq a) => [Term k a] -> Sum k a
 fromListS [] = Zero
-fromListS (h : t) = h +: fromList t
+fromListS (h : t) = h +: fromListS t
 
 toListS :: (Scalar k, Eq a) => Sum k a -> [Term k a]
 toListS Zero = []
-toListS (h :+ t) = h : toList t
+toListS (h :+ t) = h : toListS t
 
 instance (Scalar k, Eq a, Show a) => Show (Sum k a) where
     show ((Term k a) :+ Zero) = show k ++ " *^ " ++ show a
@@ -110,17 +109,23 @@ Properties:
 prop> (length $ t +: l) - 1 <= length (l :: [(Int, Int)])
 -}
 (+:) :: (Scalar k, Eq a) => Term k a -> Sum k a -> Sum k a
-(+:) t ts = fromListS $ case (span findTerm $ toListS ts) of
-    (pre, []) -> t : pre
-    (pre, t0 : post) -> pre ++ (addToTerm t0) ++ post
+(+:) (Term 0 _) s = s
+(+:) t s = case maybeAddTerm t s of
+    Nothing -> Sum t s
+    Just s' -> s'
   where
-    findTerm t0 = (basisElement t0) /= (basisElement t)
-    addToTerm t0 =
-        if scalarSum /= 0
-            then [term scalarSum $ basisElement t]
-            else []
+    maybeAddTerm t1 Zero = Nothing
+    maybeAddTerm t1 (t2 :+ s2) =
+        if t1_basis == (basisElement t2)
+            then if scalar_sum /= 0 
+                then Just $ Sum (term scalar_sum t1_basis) s2
+                else Just s2
+            else case maybeAddTerm t1 s2 of
+                Nothing -> Nothing
+                Just s2' -> Just $ Sum t2 s2'
       where
-        scalarSum = (scalar t) + (scalar t0)
+        t1_basis = basisElement t1
+        scalar_sum = (scalar t1) + (scalar t2)
 
 instance (Scalar k, Eq a) => Semigroup (Sum k a) where
     Zero <> s2 = s2
@@ -173,6 +178,25 @@ instance Monoid (Product a) where
     mempty = One
 
 
+--------------- Algebra ----------------
+
+type Algebra k a = Sum k (Product a)
+
+instance (Scalar k, Eq a) => Num (Algebra k a) where
+    (+) = (<>)
+
+    negate = invert
+
+    a * b = fromListS $ map mconcat $ distributeLists ab_list
+      where
+        ab_list = [toListS a, toListS b]
+
+    fromInteger n = (term (fromInteger n) One) +: Zero
+
+    abs = error "abs not implemented for Algebra"
+
+    signum = error "signum not implemented for Algebra"
+
 --------------- PowerSeries ----------------
 
 infixr 6 :&
@@ -190,9 +214,9 @@ toListPS (h :& t) = h : toListPS t
 instance (Show a) => Show (PowerSeries a) where
     show ps = show_ 0 ps
       where
-        show_ n Empty = "h^" ++ show n
-        show_ n (a :& Empty) = "(" ++ show a ++ ") h^" ++ show n
-        show_ n (a :& b) = "(" ++ show a ++ ") h^" ++ show n ++ " + " ++ show_ (n + 1) b
+        show_ n Empty = "_" ++ show n
+        show_ n (a :& Empty) = "(" ++ show a ++ ")_" ++ show n
+        show_ n (a :& b) = "(" ++ show a ++ ")_" ++ show n ++ " + " ++ show_ (n + 1) b
 
 instance (Semigroup a) => Semigroup (PowerSeries a) where
     Empty <> a = a
@@ -205,3 +229,23 @@ instance (Monoid a) => Monoid (PowerSeries a) where
 instance (Group a) => Group (PowerSeries a) where
     invert Empty = Empty
     invert (a :& b) = (invert a) :& (invert b)
+
+
+--------------- GradedAlgebra ----------------
+
+type GradedAlgebra k a = PowerSeries (Algebra k a)
+
+instance (Scalar k, Eq a) => Num (GradedAlgebra k a) where
+    (+) = (<>)
+
+    negate = invert
+
+    a * b = fromListPS $ map sum $ map (map product) $ distributeGradedLists ab_list
+      where
+        ab_list = [toListPS a, toListPS b]
+
+    fromInteger n = (fromInteger n) :& Empty
+
+    abs = error "abs not implemented for GradedAlgebra"
+
+    signum = error "signum not implemented for GradedAlgebra"

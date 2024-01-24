@@ -53,9 +53,7 @@ import qualified Data.Monoid as M (
 import GradedList (
     Graded,
     Grading,
-    distributeGradedLists,
     grading,
-    groupByGrading,
  )
 
 import SymLists (
@@ -92,7 +90,7 @@ instance Arbitrary (VectorSpace Int Int) where
 
     /Note: list are used because graphs are not @Ord@ and lists can be infinite./
 -}
-data VectorSpace k a = Vector {unVector :: [Grading (Term k a)]}
+data VectorSpace k a = PowerSeries (Sum k (Product a))
 
 {- | A flat list of terms.
 Examples:
@@ -104,15 +102,15 @@ Properties:
 
 prop> terms (Vector ts) == concat ts
 -}
-terms :: (Scalar k, Basis a) => VectorSpace k a -> [Term k a]
-terms = concat . unVector
+--terms :: (Scalar k, Basis a) => VectorSpace k a -> [Term k a]
+--terms = concat . unVector
 
 -- | Only finite vectors can be compared.
-instance (Scalar k, Basis a) => Eq (VectorSpace k a) where
-    v1 == v2 = (== 0) $ lengthV $ (<> v2) $ invert v1
-
-instance (Scalar k, Basis a) => Show (VectorSpace k a) where
-    show v = "(" ++ (L.intercalate " + " $ map show $ terms v) ++ ")"
+--instance (Scalar k, Basis a) => Eq (VectorSpace k a) where
+--    v1 == v2 = (== 0) $ lengthV $ (<> v2) $ invert v1
+--
+--instance (Scalar k, Basis a) => Show (VectorSpace k a) where
+--    show v = "(" ++ (L.intercalate " + " $ map show $ terms v) ++ ")"
 
 {- | Internal function. Adds a term to a finite list. Grading ignorant.
 
@@ -127,18 +125,18 @@ Properties:
 
 prop> (length $ addTerm t l) - 1 <= length (l :: [(Int, Int)])
 -}
-addTerm :: (Scalar k, Basis a) => Term k a -> [Term k a] -> [Term k a]
-addTerm t ts = case (span findTerm ts) of
-    (pre, []) -> t : pre
-    (pre, t0 : post) -> pre ++ (addToTerm t0) ++ post
-  where
-    findTerm t0 = (basisElement t0) /= (basisElement t)
-    addToTerm t0 =
-        if scalarSum /= 0
-            then [Term scalarSum $ basisElement t]
-            else []
-      where
-        scalarSum = (scalar t) + (scalar t0)
+--addTerm :: (Scalar k, Basis a) => Term k a -> [Term k a] -> [Term k a]
+--addTerm t ts = case (span findTerm ts) of
+--    (pre, []) -> t : pre
+--    (pre, t0 : post) -> pre ++ (addToTerm t0) ++ post
+--  where
+--    findTerm t0 = (basisElement t0) /= (basisElement t)
+--    addToTerm t0 =
+--        if scalarSum /= 0
+--            then [Term scalarSum $ basisElement t]
+--            else []
+--      where
+--        scalarSum = (scalar t) + (scalar t0)
 
 {- | Group terms with the same basis element. Grading ignorant.
 
@@ -153,8 +151,8 @@ Properties:
 
 prop> (length $ groupTerms l) <= length (l :: [(Int, Int)])
 -}
-groupTerms :: (Scalar k, Basis a) => [Term k a] -> [Term k a]
-groupTerms = foldr addTerm mempty
+--groupTerms :: (Scalar k, Basis a) => [Term k a] -> [Term k a]
+--groupTerms = foldr addTerm mempty
 
 {- | Construct a vector from a list of terms. The list must be finite.
 
@@ -201,15 +199,15 @@ Properties:
 
 prop> v1 <> v2 == (v2 <> v1 :: VectorSpace Int Int)
 -}
-instance (Scalar k, Basis a) => Semigroup (VectorSpace k a) where
-    v1 <> v2 = Vector $ zipWithDefault addGradings (unVector v1) (unVector v2)
-      where
-        zipWithDefault _ [] [] = []
-        zipWithDefault f [] (e : t) = (f [] e) : zipWithDefault f [] t
-        zipWithDefault f (e : t) [] = (f e []) : zipWithDefault f t []
-        zipWithDefault f (e1 : t1) (e2 : t2) = (f e1 e2) : zipWithDefault f t1 t2
-
-        addGradings ts1 ts2 = foldr addTerm ts1 ts2
+--instance (Scalar k, Basis a) => Semigroup (VectorSpace k a) where
+--    v1 <> v2 = Vector $ zipWithDefault addGradings (unVector v1) (unVector v2)
+--      where
+--        zipWithDefault _ [] [] = []
+--        zipWithDefault f [] (e : t) = (f [] e) : zipWithDefault f [] t
+--        zipWithDefault f (e : t) [] = (f e []) : zipWithDefault f t []
+--        zipWithDefault f (e1 : t1) (e2 : t2) = (f e1 e2) : zipWithDefault f t1 t2
+--
+--        addGradings ts1 ts2 = foldr addTerm ts1 ts2
 
 {- | Vector space is a monoid with addition as the operation and the empty vector as the identity.
 
@@ -224,8 +222,8 @@ Properties:
 
 prop> v <> mempty == (v :: VectorSpace Int Int)
 -}
-instance (Scalar k, Basis a) => Monoid (VectorSpace k a) where
-    mempty = Vector []
+--instance (Scalar k, Basis a) => Monoid (VectorSpace k a) where
+--    mempty = Vector []
 
 {- | Vector space is a group with addition as the operation and negation as the inverse.
 
@@ -242,8 +240,8 @@ prop> v <> invert v == (mempty :: VectorSpace Int Int)
 prop> invert v <> v == (mempty :: VectorSpace Int Int)
 prop> invert (invert v) == (v :: VectorSpace Int Int)
 -}
-instance (Scalar k, Basis a) => Group (VectorSpace k a) where
-    invert = renormalize (\s _ -> negate s)
+--instance (Scalar k, Basis a) => Group (VectorSpace k a) where
+--    invert = renormalize (\s _ -> negate s)
 
 {- | Extends a function @f@ that maps basis elements to basis elements to a linear map. The resulting function accepts only finite vectors.
 
@@ -260,8 +258,8 @@ as well as @(mapV f (fmap g v)) == (map (f . g) v)@ and @(mapV f (v1 <> v2)) == 
 
 /__TODO:__ add property-tests for the last two properties above. Difficulty: how to generate functions that are monotonically increasing with respect to the grading? Use suchThat function of QuickCheck./
 -}
-mapV :: (Scalar k, Basis a, Basis b) => (a -> b) -> VectorSpace k a -> VectorSpace k b
-mapV f = vector . (map $ fmap f) . terms
+--mapV :: (Scalar k, Basis a, Basis b) => (a -> b) -> VectorSpace k a -> VectorSpace k b
+--mapV f = vector . (map $ fmap f) . terms
 
 {- | The same as @fmap@, but the function @f@ must be monotonically increasing with respect to the grading, that is,
 
@@ -274,8 +272,8 @@ Examples:
 >>> takeV 10 $ mapVG (*10) $ (basisVectorG [1..] :: VectorSpace Int Int)
 ((1,10) + (1,20) + (1,30) + (1,40) + (1,50) + (1,60) + (1,70) + (1,80) + (1,90) + (1,100))
 -}
-mapVG :: (Scalar k, Basis a, Basis b) => (a -> b) -> VectorSpace k a -> VectorSpace k b
-mapVG f = vectorG . (map $ fmap f) . terms
+--mapVG :: (Scalar k, Basis a, Basis b) => (a -> b) -> VectorSpace k a -> VectorSpace k b
+--mapVG f = vectorG . (map $ fmap f) . terms
 
 {- | Takes a function from the basis to a vector space and extends it to a linear map. The resulting function accepts only finite vectors.
 
@@ -369,8 +367,8 @@ Properties:
 
 prop> lengthV v == length (terms v :: [(Int, Int)])
 -}
-lengthV :: (Scalar k, Basis a) => VectorSpace k a -> Int
-lengthV = sum . (map length) . unVector
+--lengthV :: (Scalar k, Basis a) => VectorSpace k a -> Int
+--lengthV = sum . (map length) . unVector
 
 {- | Take terms from a vector until the first term that does not satisfy the condition given by @f@.
 
@@ -386,8 +384,8 @@ Properties:
 prop> takeWhileV (\_ -> True) v == (v :: VectorSpace Int Int)
 prop> takeWhileV (\_ -> False) v == (mempty :: VectorSpace Int Int)
 -}
-takeWhileV :: (Scalar k, Basis a) => (Term k a -> Bool) -> VectorSpace k a -> VectorSpace k a
-takeWhileV f = Vector . groupByGrading . (takeWhile f) . concat . unVector
+--takeWhileV :: (Scalar k, Basis a) => (Term k a -> Bool) -> VectorSpace k a -> VectorSpace k a
+--takeWhileV f = Vector . groupByGrading . (takeWhile f) . concat . unVector
 
 {- | Filter terms from a vector that satisfy the condition given by @f@.
 
@@ -401,8 +399,8 @@ Properties:
 prop> filterV (\_ -> True) v == (v :: VectorSpace Int Int)
 prop> filterV (\_ -> False) v == (mempty :: VectorSpace Int Int)
 -}
-filterV :: (Scalar k, Basis a) => (Term k a -> Bool) -> VectorSpace k a -> VectorSpace k a
-filterV f = Vector . (map $ filter f) . unVector
+--filterV :: (Scalar k, Basis a) => (Term k a -> Bool) -> VectorSpace k a -> VectorSpace k a
+--filterV f = Vector . (map $ filter f) . unVector
 
 {- | Take the first @n@ terms from a vector.
 
@@ -416,8 +414,8 @@ Properties:
 prop> takeV (lengthV v) v == (v :: VectorSpace Int Int)
 prop> takeV 0 v == (mempty :: VectorSpace Int Int)
 -}
-takeV :: (Scalar k, Basis a) => Int -> VectorSpace k a -> VectorSpace k a
-takeV n = Vector . groupByGrading . (take n) . concat . unVector
+--takeV :: (Scalar k, Basis a) => Int -> VectorSpace k a -> VectorSpace k a
+--takeV n = Vector . groupByGrading . (take n) . concat . unVector
 
 -----------------------------------------------------------------------------
 
@@ -426,7 +424,7 @@ takeV n = Vector . groupByGrading . (take n) . concat . unVector
 -----------------------------------------------------------------------------
 
 -- | A graded tensor algebra is defined as a graded vector space with the tensor product as the term. A tensor product is represented by a list of basis elements.
-type TensorAlgebra k a = VectorSpace k [a]
+--type TensorAlgebra k a = VectorSpace k [a]
 
 {- | Tensor algebra is has an instance of the @Num@ class since both addition and multiplication are defined on it. To ensure that the product of two vectors in the tensor algebra is also in the tensor algebra, the product is distributed over the basis elements of the two vectors.
 
@@ -435,30 +433,30 @@ Examples:
 >>> (vector [Term 1 [1, 2], Term 1 [3, 4]]) * (vector [Term 1 [11, 12], Term 1 [13, 14]])
 ((1,[1,2,11,12]) + (1,[3,4,11,12]) + (1,[1,2,13,14]) + (1,[3,4,13,14]))
 -}
-instance (Scalar k, Basis a) => Num (TensorAlgebra k a) where
-    (+) = (<>)
-
-    v1 * v2 =
-        Vector $
-            map (map mconcatProductMonoid) $
-                distributeGradedLists $
-                    map unVector $
-                        [v1, v2]
-      where
-        productMonoidScalars t = (M.Product $ scalar t, basisElement t)
-        unProductMonoidScalars t = Term (M.getProduct $ fst t) (snd t)
-        mconcatProductMonoid = unProductMonoidScalars . mconcat . (map productMonoidScalars)
-
-    -- \| Absolute value of a vector makes no sense.
-    abs = id
-
-    -- \| Signum of a vector makes no sense either.
-    signum _ = 1
-
-    -- \| Inject integers into the tensor algebra.
-    fromInteger i = vector [Term (fromInteger i) []]
-
-    negate = invert
+--instance (Scalar k, Basis a) => Num (TensorAlgebra k a) where
+--    (+) = (<>)
+--
+--    v1 * v2 =
+--        Vector $
+--            map (map mconcatProductMonoid) $
+--                distributeGradedLists $
+--                    map unVector $
+--                        [v1, v2]
+--      where
+--        productMonoidScalars t = (M.Product $ scalar t, basisElement t)
+--        unProductMonoidScalars t = Term (M.getProduct $ fst t) (snd t)
+--        mconcatProductMonoid = unProductMonoidScalars . mconcat . (map productMonoidScalars)
+--
+--    -- \| Absolute value of a vector makes no sense.
+--    abs = id
+--
+--    -- \| Signum of a vector makes no sense either.
+--    signum _ = 1
+--
+--    -- \| Inject integers into the tensor algebra.
+--    fromInteger i = vector [Term (fromInteger i) []]
+--
+--    negate = invert
 
 {- | Take a function @f@ that maps basis elements to basis elements and extends it to a morphism of the tensor algebra.
 
