@@ -72,7 +72,7 @@ Example:
 
 Note that the grading of an integer is the number of digits.
 -}
-instance (Basis a) => Graded (PRTree a) where
+instance (Graded a) => Graded (PRTree a) where
     grading (PRTree r xs) = (grading r) + sum (map grading xs)
 
 -- | Planar rooted trees can serve as a basis for a vector space.

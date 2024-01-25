@@ -3,22 +3,52 @@
 \pytx@SVMCR{pytx@MCR@py@default@default@1}
 \tikz[planar forest] {
 
-\node [lc] at (0.0, 0.0) { 1 } 
+\node [lc] at (0.0, 0.0) { 0 } 
+child {node [lc] at (-1.5, 1.0) { 1 }  
+child {node [lc] at (-0.5, 1.0) { 1 }  
+}
+child {node [lc] at (0.5, 1.0) { 1 }  
+}
+}
+child {node [lc] at (0.0, 1.0) { 1 }  
+child {node [lc] at (0.0, 1.0) { 1 }  
+child {node [lc] at (-0.5, 1.0) { 1 }  
+}
+child {node [lc] at (0.5, 1.0) { 1 }  
+}
+}
+}
+child {node [lc] at (1.0, 1.0) { 0 }  
+}
 ;
 }\endpytx@SVMCR
 
 \pytx@SVMCR{pytx@MCR@py@default@default@2}
 \tikz[planar forest] {
 
-\node [lc] at (0.0, 0.0) { 2 } 
+\node [lc] at (0.0, 0.0) { 0 } 
 ;
 }\endpytx@SVMCR
 
 \pytx@SVMCR{pytx@MCR@py@default@default@3}
 \tikz[planar forest] {
 
-\node [lc] at (0.0, 0.0) { 3 } 
-child {node [lc] at (0.0, 1.0) { 4 }  
+\node [lc] at (0.0, 0.0) { 0 } 
+child {node [lc] at (-0.75, 1.0) { 1 }  
+child {node [lc] at (-0.5, 1.0) { 1 }  
+}
+child {node [lc] at (0.5, 1.0) { 1 }  
+}
+}
+child {node [lc] at (0.75, 1.0) { 0 }  
+child {node [lc] at (0.0, 1.0) { 1 }  
+child {node [lc] at (0.0, 1.0) { 1 }  
+child {node [lc] at (-0.5, 1.0) { 1 }  
+}
+child {node [lc] at (0.5, 1.0) { 1 }  
+}
+}
+}
 }
 ;
 }\endpytx@SVMCR
@@ -26,49 +56,81 @@ child {node [lc] at (0.0, 1.0) { 4 }
 \pytx@SVMCR{pytx@MCR@py@default@default@4}
 \tikz[planar forest] {
 
-\node [lc] at (0.0, 0.0) { 5 } 
+\node [lc] at (0.0, 0.0) { 0 } 
 ;
 }\endpytx@SVMCR
 
 \pytx@SVMCR{pytx@MCR@py@default@default@5}
 \tikz[planar forest] {
 
-\node [lc] at (0.0, 0.0) { 1 } 
+\node [lc] at (0.0, 0.0) { 0 } 
+child {node [lc] at (-1.0, 1.0) { 1 }  
+child {node [lc] at (0.0, 1.0) { 1 }  
+child {node [lc] at (-0.5, 1.0) { 1 }  
+}
+child {node [lc] at (0.5, 1.0) { 1 }  
+}
+}
+}
+child {node [lc] at (1.0, 1.0) { 0 }  
+child {node [lc] at (0.0, 1.0) { 1 }  
+child {node [lc] at (-0.5, 1.0) { 1 }  
+}
+child {node [lc] at (0.5, 1.0) { 1 }  
+}
+}
+}
 ;
 }\endpytx@SVMCR
 
 \pytx@SVMCR{pytx@MCR@py@default@default@6}
 \tikz[planar forest] {
 
-\node [lc] at (0.0, 0.0) { 3 } 
-child {node [lc] at (-0.5, 1.0) { 2 }  
-}
-child {node [lc] at (0.5, 1.0) { 4 }  
-}
+\node [lc] at (0.0, 0.0) { 0 } 
 ;
 }\endpytx@SVMCR
 
 \pytx@SVMCR{pytx@MCR@py@default@default@7}
 \tikz[planar forest] {
 
-\node [lc] at (0.0, 0.0) { 5 } 
+\node [lc] at (0.0, 0.0) { 0 } 
+child {node [lc] at (0.0, 1.0) { 0 }  
+child {node [lc] at (-0.75, 1.0) { 1 }  
+child {node [lc] at (-0.5, 1.0) { 1 }  
+}
+child {node [lc] at (0.5, 1.0) { 1 }  
+}
+}
+child {node [lc] at (0.75, 1.0) { 1 }  
+child {node [lc] at (0.0, 1.0) { 1 }  
+child {node [lc] at (-0.5, 1.0) { 1 }  
+}
+child {node [lc] at (0.5, 1.0) { 1 }  
+}
+}
+}
+}
 ;
 }\endpytx@SVMCR
 
 \pytx@SVMCR{pytx@MCR@py@default@default@8}
 \tikz[planar forest] {
 
-\node [lc] at (0.0, 0.0) { 1 } 
+\node [lc] at (0.0, 0.0) { 0 } 
 ;
 }\endpytx@SVMCR
 
 \pytx@SVMCR{pytx@MCR@py@default@default@9}
 \tikz[planar forest] {
 
-\node [lc] at (0.0, 0.0) { 3 } 
-child {node [lc] at (0.0, 1.0) { 4 }  
-child {node [lc] at (0.0, 1.0) { 2 }  
+\node [lc] at (0.0, 0.0) { 0 } 
+child {node [lc] at (-0.5, 1.0) { 1 }  
+child {node [lc] at (-0.5, 1.0) { 1 }  
 }
+child {node [lc] at (0.5, 1.0) { 1 }  
+}
+}
+child {node [lc] at (0.5, 1.0) { 0 }  
 }
 ;
 }\endpytx@SVMCR
@@ -76,22 +138,44 @@ child {node [lc] at (0.0, 1.0) { 2 }
 \pytx@SVMCR{pytx@MCR@py@default@default@10}
 \tikz[planar forest] {
 
-\node [lc] at (0.0, 0.0) { 5 } 
+\node [lc] at (0.0, 0.0) { 0 } 
+child {node [lc] at (0.0, 1.0) { 1 }  
+child {node [lc] at (0.0, 1.0) { 1 }  
+child {node [lc] at (-0.5, 1.0) { 1 }  
+}
+child {node [lc] at (0.5, 1.0) { 1 }  
+}
+}
+}
 ;
 }\endpytx@SVMCR
 
 \pytx@SVMCR{pytx@MCR@py@default@default@11}
 \tikz[planar forest] {
 
-\node [lc] at (0.0, 0.0) { 1 } 
+\node [lc] at (0.0, 0.0) { 0 } 
+child {node [lc] at (0.0, 1.0) { 0 }  
+child {node [lc] at (0.0, 1.0) { 1 }  
+child {node [lc] at (-0.5, 1.0) { 1 }  
+}
+child {node [lc] at (0.5, 1.0) { 1 }  
+}
+}
+}
 ;
 }\endpytx@SVMCR
 
 \pytx@SVMCR{pytx@MCR@py@default@default@12}
 \tikz[planar forest] {
 
-\node [lc] at (0.0, 0.0) { 3 } 
-child {node [lc] at (0.0, 1.0) { 4 }  
+\node [lc] at (0.0, 0.0) { 0 } 
+child {node [lc] at (0.0, 1.0) { 1 }  
+child {node [lc] at (0.0, 1.0) { 1 }  
+child {node [lc] at (-0.5, 1.0) { 1 }  
+}
+child {node [lc] at (0.5, 1.0) { 1 }  
+}
+}
 }
 ;
 }\endpytx@SVMCR
@@ -99,8 +183,16 @@ child {node [lc] at (0.0, 1.0) { 4 }
 \pytx@SVMCR{pytx@MCR@py@default@default@13}
 \tikz[planar forest] {
 
-\node [lc] at (0.0, 0.0) { 5 } 
-child {node [lc] at (0.0, 1.0) { 2 }  
+\node [lc] at (0.0, 0.0) { 0 } 
+child {node [lc] at (-0.5, 1.0) { 1 }  
+child {node [lc] at (0.0, 1.0) { 1 }  
+child {node [lc] at (-0.5, 1.0) { 1 }  
+}
+child {node [lc] at (0.5, 1.0) { 1 }  
+}
+}
+}
+child {node [lc] at (0.5, 1.0) { 0 }  
 }
 ;
 }\endpytx@SVMCR
@@ -108,17 +200,29 @@ child {node [lc] at (0.0, 1.0) { 2 }
 \pytx@SVMCR{pytx@MCR@py@default@default@14}
 \tikz[planar forest] {
 
-\node [lc] at (0.0, 0.0) { 2 } 
+\node [lc] at (0.0, 0.0) { 0 } 
+child {node [lc] at (0.0, 1.0) { 1 }  
+child {node [lc] at (-0.5, 1.0) { 1 }  
+}
+child {node [lc] at (0.5, 1.0) { 1 }  
+}
+}
 ;
 }\endpytx@SVMCR
 
 \pytx@SVMCR{pytx@MCR@py@default@default@15}
 \tikz[planar forest] {
 
-\node [lc] at (0.0, 0.0) { 3 } 
+\node [lc] at (0.0, 0.0) { 0 } 
+child {node [lc] at (0.0, 1.0) { 0 }  
+child {node [lc] at (0.0, 1.0) { 1 }  
+child {node [lc] at (0.0, 1.0) { 1 }  
 child {node [lc] at (-0.5, 1.0) { 1 }  
 }
-child {node [lc] at (0.5, 1.0) { 4 }  
+child {node [lc] at (0.5, 1.0) { 1 }  
+}
+}
+}
 }
 ;
 }\endpytx@SVMCR
@@ -126,236 +230,42 @@ child {node [lc] at (0.5, 1.0) { 4 }
 \pytx@SVMCR{pytx@MCR@py@default@default@16}
 \tikz[planar forest] {
 
-\node [lc] at (0.0, 0.0) { 5 } 
+\node [lc] at (0.0, 0.0) { 0 } 
+child {node [lc] at (0.0, 1.0) { 1 }  
+child {node [lc] at (-0.5, 1.0) { 1 }  
+}
+child {node [lc] at (0.5, 1.0) { 1 }  
+}
+}
 ;
 }\endpytx@SVMCR
 
 \pytx@SVMCR{pytx@MCR@py@default@default@17}
 \tikz[planar forest] {
 
-\node [lc] at (0.0, 0.0) { 2 } 
+\node [lc] at (0.0, 0.0) { 0 } 
+child {node [lc] at (0.0, 1.0) { 0 }  
+}
 ;
 }\endpytx@SVMCR
 
 \pytx@SVMCR{pytx@MCR@py@default@default@18}
 \tikz[planar forest] {
 
-\node [lc] at (0.0, 0.0) { 3 } 
-child {node [lc] at (0.0, 1.0) { 4 }  
-child {node [lc] at (0.0, 1.0) { 1 }  
-}
-}
-;
-}\endpytx@SVMCR
-
-\pytx@SVMCR{pytx@MCR@py@default@default@19}
-\tikz[planar forest] {
-
-\node [lc] at (0.0, 0.0) { 5 } 
-;
-}\endpytx@SVMCR
-
-\pytx@SVMCR{pytx@MCR@py@default@default@20}
-\tikz[planar forest] {
-
-\node [lc] at (0.0, 0.0) { 2 } 
-;
-}\endpytx@SVMCR
-
-\pytx@SVMCR{pytx@MCR@py@default@default@21}
-\tikz[planar forest] {
-
-\node [lc] at (0.0, 0.0) { 3 } 
-child {node [lc] at (0.0, 1.0) { 4 }  
-}
-;
-}\endpytx@SVMCR
-
-\pytx@SVMCR{pytx@MCR@py@default@default@22}
-\tikz[planar forest] {
-
-\node [lc] at (0.0, 0.0) { 5 } 
-child {node [lc] at (0.0, 1.0) { 1 }  
-}
-;
-}\endpytx@SVMCR
-
-\pytx@SVMCR{pytx@MCR@py@default@default@23}
-\tikz[planar forest] {
-
-\node [lc] at (0.0, 0.0) { 3 } 
-child {node [lc] at (-1.0, 1.0) { 1 }  
-}
-child {node [lc] at (0.0, 1.0) { 2 }  
-}
-child {node [lc] at (1.0, 1.0) { 4 }  
-}
-;
-}\endpytx@SVMCR
-
-\pytx@SVMCR{pytx@MCR@py@default@default@24}
-\tikz[planar forest] {
-
-\node [lc] at (0.0, 0.0) { 5 } 
-;
-}\endpytx@SVMCR
-
-\pytx@SVMCR{pytx@MCR@py@default@default@25}
-\tikz[planar forest] {
-
-\node [lc] at (0.0, 0.0) { 3 } 
+\node [lc] at (0.0, 0.0) { 0 } 
+child {node [lc] at (-0.75, 1.0) { 1 }  
 child {node [lc] at (-0.5, 1.0) { 1 }  
 }
-child {node [lc] at (0.5, 1.0) { 4 }  
-child {node [lc] at (0.0, 1.0) { 2 }  
+child {node [lc] at (0.5, 1.0) { 1 }  
 }
 }
-;
-}\endpytx@SVMCR
-
-\pytx@SVMCR{pytx@MCR@py@default@default@26}
-\tikz[planar forest] {
-
-\node [lc] at (0.0, 0.0) { 5 } 
-;
-}\endpytx@SVMCR
-
-\pytx@SVMCR{pytx@MCR@py@default@default@27}
-\tikz[planar forest] {
-
-\node [lc] at (0.0, 0.0) { 3 } 
-child {node [lc] at (-0.5, 1.0) { 2 }  
-}
-child {node [lc] at (0.5, 1.0) { 4 }  
+child {node [lc] at (0.75, 1.0) { 1 }  
 child {node [lc] at (0.0, 1.0) { 1 }  
-}
-}
-;
-}\endpytx@SVMCR
-
-\pytx@SVMCR{pytx@MCR@py@default@default@28}
-\tikz[planar forest] {
-
-\node [lc] at (0.0, 0.0) { 5 } 
-;
-}\endpytx@SVMCR
-
-\pytx@SVMCR{pytx@MCR@py@default@default@29}
-\tikz[planar forest] {
-
-\node [lc] at (0.0, 0.0) { 3 } 
-child {node [lc] at (0.0, 1.0) { 4 }  
 child {node [lc] at (-0.5, 1.0) { 1 }  
 }
-child {node [lc] at (0.5, 1.0) { 2 }  
+child {node [lc] at (0.5, 1.0) { 1 }  
 }
 }
-;
-}\endpytx@SVMCR
-
-\pytx@SVMCR{pytx@MCR@py@default@default@30}
-\tikz[planar forest] {
-
-\node [lc] at (0.0, 0.0) { 5 } 
-;
-}\endpytx@SVMCR
-
-\pytx@SVMCR{pytx@MCR@py@default@default@31}
-\tikz[planar forest] {
-
-\node [lc] at (0.0, 0.0) { 3 } 
-child {node [lc] at (-0.5, 1.0) { 1 }  
-}
-child {node [lc] at (0.5, 1.0) { 4 }  
-}
-;
-}\endpytx@SVMCR
-
-\pytx@SVMCR{pytx@MCR@py@default@default@32}
-\tikz[planar forest] {
-
-\node [lc] at (0.0, 0.0) { 5 } 
-child {node [lc] at (0.0, 1.0) { 2 }  
-}
-;
-}\endpytx@SVMCR
-
-\pytx@SVMCR{pytx@MCR@py@default@default@33}
-\tikz[planar forest] {
-
-\node [lc] at (0.0, 0.0) { 3 } 
-child {node [lc] at (0.0, 1.0) { 4 }  
-child {node [lc] at (0.0, 1.0) { 1 }  
-}
-}
-;
-}\endpytx@SVMCR
-
-\pytx@SVMCR{pytx@MCR@py@default@default@34}
-\tikz[planar forest] {
-
-\node [lc] at (0.0, 0.0) { 5 } 
-child {node [lc] at (0.0, 1.0) { 2 }  
-}
-;
-}\endpytx@SVMCR
-
-\pytx@SVMCR{pytx@MCR@py@default@default@35}
-\tikz[planar forest] {
-
-\node [lc] at (0.0, 0.0) { 3 } 
-child {node [lc] at (-0.5, 1.0) { 2 }  
-}
-child {node [lc] at (0.5, 1.0) { 4 }  
-}
-;
-}\endpytx@SVMCR
-
-\pytx@SVMCR{pytx@MCR@py@default@default@36}
-\tikz[planar forest] {
-
-\node [lc] at (0.0, 0.0) { 5 } 
-child {node [lc] at (0.0, 1.0) { 1 }  
-}
-;
-}\endpytx@SVMCR
-
-\pytx@SVMCR{pytx@MCR@py@default@default@37}
-\tikz[planar forest] {
-
-\node [lc] at (0.0, 0.0) { 3 } 
-child {node [lc] at (0.0, 1.0) { 4 }  
-child {node [lc] at (0.0, 1.0) { 2 }  
-}
-}
-;
-}\endpytx@SVMCR
-
-\pytx@SVMCR{pytx@MCR@py@default@default@38}
-\tikz[planar forest] {
-
-\node [lc] at (0.0, 0.0) { 5 } 
-child {node [lc] at (0.0, 1.0) { 1 }  
-}
-;
-}\endpytx@SVMCR
-
-\pytx@SVMCR{pytx@MCR@py@default@default@39}
-\tikz[planar forest] {
-
-\node [lc] at (0.0, 0.0) { 3 } 
-child {node [lc] at (0.0, 1.0) { 4 }  
-}
-;
-}\endpytx@SVMCR
-
-\pytx@SVMCR{pytx@MCR@py@default@default@40}
-\tikz[planar forest] {
-
-\node [lc] at (0.0, 0.0) { 5 } 
-child {node [lc] at (-0.5, 1.0) { 1 }  
-}
-child {node [lc] at (0.5, 1.0) { 2 }  
 }
 ;
 }\endpytx@SVMCR
