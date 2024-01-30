@@ -94,6 +94,15 @@ graftFF f1 (t : f2) = linear perCoproductTerm $ tensorCoproduct f1
   where
     perCoproductTerm [f11, f12] = (mapV (: []) $ graftFT f11 t) * (graftFF f12 f2)
 
+-- I want it to be:
+graftFF :: PRForest a -> PRForest a -> VectorSpace Integer (PRForest a)
+graftFF One One = vector One
+graftFF One f2 = vector f2
+graftFF f1 One = vector Zero
+graftFF f1 (t :* f2) = linear perCoproductTerm $ coproduct f1
+  where
+    perCoproductTerm (f11, f12) = (graftFT f11 t) _* (graftFF f12 f2)
+
 {- | Graft a forest onto a tree using the Grossman-Larson product implemented by the @gl@ function.
 
 Example:
@@ -103,6 +112,10 @@ Example:
 -}
 graftFT :: (Basis a) => [PRTree a] -> PRTree a -> VectorSpace Integer (PRTree a)
 graftFT f (PRTree r ts) = mapV (PRTree r) $ gl f ts
+
+-- I want it to be:
+graftFT :: PRForest a -> PRTree a -> VectorSpace Integer (PRTree a)
+graftFT f (PRTree r ts) = linear (PRTree r) $ gl f ts
 
 {- | Grossman-Larson product of two forests.
 
@@ -115,3 +128,9 @@ gl :: (Basis a) => [PRTree a] -> [PRTree a] -> VectorSpace Integer [PRTree a]
 gl f1 f2 = linear perCoproductTerm $ tensorCoproduct f1
   where
     perCoproductTerm [f11, f12] = (basisVector [f11]) * (graftFF f12 f2)
+
+-- I want it to be:
+gl :: PRForest a -> PRForest a -> VectorSpace Integer (PRForest a)
+gl f1 f2 = linear perCoproductTerm $ coproduct f1
+  where
+    perCoproductTerm (f11, f12) = (vector f11) * (graftFF f12 f2)
