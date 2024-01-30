@@ -1,49 +1,36 @@
-{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 module SymLists (
     Scalar,
     Basis,
-    term,
-    scalar,
-    basisElement,
-    basisTerm,
-    scale,
-    Sum,
-    (+:),
-    pattern (:+),
-    fromListS,
-    toListS,
-    Product (..),
-    fromListP,
-    toListP,
-    Algebra,
+    Product,
+    pattern (:*),
+    Sum (Zero),
+    leadingCoeff,
+    leadingElement,
     PowerSeries (..),
-    fromListPS,
-    toListPS,
+    Algebra,
+    Algebra2,
     GradedAlgebra,
+    GradedAlgebra2,
 ) where
 
-
 import Data.Group
-
 import GradedList
 
-data Term k a = Term k a deriving (Eq)
 
-term :: (Scalar k, Eq a) => k -> a -> Term k a
-term k a = Term k a
-
-class (Num k, Eq k, Show k) => Scalar k
+class (Num sc, Eq sc, Show sc) => Scalar sc
 
 instance Scalar Int
 
 instance Scalar Integer
 
-class (Eq a, Show a, Graded a) => Basis a
+class (Eq b, Show b) => Basis b
 
 instance Basis Int
 
@@ -51,55 +38,109 @@ instance Basis Integer
 
 instance Basis Char
 
-scalar :: (Scalar k, Eq a) => Term k a -> k
-scalar (Term k _) = k
+--------------- Product ----------------
 
-basisElement :: (Scalar k, Eq a) => Term k a -> a
-basisElement (Term _ b) = b
+pattern (:*) :: (Basis b) => b -> Product b -> Product b
+pattern t :* s <- Product t s
 
-scale :: (Scalar k, Eq a) => k -> Term k a -> Term k a
-scale c1 (Term c2 b) = term (c1 * c2) b
+data Product b = Product b (Product b) | One deriving (Eq)
 
-basisTerm :: (Scalar k, Eq a) => a -> Term k a
-basisTerm b = term (fromInteger 1) b
+(*:) :: (Basis b) => b -> Product b -> Product b
+(*:) = Product
 
-instance (Scalar k, Basis a) => Graded (Term k a) where
-    grading = grading . basisElement
+type family ProductBasis p where
+    ProductBasis (Product b) = b
+    ProductBasis b = b
 
-instance (Scalar k, Eq a, Show a) => Show (Term k a) where
-    show (Term k b) = show k ++ " *^ " ++ show b
+class IsProduct p where
+    toProduct :: p -> Product (ProductBasis p)
+
+instance (Basis b, ProductBasis b ~ b) => IsProduct b where
+    toProduct b = b *: One
+
+instance (Basis b) => IsProduct (Product b) where
+    toProduct = id
+
+fromListP :: (Basis b) => [b] -> Product b
+fromListP [] = One
+fromListP (h : t) = h *: fromListP t
+
+toListP :: Product b -> [b]
+toListP One = []
+toListP (h :* t) = h : toListP t
+
+instance (Graded b) => Graded (Product b) where
+    grading One = 0
+    grading (t :* p) = grading t + grading p
+
+instance (Show b) => Show (Product b) where
+    show One = "1"
+    show (t :* One) = show t
+    show (t :* p) = show t ++ " * " ++ show p
+
+instance Semigroup (Product b) where
+    One <> p = p
+    p <> One = p
+    (t :* p1) <> p2 = t *: (p1 <> p2)
+
+instance Monoid (Product b) where
+    mempty = One
+
+--------------- Term (internal) ----------------
+
+data Term sc b = sc :*^ (Product b) deriving (Eq)
+
+(*^) :: (Scalar sc, Eq b, ProductBasis p ~ b, IsProduct p) => sc -> p -> Term sc b
+sc *^ p = sc :*^ (toProduct p)
+
+instance (Scalar sc, Eq b, Show b) => Show (Term sc b) where
+    show (sc :*^ b) = show sc ++ " *^ " ++ show b
 
 -- Choose the Product monoid of Num for the scalars.
-instance (Scalar k, Eq a, Semigroup a) => Semigroup (Term k a) where
-    (Term k1 b1) <> (Term k2 b2) = term (k1 * k2) (b1 <> b2)
+instance (Scalar sc, Eq b, Semigroup b) => Semigroup (Term sc b) where
+    (sc1 :*^ b1) <> (sc2 :*^ b2) = (sc1 * sc2) *^ (b1 <> b2)
 
-instance (Scalar k, Eq a, Monoid a) => Monoid (Term k a) where
-    mempty = term (fromInteger 1) mempty
+instance (Scalar sc, Eq b) => Monoid (Term sc b) where
+    mempty = (fromInteger 1) *^ One
 
-instance (Scalar k, Eq a, Group a) => Group (Term k a) where
-    invert (Term k b) = term (negate k) (invert b)
-                                                  
+instance (Scalar sc, Eq b, Group b) => Group (Term sc b) where
+    invert (sc :*^ b) = (negate sc) *^ (invert b)
 
 --------------- Sum ----------------
 
-pattern (:+) :: (Scalar k, Eq a) => Term k a -> Sum k a -> Sum k a
+pattern (:+) :: (Scalar sc, Eq b) => Term sc b -> Sum sc b -> Sum sc b
 pattern t :+ s <- Sum t s
 
-data Sum k a = Sum (Term k a) (Sum k a) | Zero
+data Sum sc b = Sum (Term sc b) (Sum sc b) | Zero
 
-fromListS :: (Scalar k, Eq a) => [Term k a] -> Sum k a
-fromListS [] = Zero
-fromListS (h : t) = h +: fromListS t
+type family SumScalar s where
+    SumScalar (Sum sc b) = sc
+    SumScalar s = Integer
 
-toListS :: (Scalar k, Eq a) => Sum k a -> [Term k a]
-toListS Zero = []
-toListS (h :+ t) = h : toListS t
+class IsSum s where
+    toSum :: s -> Sum (SumScalar s) (ProductBasis s)
 
-instance (Scalar k, Eq a, Show a) => Show (Sum k a) where
-    show ((Term k a) :+ Zero) = show k ++ " *^ " ++ show a
-    show ((Term k a) :+ b) = show k ++ " *^ " ++ show a ++ " + " ++ show b
+instance IsSum (Product b) where
+    toSum p = ((fromInteger 1) *^ p) +: Zero
+
+instance (IsProduct b) => IsSum b where
+    toSum = toSum . toProduct
+
+instance IsSum (Sum sc b) where
+    toSum = id
+
+leadingCoef :: (Scalar sc, Eq b) => Sum sc b -> sc
+leadingCoef Zero = 0
+leadingCoef ((sc :*^ _) :+ _) = sc
+
+leadingElem :: (Scalar sc, Eq b) => Sum sc b -> Product b
+leadingElem Zero = One
+leadingElem ((_ :*^ b) :+ _) = b
+
+instance (Scalar sc, Eq b, Show b) => Show (Sum sc b) where
+    show ((sc :*^ b) :+ Zero) = show sc ++ " *^ " ++ show b
+    show ((sc :*^ b) :+ s) = show sc ++ " *^ " ++ show b ++ " + " ++ show s
     show Zero = "0"
-
 
 infixr 7 +:
 
@@ -116,8 +157,8 @@ Properties:
 
 prop> (length $ t +: l) - 1 <= length (l :: [(Int, Int)])
 -}
-(+:) :: (Scalar k, Eq a) => Term k a -> Sum k a -> Sum k a
-(+:) (Term 0 _) s = s
+(+:) :: (Scalar sc, Eq b) => Term sc b -> Sum sc b -> Sum sc b
+(+:) (0 :*^ _) t = t
 (+:) t s = case maybeAddTerm t s of
     Nothing -> Sum t s
     Just s' -> s'
@@ -125,9 +166,10 @@ prop> (length $ t +: l) - 1 <= length (l :: [(Int, Int)])
     maybeAddTerm t1 Zero = Nothing
     maybeAddTerm t1 (t2 :+ s2) =
         if t1_basis == (basisElement t2)
-            then if scalar_sum /= 0 
-                then Just $ Sum (term scalar_sum t1_basis) s2
-                else Just s2
+            then
+                if scalar_sum /= 0
+                    then Just $ Sum (term scalar_sum t1_basis) s2
+                    else Just s2
             else case maybeAddTerm t1 s2 of
                 Nothing -> Nothing
                 Just s2' -> Just $ Sum t2 s2'
@@ -135,62 +177,59 @@ prop> (length $ t +: l) - 1 <= length (l :: [(Int, Int)])
         t1_basis = basisElement t1
         scalar_sum = (scalar t1) + (scalar t2)
 
-instance (Scalar k, Eq a) => Semigroup (Sum k a) where
+instance (Scalar sc, Eq b) => Semigroup (Sum sc b) where
     Zero <> s2 = s2
     s1 <> Zero = s1
     (t :+ s1) <> s2 = t +: (s1 <> s2)
 
-instance (Scalar k, Eq a) => Monoid (Sum k a) where
+instance (Scalar sc, Eq b) => Monoid (Sum sc b) where
     mempty = Zero
 
-instance (Scalar k, Eq a) => Group (Sum k a) where
+instance (Scalar sc, Eq b) => Group (Sum sc b) where
     invert Zero = Zero
     invert (t :+ s) = (term (negate $ scalar t) (basisElement t)) +: (invert s)
 
-instance (Scalar k, Eq a) => Eq (Sum k a) where
+instance (Scalar sc, Eq b) => Eq (Sum sc b) where
     s1 == s2 = (s1 <> (invert s2)) == Zero
 
+--------------- PowerSeries ----------------
 
+infixr 6 :&
 
---------------- Product ----------------
+data PowerSeries a = a :& (PowerSeries a) | Empty deriving (Eq)
 
-infixr 8 :*
+fromListPS :: [a] -> PowerSeries a
+fromListPS [] = Empty
+fromListPS (h : t) = h :& fromListPS t
 
-data Product a = a :* (Product a) | One deriving (Eq)
+toListPS :: PowerSeries a -> [a]
+toListPS Empty = []
+toListPS (h :& ps) = h : toListPS ps
 
-fromListP :: [a] -> Product a
-fromListP [] = One
-fromListP (h : t) = h :* fromListP t
+instance (Show a) => Show (PowerSeries a) where
+    show ps = show_ 0 ps
+      where
+        show_ n Empty = "_" ++ show n
+        show_ n (h :& Empty) = "(" ++ show h ++ ")_" ++ show n
+        show_ n (h :& ps) = "(" ++ show h ++ ")_" ++ show n ++ " + " ++ show_ (n + 1) ps
 
-toListP :: Product a -> [a]
-toListP One = []
-toListP (h :* t) = h : toListP t
+instance (Semigroup a) => Semigroup (PowerSeries a) where
+    Empty <> ps = ps
+    ps <> Empty = ps
+    (h1 :& ps1) <> (h2 :& ps2) = (h1 <> h2) :& (ps1 <> ps2)
 
-instance Graded a => Graded (Product a) where
-    grading One = 0
-    grading (a :* b) = grading a + grading b
+instance (Monoid a) => Monoid (PowerSeries a) where
+    mempty = Empty
 
-instance Show a => Show (Product a) where
-    show One = "1"
-    show (a :* One) = show a
-    show (a :* b) = show a ++ " * " ++ show b
-
-instance Basis a => Basis (Product a)
-
-instance Semigroup (Product a) where
-    One <> a = a
-    a <> One = a
-    (a :* b) <> c = a :* (b <> c)
-
-instance Monoid (Product a) where
-    mempty = One
-
+instance (Group a) => Group (PowerSeries a) where
+    invert Empty = Empty
+    invert (h :& ps) = (invert h) :& (invert ps)
 
 --------------- Algebra ----------------
 
-type Algebra k a = Sum k (Product a)
+type Algebra sc b = Sum sc (Product b)
 
-instance (Scalar k, Eq a) => Num (Algebra k a) where
+instance (Scalar sc, Eq b) => Num (Algebra sc b) where
     (+) = (<>)
 
     negate = invert
@@ -205,45 +244,30 @@ instance (Scalar k, Eq a) => Num (Algebra k a) where
 
     signum = error "signum not implemented for Algebra"
 
---------------- PowerSeries ----------------
+--------------- Algebra2 ----------------
 
-infixr 6 :&
+type Algebra2 sc b = Sum sc (Product b, Product b)
 
-data PowerSeries a = a :& (PowerSeries a) | Empty deriving (Eq)
+instance (Scalar sc, Eq b) => Num (Algebra2 sc b) where
+    (+) = (<>)
 
-fromListPS :: [a] -> PowerSeries a
-fromListPS [] = Empty
-fromListPS (h : t) = h :& fromListPS t
+    negate = invert
 
-toListPS :: PowerSeries a -> [a]
-toListPS Empty = []
-toListPS (h :& t) = h : toListPS t
-
-instance (Show a) => Show (PowerSeries a) where
-    show ps = show_ 0 ps
+    a * b = fromListS $ map mconcat $ distributeLists ab_list
       where
-        show_ n Empty = "_" ++ show n
-        show_ n (a :& Empty) = "(" ++ show a ++ ")_" ++ show n
-        show_ n (a :& b) = "(" ++ show a ++ ")_" ++ show n ++ " + " ++ show_ (n + 1) b
+        ab_list = [toListS a, toListS b]
 
-instance (Semigroup a) => Semigroup (PowerSeries a) where
-    Empty <> a = a
-    a <> Empty = a
-    (a :& b) <> (c :& d) = (a <> c) :& (b <> d)
+    fromInteger n = (term (fromInteger n) (One, One)) +: Zero
 
-instance (Monoid a) => Monoid (PowerSeries a) where
-    mempty = Empty
+    abs = error "abs not implemented for Algebra2"
 
-instance (Group a) => Group (PowerSeries a) where
-    invert Empty = Empty
-    invert (a :& b) = (invert a) :& (invert b)
+    signum = error "signum not implemented for Algebra2"
 
+type GradedAlgebra sc b = PowerSeries (Algebra sc b)
 
---------------- GradedAlgebra ----------------
+type GradedAlgebra2 sc b = PowerSeries (Algebra2 sc b)
 
-type GradedAlgebra k a = PowerSeries (Algebra k a)
-
-instance (Scalar k, Eq a) => Num (GradedAlgebra k a) where
+instance (Scalar sc, Eq b) => Num (GradedAlgebra sc b) where
     (+) = (<>)
 
     negate = invert
@@ -257,3 +281,18 @@ instance (Scalar k, Eq a) => Num (GradedAlgebra k a) where
     abs = error "abs not implemented for GradedAlgebra"
 
     signum = error "signum not implemented for GradedAlgebra"
+
+instance (Scalar sc, Eq b) => Num (GradedAlgebra2 sc b) where
+    (+) = (<>)
+
+    negate = invert
+
+    a * b = fromListPS $ map sum $ map (map product) $ distributeGradedLists ab_list
+      where
+        ab_list = [toListPS a, toListPS b]
+
+    fromInteger n = (fromInteger n) :& Empty
+
+    abs = error "abs not implemented for GradedAlgebra2"
+
+    signum = error "signum not implemented for GradedAlgebra2"
