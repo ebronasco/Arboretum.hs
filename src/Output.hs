@@ -45,10 +45,10 @@ instance Texifiable Char where
 instance Texifiable Integer where
     texify = show
 
-instance (Texifiable k, Texifiable a) => Texifiable (k, a) where
+instance (Texifiable k, Texifiable a) => Texifiable (Term k a) where
     texifyID _                 = "ScProd"
-    texify (k, v)          = (texifyP k) ++ " \\cdot " ++ (texifyP v)
-    texifyDebug i j (k, v) = (texifyD i j k) ++ " \\cdot " ++ (texifyD i j v)
+    texify (Term k v)          = (texifyP k) ++ " \\cdot " ++ (texifyP v)
+    texifyDebug i j (Term k v) = (texifyD i j k) ++ " \\cdot " ++ (texifyD i j v)
 
 instance (Texifiable k, Scalar k, Basis a, Texifiable a) => Texifiable (VectorSpace k a) where
     texifyID _                = "Vect"
