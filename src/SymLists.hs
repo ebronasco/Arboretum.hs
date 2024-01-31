@@ -1,9 +1,5 @@
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 
 module SymLists (
     Basis,
@@ -21,15 +17,6 @@ module SymLists (
 import Data.Group
 import GradedList
 
-data Basis b = Basis {unBasis :: b} deriving (Eq)
-
-basis :: b -> Basis b
-basis = Basis
-
-instance (Show b) => Show (Basis b) where
-    show = show . unBasis
-
---------------- Product ----------------
 
 data Product b = b :* (Product b) | One deriving (Eq)
 
@@ -53,16 +40,16 @@ instance Monoid (Product b) where
     mempty = One
 
 class IsProduct p where
-    type ProductBasis p 
+    type ProductBasis p :: *
     toProduct :: p -> Product (ProductBasis p)
 
-instance IsProduct (Basis b) where
-    type ProductBasis (Basis b) = b
-    toProduct (Basis b) = b :* One
-
-instance IsProduct (Product b) where
+instance {-# OVERLAPPING #-} IsProduct (Product b) where
     type ProductBasis (Product b) = b
     toProduct = id
+
+instance IsProduct b where
+    type ProductBasis b = b
+    toProduct b = b :* One
 
 --------------- Term (internal) ----------------
 
@@ -171,22 +158,6 @@ instance (Num k, Eq k, Eq b, Semigroup b) => Num (Sum k b) where
     abs = error "abs not implemented for Algebra"
 
     signum = error "signum not implemented for Algebra"
-
-class IsSum s where
-    type SumScalar s
-    type SumBasis s
-    toSum :: s -> Sum (SumScalar s) (SumBasis s)
-
-instance (Num k, Eq k, Eq b) => IsSum (Term k b) where
-    type SumBasis (Term k b) = b
-    type SumScalar (Term k b) = k
-    toSum = (+: Zero)
-
-instance (Num k, Eq k, Eq b, IsProduct p, ProductBasis p ~ b) => IsSum p where
-    type SumBasis p = ProductBasis p
-    type SumScalar p = Integer
-    toSum p = toSum $ (fromInteger 1) *^ (toProduct p)
-
 
 
 -- --------------- PowerSeries ----------------
