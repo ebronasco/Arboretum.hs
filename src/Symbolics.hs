@@ -52,9 +52,6 @@ import qualified Data.List as L (
     intercalate,
     sortBy,
  )
-import qualified Data.Monoid as M (
-    Product (..),
- )
 import GradedList (
     Graded,
     Grading,
@@ -68,8 +65,13 @@ import GradedList (
 >>> import Test.QuickCheck (Arbitrary (arbitrary), Gen)
 >>> import Test.QuickCheck.Function (Fun (Fun), apply, pattern Fn)
 >>> :{
-instance Arbitrary (VectorSpace Int Int) where
-   arbitrary = vector <$> (arbitrary :: Gen [(Int, Int)])
+instance Arbitrary (Term Integer Integer) where
+   arbitrary = term <$> (arbitrary :: Gen Integer) <*> (arbitrary :: Gen [Integer])
+:}
+
+>>> :{
+instance Arbitrary (VectorSpace Integer Integer) where
+   arbitrary = vector <$> (arbitrary :: Gen [Term Integer Integer])
 :}
 -}
 
@@ -93,6 +95,7 @@ instance Basis Integer
 
 instance Basis a => Basis [a]
 
+-- | A term is defined to be a pair of a scalar (@Num@) and a product of basis elements.
 data Term k a = Term
     { scalar :: k
     , basisElement :: [a]
@@ -104,6 +107,13 @@ instance (Show k, Show a) => Show (Term k a) where
 
 instance Functor (Term k) where
     fmap f (Term s b) = Term s (map f b)
+
+-- | Choose the product semigroup for the scalar type.
+instance Num k => Semigroup (Term k a) where
+    (Term s1 b1) <> (Term s2 b2) = Term (s1 * s2) (b1 <> b2)
+
+instance Num k => Monoid (Term k a) where
+    mempty = Term 1 mempty
 
 term :: (Scalar k, Basis a) => k -> [a] -> Term k a
 term = Term
@@ -130,8 +140,8 @@ data VectorSpace k a = Vector {unVector :: [Grading (Term k a)]}
 {- | A flat list of terms.
 Examples:
 
->>> terms $ Vector [[], [(1, 1), (1, 2)]]
-[(1,1),(1,2)]
+>>> terms $ Vector [[], [term 1 [1], term 1 [2]]]
+[1 *^ [1],1 *^ [2]]
 
 Properties:
 
@@ -151,14 +161,14 @@ instance (Scalar k, Basis a) => Show (VectorSpace k a) where
 
 Examples:
 
->>> addTerm (1, 1) [(1, 1), (1, 2)] :: [(Int, Int)]
-[(2,1),(1,2)]
->>> addTerm (1, 3) [(1, 1), (1, 2)] :: [(Int, Int)]
-[(1,3),(1,1),(1,2)]
+>>> addTerm (term 1 [1]) [term 1 [1], term 1 [2]]
+[2 *^ [1],1 *^ [2]]
+>>> addTerm (term 1 [3]) [term 1 [1], term 1 [2]]
+[1 *^ [3],1 *^ [1],1 *^ [2]]
 
 Properties:
 
-prop> (length $ addTerm t l) - 1 <= length (l :: [(Int, Int)])
+prop> (length $ addTerm t l) - 1 <= length l
 -}
 addTerm :: (Scalar k, Basis a) => Term k a -> [Term k a] -> [Term k a]
 addTerm t ts = case (span findTerm ts) of
@@ -177,14 +187,14 @@ addTerm t ts = case (span findTerm ts) of
 
 Examples:
 
->>> groupTerms [(1, 1), (1, 2), (1, 1), (1, 2)] :: [(Int, Int)]
-[(2,1),(2,2)]
->>> groupTerms [(1, 1), (1, 2), (1, 1), (1, 2), (1, 3)] :: [(Int, Int)]
-[(2,1),(2,2),(1,3)]
+>>> groupTerms [term 1 [1], term 1 [2], term 1 [1], term 1 [2]]
+[2 *^ [1],2 *^ [2]]
+>>> groupTerms [term 1 [1], term 1 [2], term 1 [1], term 1 [2], term 1 [3]]
+[2 *^ [1],2 *^ [2],1 *^ [3]]
 
 Properties:
 
-prop> (length $ groupTerms l) <= length (l :: [(Int, Int)])
+prop> (length $ groupTerms l) <= length l
 -}
 groupTerms :: (Scalar k, Basis a) => [Term k a] -> [Term k a]
 groupTerms = foldr addTerm mempty
@@ -193,10 +203,10 @@ groupTerms = foldr addTerm mempty
 
 Examples:
 
->>> vector [(1, 1), (1, 2), (1, 1), (1, 2)] :: VectorSpace Int Int
-((2,1) + (2,2))
->>> vector [(1, 1), (1, 2), (1, 1), (-1, 2), (1, 3)] :: VectorSpace Int Int
-((2,1) + (1,3))
+>>> vector [term 1 [1], term 1 [2], term 1 [1], term 1 [2]]
+(2 *^ [1] + 2 *^ [2])
+>>> vector [term 1 [1], term 1 [2], term 1 [1], term (-1) [2], term 1 [3]]
+(2 *^ [1] + 1 *^ [3])
 -}
 vector :: (Scalar k, Basis a) => [Term k a] -> VectorSpace k a
 vector = vectorG . (L.sortBy compareGrading)
@@ -207,10 +217,10 @@ vector = vectorG . (L.sortBy compareGrading)
 
 Examples:
 
->>> vectorG [(1, 1), (1, 2), (1, 1), (1, 2)] :: VectorSpace Int Int
-((2,1) + (2,2))
->>> takeV 10 $ vectorG [(1, i) | i <- [1..]] :: VectorSpace Int Int
-((1,1) + (1,2) + (1,3) + (1,4) + (1,5) + (1,6) + (1,7) + (1,8) + (1,9) + (1,10))
+>>> vectorG [term 1 [1], term 1 [2], term 1 [1], term 1 [2]]
+(2 *^ [1] + 2 *^ [2])
+>>> takeV 10 $ vectorG [term 1 [i] | i <- [1..]]
+(1 *^ [1] + 1 *^ [2] + 1 *^ [3] + 1 *^ [4] + 1 *^ [5] + 1 *^ [6] + 1 *^ [7] + 1 *^ [8] + 1 *^ [9] + 1 *^ [10])
 -}
 vectorG :: (Scalar k, Basis a) => [Term k a] -> VectorSpace k a
 vectorG = Vector . (map groupTerms) . groupByGrading
@@ -227,12 +237,12 @@ basisVectorG = vectorG . (map basisTerm)
 
 Examples:
 
->>> vector [(1, 1), (1, 2)] <> (vector [(1, 1), (1, 2), (2, 3)]) :: VectorSpace Int Int
-((2,3) + (2,1) + (2,2))
+>>> vector [term 1 [1], term 1 [2]] <> (vector [term 1 [1], term 1 [2], term 2 [3]])
+(2 *^ [3] + 2 *^ [1] + 2 *^ [2])
 
 Properties:
 
-prop> v1 <> v2 == (v2 <> v1 :: VectorSpace Int Int)
+prop> v1 <> v2 == (v2 <> v1 :: VectorSpace Integer Integer)
 -}
 instance (Scalar k, Basis a) => Semigroup (VectorSpace k a) where
     v1 <> v2 = Vector $ zipWithDefault addGradings (unVector v1) (unVector v2)
@@ -248,14 +258,14 @@ instance (Scalar k, Basis a) => Semigroup (VectorSpace k a) where
 
 Examples:
 
->>> mempty :: VectorSpace Int Int
+>>> mempty :: VectorSpace Integer Integer
 ()
->>> vector [(1, 1), (1, 2)] <> mempty :: VectorSpace Int Int
-((1,1) + (1,2))
+>>> vector [term 1 [1], term 1 [2]] <> mempty
+(1 *^ [1] + 1 *^ [2])
 
 Properties:
 
-prop> v <> mempty == (v :: VectorSpace Int Int)
+prop> v <> mempty == (v :: VectorSpace Integer Integer)
 -}
 instance (Scalar k, Basis a) => Monoid (VectorSpace k a) where
     mempty = Vector []
@@ -264,16 +274,16 @@ instance (Scalar k, Basis a) => Monoid (VectorSpace k a) where
 
 Examples:
 
->>> invert $ vector [(1, 1), (1, 2)] :: VectorSpace Int Int
-((-1,1) + (-1,2))
->>> vector [(1, 1), (1, 2)] <> invert (vector [(1, 1), (1, 2)]) :: VectorSpace Int Int
+>>> invert $ vector [term 1 [1], term 1 [2]]
+(-1 *^ [1] + -1 *^ [2])
+>>> vector [term 1 [1], term 1 [2]] <> invert (vector [term 1 [1], term 1 [2]])
 ()
 
 Properties:
 
-prop> v <> invert v == (mempty :: VectorSpace Int Int)
-prop> invert v <> v == (mempty :: VectorSpace Int Int)
-prop> invert (invert v) == (v :: VectorSpace Int Int)
+prop> v <> invert v == (mempty :: VectorSpace Integer Integer)
+prop> invert v <> v == (mempty :: VectorSpace Integer Integer)
+prop> invert (invert v) == (v :: VectorSpace Integer Integer)
 -}
 instance (Scalar k, Basis a) => Group (VectorSpace k a) where
     invert = renormalize (\s _ -> negate s)
@@ -283,21 +293,17 @@ instance (Scalar k, Basis a) => Group (VectorSpace k a) where
 Examples:
 
 >>> (vector [term 1 [1, 2], term 1 [3, 4]]) * (vector [term 1 [11, 12], term 1 [13, 14]])
-((1,[1,2,11,12]) + (1,[3,4,11,12]) + (1,[1,2,13,14]) + (1,[3,4,13,14]))
+(1 *^ [1,2,11,12] + 1 *^ [3,4,11,12] + 1 *^ [1,2,13,14] + 1 *^ [3,4,13,14])
 -}
 instance (Scalar k, Basis a) => Num (VectorSpace k a) where
     (+) = (<>)
 
     v1 * v2 =
         Vector $
-            map (map mconcatProductMonoid) $
+            map (map mconcat) $
                 distributeGradedLists $
                     map unVector $
                         [v1, v2]
-      where
-        productMonoidScalars t = (M.Product $ scalar t, basisElement t)
-        unProductMonoidScalars t = term (M.getProduct $ fst t) (snd t)
-        mconcatProductMonoid = unProductMonoidScalars . mconcat . (map productMonoidScalars)
 
     -- \| Absolute value of a vector makes no sense.
     abs = id
@@ -317,12 +323,12 @@ instance (Scalar k, Basis a) => Num (VectorSpace k a) where
 
 Examples:
 
->>> mapV (\b -> b + 1) $ vector [(1, 1), (1, 2), (1, 3), (1, 4)]
-((1,2) + (1,3) + (1,4) + (1,5))
+>>> mapV (\[b]-> [b + 1]) $ vector [term 1 [1], term 1 [2], term 1 [3], term 1 [4]]
+(1 *^ [2] + 1 *^ [3] + 1 *^ [4] + 1 *^ [5])
 
 Properties:
 
-prop> mapV id v == (v :: VectorSpace Int Int)
+prop> mapV id v == (v :: VectorSpace Integer Integer)
 
 as well as @(mapV f (fmap g v)) == (map (f . g) v)@ and @(mapV f (v1 <> v2)) == ((mapV f v1) <> (mapV f v2))@.
 
@@ -340,8 +346,8 @@ The resulting function accepts infinite vectors.
 
 Examples:
 
->>> takeV 10 $ mapVG (*10) $ (basisVectorG [1..] :: VectorSpace Int Int)
-((1,10) + (1,20) + (1,30) + (1,40) + (1,50) + (1,60) + (1,70) + (1,80) + (1,90) + (1,100))
+>>> takeV 10 $ mapVG (\[x] -> [x*10]) $ basisVectorG [[i] | i <- [1..]]
+(1 *^ [10] + 1 *^ [20] + 1 *^ [30] + 1 *^ [40] + 1 *^ [50] + 1 *^ [60] + 1 *^ [70] + 1 *^ [80] + 1 *^ [90] + 1 *^ [100])
 -}
 mapVG :: (Scalar k, Basis a, Basis b) => ([a] -> [b]) -> VectorSpace k a -> VectorSpace k b
 mapVG f = vectorG . (map $ fmap_ f) . terms
@@ -351,8 +357,8 @@ mapVG f = vectorG . (map $ fmap_ f) . terms
 
 Examples:
 
->>> linear (\b -> vector [(1, b), (1, b + 1)]) $ vector [(1, 1), (1, 2), (1, 3), (1, 4)]
-((1,1) + (2,2) + (2,3) + (2,4) + (1,5))
+>>> linear (\[b] -> vector [term 1 [b], term 1 [b + 1]]) $ vector [term 1 [1], term 1 [2], term 1 [3], term 1 [4]]
+(1 *^ [1] + 2 *^ [2] + 2 *^ [3] + 2 *^ [4] + 1 *^ [5])
 -}
 linear
     :: ( Scalar k
@@ -374,8 +380,8 @@ The resulting function accepts infinite vectors.
 
 Examples:
 
->>> takeV 10 $ linearG (\b -> basisVectorG [b..]) $ (basisVectorG [1..] :: VectorSpace Int Int)
-((1,1) + (2,2) + (3,3) + (4,4) + (5,5) + (6,6) + (7,7) + (8,8) + (9,9) + (10,10))
+>>> takeV 10 $ linearG (\[b] -> basisVectorG [[i] | i <- [b..]]) $ basisVectorG [[i] | i <- [1..]]
+(1 *^ [1] + 2 *^ [2] + 3 *^ [3] + 4 *^ [4] + 5 *^ [5] + 6 *^ [6] + 7 *^ [7] + 8 *^ [8] + 9 *^ [9] + 10 *^ [10])
 -}
 linearG
     :: ( Scalar k
@@ -393,8 +399,8 @@ linearG f = vectorG . (concatMap applyf) . terms
 
 Examples:
 
->>> morphism (\b -> basisVector [b + 1]) $ vector [term 1 [1, 2, 3, 4], term 1 [11, 12, 13, 14]] :: VectorSpace Int Int
-((1,[2,3,4,5]) + (1,[12,13,14,15]))
+>>> morphism (\b -> basisVector [[b + 1]]) $ vector [term 1 [1, 2, 3, 4], term 1 [11, 12, 13, 14]]
+(1 *^ [2,3,4,5] + 1 *^ [12,13,14,15])
 -}
 morphism
     :: ( Scalar k
@@ -410,8 +416,8 @@ morphism f = linear $ product . (map f)
 
 Examples:
 
->>> renormalize (\s b -> s + 1) $ vector [(1, 1), (1, 2), (1, 3), (1, 4) :: (Int, Int)]
-((2,1) + (2,2) + (2,3) + (2,4))
+>>> renormalize (\s b -> s + 1) $ vector [term 1 [1], term 1 [2], term 1 [3], term 1 [4]]
+(2 *^ [1] + 2 *^ [2] + 2 *^ [3] + 2 *^ [4])
 -}
 renormalize
     :: ( Scalar k1
@@ -429,8 +435,8 @@ renormalize f = vectorG . (map renormalizeTerm) . terms
 
 Examples:
 
->>> scaleV 2 $ vector [(1, 1), (1, 2), (1, 3), (1, 4) :: (Int, Int)]
-((2,1) + (2,2) + (2,3) + (2,4))
+>>> scaleV 2 $ vector [term 1 [1], term 1 [2], term 1 [3], term 1 [4]]
+(2 *^ [1] + 2 *^ [2] + 2 *^ [3] + 2 *^ [4])
 -}
 scaleV :: (Scalar k, Basis a) => k -> VectorSpace k a -> VectorSpace k a
 scaleV s = renormalize (\s0 _ -> s * s0)
@@ -439,7 +445,7 @@ scaleV s = renormalize (\s0 _ -> s * s0)
 
 Examples:
 
->>> functional (\b -> fromInteger $ grading b) $ vector [(1, 1), (1, 2), (1, 3), (1, 4) :: (Int, Int)]
+>>> functional (\b -> fromInteger $ grading b) $ vector [term 1 [1], term 1 [2], term 1 [3], term 1 [4]]
 4
 -}
 functional :: (Scalar k, Basis a) => ([a] -> k) -> VectorSpace k a -> k
@@ -449,12 +455,12 @@ functional f = sum . (map $ \t -> (scalar t) * (f $ basisElement t)) . terms
 
 Examples:
 
->>> lengthV $ vector [(1,1), (1,2), (1,3), (1,4) :: (Int, Int)]
+>>> lengthV $ vector [term 1 [1], term 1 [2], term 1 [3], term 1 [4]]
 4
 
 Properties:
 
-prop> lengthV v == length (terms v :: [(Int, Int)])
+prop> lengthV v == length (terms v :: [Term Integer Integer])
 -}
 lengthV :: (Scalar k, Basis a) => VectorSpace k a -> Int
 lengthV = sum . (map length) . unVector
@@ -463,15 +469,15 @@ lengthV = sum . (map length) . unVector
 
 Examples:
 
->>> takeWhileV (\(i, j) -> j < 3) $ vector [(1,1), (1,2), (1,3), (1,4) :: (Int, Int)]
-((1,1) + (1,2))
->>> takeWhileV (\(i, j) -> j < 5) $ (basisVectorG [1..] :: VectorSpace Int Int)
-((1,1) + (1,2) + (1,3) + (1,4))
+>>> takeWhileV (\(Term i [j]) -> j < 3) $ vector [term 1 [1], term 1 [2], term 1 [3], term 1 [4]]
+(1 *^ [1] + 1 *^ [2])
+>>> takeWhileV (\(Term i [j]) -> j < 5) $ basisVectorG [[i] | i <- [1..]]
+(1 *^ [1] + 1 *^ [2] + 1 *^ [3] + 1 *^ [4])
 
 Properties:
 
-prop> takeWhileV (\_ -> True) v == (v :: VectorSpace Int Int)
-prop> takeWhileV (\_ -> False) v == (mempty :: VectorSpace Int Int)
+prop> takeWhileV (\_ -> True) v == (v :: VectorSpace Integer Integer)
+prop> takeWhileV (\_ -> False) v == (mempty :: VectorSpace Integer Integer)
 -}
 takeWhileV :: (Scalar k, Basis a) => (Term k a -> Bool) -> VectorSpace k a -> VectorSpace k a
 takeWhileV f = Vector . groupByGrading . (takeWhile f) . concat . unVector
@@ -480,13 +486,13 @@ takeWhileV f = Vector . groupByGrading . (takeWhile f) . concat . unVector
 
 Examples:
 
->>> takeV 10 $ filterV (\(_, j) -> j `mod` 3 == 0) $ basisVectorG [1..] :: VectorSpace Int Int
-((1,3) + (1,6) + (1,9) + (1,12) + (1,15) + (1,18) + (1,21) + (1,24) + (1,27) + (1,30))
+>>> takeV 10 $ filterV (\(Term _ [j]) -> j `mod` 3 == 0) $ basisVectorG [[i] | i <- [1..]]
+(1 *^ [3] + 1 *^ [6] + 1 *^ [9] + 1 *^ [12] + 1 *^ [15] + 1 *^ [18] + 1 *^ [21] + 1 *^ [24] + 1 *^ [27] + 1 *^ [30])
 
 Properties:
 
-prop> filterV (\_ -> True) v == (v :: VectorSpace Int Int)
-prop> filterV (\_ -> False) v == (mempty :: VectorSpace Int Int)
+prop> filterV (\_ -> True) v == (v :: VectorSpace Integer Integer)
+prop> filterV (\_ -> False) v == (mempty :: VectorSpace Integer Integer)
 -}
 filterV :: (Scalar k, Basis a) => (Term k a -> Bool) -> VectorSpace k a -> VectorSpace k a
 filterV f = Vector . (map $ filter f) . unVector
@@ -495,13 +501,13 @@ filterV f = Vector . (map $ filter f) . unVector
 
 Examples:
 
->>> takeV 10 $ (basisVectorG [1..] :: VectorSpace Int Int)
-((1,1) + (1,2) + (1,3) + (1,4) + (1,5) + (1,6) + (1,7) + (1,8) + (1,9) + (1,10))
+>>> takeV 10 $ basisVectorG [[i] | i <- [1..]]
+(1 *^ [1] + 1 *^ [2] + 1 *^ [3] + 1 *^ [4] + 1 *^ [5] + 1 *^ [6] + 1 *^ [7] + 1 *^ [8] + 1 *^ [9] + 1 *^ [10])
 
 Properties:
 
-prop> takeV (lengthV v) v == (v :: VectorSpace Int Int)
-prop> takeV 0 v == (mempty :: VectorSpace Int Int)
+prop> takeV (lengthV v) v == (v :: VectorSpace Integer Integer)
+prop> takeV 0 v == (mempty :: VectorSpace Integer Integer)
 -}
 takeV :: (Scalar k, Basis a) => Int -> VectorSpace k a -> VectorSpace k a
 takeV n = Vector . groupByGrading . (take n) . concat . unVector
@@ -510,8 +516,8 @@ takeV n = Vector . groupByGrading . (take n) . concat . unVector
 
 Examples:
 
->>> tensorCoproduct [1,2,3] :: VectorSpace Int [Int]
-((1,[[1,2,3],[]]) + (1,[[1,2],[3]]) + (1,[[1,3],[2]]) + (1,[[1],[2,3]]) + (1,[[2,3],[1]]) + (1,[[2],[1,3]]) + (1,[[3],[1,2]]) + (1,[[],[1,2,3]]))
+>>> tensorCoproduct [1,2,3]
+(1 *^ [[1,2,3],[]] + 1 *^ [[1,2],[3]] + 1 *^ [[1,3],[2]] + 1 *^ [[1],[2,3]] + 1 *^ [[2,3],[1]] + 1 *^ [[2],[1,3]] + 1 *^ [[3],[1,2]] + 1 *^ [[],[1,2,3]])
 -}
 tensorCoproduct :: (Scalar k, Basis a) => [a] -> VectorSpace k [a]
 -- tensorCoproduct = product . (map (\b -> basisVector [([b],[]), ([],[b])]))
