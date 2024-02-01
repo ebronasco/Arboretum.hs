@@ -83,7 +83,7 @@ instance (Basis a) => Basis (PRTree a)
 Example:
 
 >>> graftFF [PRTree 1 [PRTree 2 []]] [PRTree 3 [], PRTree 4 [PRTree 5 []]]
-((1,[3[1[2]],4[5]]) + (1,[3,4[1[2],5]]) + (1,[3,4[5[1[2]]]]))
+(1 *^ [3[1[2]],4[5]] + 1 *^ [3,4[1[2],5]] + 1 *^ [3,4[5[1[2]]]])
 -}
 graftFF :: forall a. (Basis a) => [PRTree a] -> [PRTree a] -> VectorSpace Integer (PRTree a)
 graftFF [] [] = basisVector [[]] :: VectorSpace Integer (PRTree a)
@@ -98,7 +98,7 @@ graftFF f1 (t:f2) = linear perCoproductTerm $ tensorCoproduct f1
 Example:
 
 >>> graftFT [PRTree 1 [PRTree 2 []]] (PRTree 3 [PRTree 4 []])
-((1,3[1[2],4]) + (1,3[4[1[2]]]))
+(1 *^ [3[1[2],4]] + 1 *^ [3[4[1[2]]]])
 -}
 graftFT ::(Basis a) => [PRTree a] -> PRTree a -> VectorSpace Integer (PRTree a)
 graftFT f (PRTree r ts) = mapV ((:[]) . PRTree r) $ gl f ts
@@ -108,7 +108,7 @@ graftFT f (PRTree r ts) = mapV ((:[]) . PRTree r) $ gl f ts
 Example:
 
 >>> gl [PRTree 1 [PRTree 2 []]] [PRTree 3 [], PRTree 4 [PRTree 5 []]]
-((1,[1[2],3,4[5]]) + (1,[3[1[2]],4[5]]) + (1,[3,4[1[2],5]]) + (1,[3,4[5[1[2]]]]))
+(1 *^ [1[2],3,4[5]] + 1 *^ [3[1[2]],4[5]] + 1 *^ [3,4[1[2],5]] + 1 *^ [3,4[5[1[2]]]])
 -}
 gl :: (Basis a) => [PRTree a] -> [PRTree a] -> VectorSpace Integer (PRTree a)
 gl f1 f2 = linear perCoproductTerm $ tensorCoproduct f1
