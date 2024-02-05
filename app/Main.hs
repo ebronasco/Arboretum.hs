@@ -10,12 +10,6 @@ import qualified Data.MultiSet as MS
 import qualified Data.List as L
 import Data.Group
 
-[t1,t2,t10,t13,t20,t100] = map (1,) [1,2,10,13,20,100] 
-
-v1 = vector [t13, t2, t10, t100, t1, t1, t20] :: VectorSpace Integer Integer
-
-v2 = vector [t13, t2, t10] :: VectorSpace Integer Integer
-
 -- OPERATIONS
 
 labeledGraftTo :: (RootedGraph g1, Graph g2, Edge g1 ~ Edge g2) => g1 -> g2 -> a -> Vertex g2 -> g2

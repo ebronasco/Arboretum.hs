@@ -7,9 +7,6 @@ module SymLists (
 --     PowerSeries (..),
 ) where
 
-import Data.Group
-import GradedList
-
 --------------- Product ----------------
 --
 -- data Product b = b :* (Product b) | One deriving (Eq)
