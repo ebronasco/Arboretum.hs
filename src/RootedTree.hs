@@ -83,10 +83,10 @@ instance (Basis a) => Basis (PRTree a)
 Example:
 
 >>> graftFF [PRTree 1 [PRTree 2 []]] [PRTree 3 [], PRTree 4 [PRTree 5 []]]
-(1 *^ [3[1[2]],4[5]] + 1 *^ [3,4[1[2],5]] + 1 *^ [3,4[5[1[2]]]])
+(1 *^ [3[1[2]],4[5]] + 1 *^ [3,4[1[2],5]] + 1 *^ [3,4[5[1[2]]]])_5
 -}
-graftFF :: forall a. (Basis a) => [PRTree a] -> [PRTree a] -> VectorSpace Integer (PRTree a)
-graftFF [] [] = basisVector [[]] :: VectorSpace Integer (PRTree a)
+graftFF :: forall a. (Basis a) => [PRTree a] -> [PRTree a] -> PowerSeries Integer (PRTree a)
+graftFF [] [] = basisVector [[]] :: PowerSeries Integer (PRTree a)
 graftFF _  [] = mempty
 graftFF [] f2 = basisVector [f2]
 graftFF f1 (t:f2) = linear perCoproductTerm $ tensorCoproduct f1
@@ -98,9 +98,9 @@ graftFF f1 (t:f2) = linear perCoproductTerm $ tensorCoproduct f1
 Example:
 
 >>> graftFT [PRTree 1 [PRTree 2 []]] (PRTree 3 [PRTree 4 []])
-(1 *^ [3[1[2],4]] + 1 *^ [3[4[1[2]]]])
+(1 *^ [3[1[2],4]] + 1 *^ [3[4[1[2]]]])_4
 -}
-graftFT ::(Basis a) => [PRTree a] -> PRTree a -> VectorSpace Integer (PRTree a)
+graftFT ::(Basis a) => [PRTree a] -> PRTree a -> PowerSeries Integer (PRTree a)
 graftFT f (PRTree r ts) = mapV ((:[]) . PRTree r) $ gl f ts
 
 {- | Grossman-Larson product of two forests.
@@ -108,9 +108,9 @@ graftFT f (PRTree r ts) = mapV ((:[]) . PRTree r) $ gl f ts
 Example:
 
 >>> gl [PRTree 1 [PRTree 2 []]] [PRTree 3 [], PRTree 4 [PRTree 5 []]]
-(1 *^ [1[2],3,4[5]] + 1 *^ [3[1[2]],4[5]] + 1 *^ [3,4[1[2],5]] + 1 *^ [3,4[5[1[2]]]])
+(1 *^ [1[2],3,4[5]] + 1 *^ [3[1[2]],4[5]] + 1 *^ [3,4[1[2],5]] + 1 *^ [3,4[5[1[2]]]])_5
 -}
-gl :: (Basis a) => [PRTree a] -> [PRTree a] -> VectorSpace Integer (PRTree a)
+gl :: (Basis a) => [PRTree a] -> [PRTree a] -> PowerSeries Integer (PRTree a)
 gl f1 f2 = linear perCoproductTerm $ tensorCoproduct f1
   where
     perCoproductTerm [f11, f12] = (basisVector [f11]) * (graftFF f12 f2)

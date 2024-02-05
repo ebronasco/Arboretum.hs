@@ -2,17 +2,10 @@ module GradedList (
     Grading,
     Graded,
     grading,
-    functionFromAssocList,
-    bijections,
-    unorderedEqualityOfLists,
+    distributeLists,
     distributeGradedLists,
     groupByGrading,
 ) where
-
-import qualified Data.List as L (
-    delete,
-    permutations,
- )
 
 -- a list of elements with the same grading
 type Grading t = [t]
@@ -34,21 +27,12 @@ instance Graded Integer where
     where
       abs_n = abs n
 
+instance Graded Char where
+  grading _ = 1
+
 instance Graded a => Graded [a] where
   grading [] = 0
   grading (h : t) = (grading h) + (grading t)
-
-functionFromAssocList :: (Eq a) => [(a, b)] -> (a -> b)
-functionFromAssocList assocList x = snd $ head $ filter ((== x) . fst) assocList
-
-bijections :: (Eq a) => [a] -> [b] -> [a -> b]
-bijections a b = map functionFromAssocList $ map (\(x, y) -> zip x y) $ zip (repeat a) (L.permutations b)
-
-unorderedEqualityOfLists :: (Eq a) => [a] -> [a] -> Bool
-unorderedEqualityOfLists xs ys
-    | length xs /= length ys = False -- different length
-    | foldr (\t acc -> L.delete t acc) ys xs == [] = True -- same length and xs subset of ys
-    | otherwise = False
 
 -- Graded distribution of lists graded by position
 
@@ -82,32 +66,47 @@ getElementsFromLevel _ Empty_ = []
 getElementsFromLevel 0 (T_ el _) = [el]
 getElementsFromLevel i (T_ _ subtrees) = concat $ map (getElementsFromLevel (i - 1)) subtrees
 
-_flattenTree :: (Eq a) => Tree_ a -> [[a]]
+_flattenTree :: (Eq a) => Tree_ a -> [[[a]]]
 _flattenTree Empty_ = []
-_flattenTree tree_ = concat $ takeWhile (/= []) $ map (\i -> getElementsFromLevel i tree_) [0 ..]
+_flattenTree tree_ = takeWhile (/= []) $ map (\i -> getElementsFromLevel i tree_) [0 ..]
 
+{- | Cartesian product of lists in which lists can be infinite. It works in the following way:
+@distributeLists [[a_1, a_2], [b_1, b_2]]@ will return:
+@[[a_1, b_1], [a_1, b_2], [a_2, b_1], [a_2, b_2]]@.
+
+Example:
+
+>>> distributeLists [[1, 2], [11, 12], [21, 22]]
+[[1,11,21],[2,11,21],[1,12,21],[1,11,22],[2,12,21],[2,11,22],[1,12,22],[2,12,22]]
+-}
 distributeLists :: (Eq a) => [[a]] -> [[a]]
-distributeLists = _flattenTree . (_buildTree 1)
+distributeLists = concat . _flattenTree . (_buildTree 1)
 
-distributeGradedLists :: (Eq a, Graded a, Show a) => [[Grading a]] -> [[Grading a]]
-distributeGradedLists = groupByGrading . (concatMap distributeLists) . distributeLists
+{- | The same as @distributeLists@ but it groups the resulting terms by the sums of their indices. It works in the following way: 
+@distributeLists [[a_1, a_2, a_3], [b_1, b_2], [c_1, c_2]]@ will return:
+@[[[a_1,b_1,c_1]],[[a_2,b_1,c_1],[a_1,b_2,c_1],[a_1,b_1,c_2]],[[a_3,b_1,c_1],[a_2,b_2,c_1],[a_2,b_1,c_2],[a_1,b_2,c_2]],[[a_3,b_2,c_1],[a_3,b_1,c_2],[a_2,b_2,c_2]],[[a_3,b_2,c_2]]]@.
+
+Example:
+
+>>> distributeGradedLists [[1, 2, 3], [11, 12], [21, 22]]
+[[[1,11,21]],[[2,11,21],[1,12,21],[1,11,22]],[[3,11,21],[2,12,21],[2,11,22],[1,12,22]],[[3,12,21],[3,11,22],[2,12,22]],[[3,12,22]]]
+-}
+distributeGradedLists :: (Eq a) => [[a]] -> [[[a]]]
+distributeGradedLists = _flattenTree . (_buildTree 1)
 
 -- break a graded list into the list of gradings
 groupByGrading :: (Graded a, Show a) => [a] -> [Grading a]
-groupByGrading = groupByGradingWith (fromInteger . grading)
+groupByGrading = groupByGradingWith 0 (fromInteger . grading)
 
-groupByGradingWith :: Show a => (a -> Int) -> [a] -> [Grading a]
-groupByGradingWith = groupByGradingWith' 0
-
-groupByGradingWith' :: Show a => Int -> (a -> Int) -> [a] -> [Grading a]
-groupByGradingWith' _ _ [] = []
-groupByGradingWith' k f l@(h : _) =
+groupByGradingWith :: Show a => Int -> (a -> Int) -> [a] -> [Grading a]
+groupByGradingWith _ _ [] = []
+groupByGradingWith k f l@(h : _) =
     if (f h) == k
         then
-            ( (\(g, t) -> g : (groupByGradingWith' (k + 1) f t)) $
+            ( (\(g, t) -> g : (groupByGradingWith (k + 1) f t)) $
                 span (\x -> (f x) == k) l
             )
         else if (f h) > k
             then
-                [] : (groupByGradingWith' (k + 1) f l)
+                [] : (groupByGradingWith (k + 1) f l)
             else error $ "The list given to @groupByGradingWith@ is not graded, therefore, the grading of the element " ++ (show h) ++ " is less than the expected grading " ++ (show k) ++ "."

@@ -47,19 +47,19 @@ instance Texifiable Integer where
 
 instance (Texifiable k, Texifiable a) => Texifiable (Term k a) where
     texifyID _                 = "ScProd"
-    texify (Term k v)          = (texifyP k) ++ " \\cdot " ++ (texifyP v)
+    texify (Term k v)          = (texifyP k) ++ " " ++ (texifyP v)
     texifyDebug i j (Term k v) = (texifyD i j k) ++ " \\cdot " ++ (texifyD i j v)
 
-instance (Texifiable k, Scalar k, Basis a, Texifiable a) => Texifiable (VectorSpace k a) where
-    texifyID _                = "Vect"
+instance (Texifiable k, Scalar k, Basis a, Texifiable a) => Texifiable (PowerSeries k a) where
+    texifyID _                = "PowSer"
     texify v                  = intercalate " + " $ map texify $ terms v
     texifyDebug i j v         = intercalate " + " $ map (texifyD i j) $ terms v
-    texifyParentheses x       = if lengthV x > 1 then ("(",")") else ("","")
+    texifyParentheses x       = if (lengthV x == 0 || lengthV x == 1) then ("(",")") else ("","")
 
 instance (Texifiable a) => Texifiable [a] where
-    texifyID _                 = "TProd"
-    texify os          = intercalate " \\otimes " $ map texifyP os
-    texifyDebug i j os = intercalate " \\otimes " $ map (texifyD i j) os
+    texifyID _                 = "Prod"
+    texify os          = intercalate " \\cdot " $ map texifyP os
+    texifyDebug i j os = intercalate " \\cdot " $ map (texifyD i j) os
     texifyParentheses x     = if length x > 1 then ("(",")") else ("","")
 
  -- Take a string and apply pdflatex, pythontex, pdflatex to it to obtain a pdf
@@ -75,8 +75,8 @@ printPdf str = do
     runProcess_ $ shell "zathura --synctex-forward :: output.pdf > /dev/null &"
     return ()
 
-display :: (Texifiable k, Texifiable a, Scalar k, Basis a) => VectorSpace k a -> IO ()
+display :: (Texifiable k, Texifiable a, Scalar k, Basis a) => PowerSeries k a -> IO ()
 display v = printPdf $ " $ " ++ (texify v) ++ " $ "
 
-displayDebug :: (Texifiable k, Texifiable a, Scalar k, Basis a) => Integer -> Integer -> VectorSpace k a -> IO ()
+displayDebug :: (Texifiable k, Texifiable a, Scalar k, Basis a) => Integer -> Integer -> PowerSeries k a -> IO ()
 displayDebug startLevel endLevel v = printPdf $ " $ " ++ (texifyDebug startLevel endLevel v) ++ " $ "
