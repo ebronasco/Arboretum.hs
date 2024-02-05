@@ -70,9 +70,27 @@ _flattenTree :: (Eq a) => Tree_ a -> [[[a]]]
 _flattenTree Empty_ = []
 _flattenTree tree_ = takeWhile (/= []) $ map (\i -> getElementsFromLevel i tree_) [0 ..]
 
+{- | Cartesian product of lists in which lists can be infinite. It works in the following way:
+@distributeLists [[a_1, a_2], [b_1, b_2]]@ will return:
+@[[a_1, b_1], [a_1, b_2], [a_2, b_1], [a_2, b_2]]@.
+
+Example:
+
+>>> distributeLists [[1, 2], [11, 12], [21, 22]]
+[[1,11,21],[2,11,21],[1,12,21],[1,11,22],[2,12,21],[2,11,22],[1,12,22],[2,12,22]]
+-}
 distributeLists :: (Eq a) => [[a]] -> [[a]]
 distributeLists = concat . _flattenTree . (_buildTree 1)
 
+{- | The same as @distributeLists@ but it groups the resulting terms by the sums of their indices. It works in the following way: 
+@distributeLists [[a_1, a_2, a_3], [b_1, b_2], [c_1, c_2]]@ will return:
+@[[[a_1,b_1,c_1]],[[a_2,b_1,c_1],[a_1,b_2,c_1],[a_1,b_1,c_2]],[[a_3,b_1,c_1],[a_2,b_2,c_1],[a_2,b_1,c_2],[a_1,b_2,c_2]],[[a_3,b_2,c_1],[a_3,b_1,c_2],[a_2,b_2,c_2]],[[a_3,b_2,c_2]]]@.
+
+Example:
+
+>>> distributeGradedLists [[1, 2, 3], [11, 12], [21, 22]]
+[[[1,11,21]],[[2,11,21],[1,12,21],[1,11,22]],[[3,11,21],[2,12,21],[2,11,22],[1,12,22]],[[3,12,21],[3,11,22],[2,12,22]],[[3,12,22]]]
+-}
 distributeGradedLists :: (Eq a) => [[a]] -> [[[a]]]
 distributeGradedLists = _flattenTree . (_buildTree 1)
 
