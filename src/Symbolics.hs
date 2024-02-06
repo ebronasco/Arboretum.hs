@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -fno-warn-redundant-constraints #-}
 
 {- |
@@ -24,7 +25,6 @@ module Symbolics (
 --    VectorSpace,
     vector,
     vectorG,
-    basisVector,
     basisVectorG,
     terms,
     mapV,
@@ -81,7 +81,7 @@ instance Arbitrary (Sum Integer Integer) where
 
 >>> :{
 instance Arbitrary (PowerSeries Integer Integer) where
-   arbitrary = vector <$> (arbitrary :: Gen [Term Integer Integer])
+   arbitrary = vector <$> (arbitrary :: Gen (Sum Integer Integer))
 :}
 -}
 
@@ -211,6 +211,17 @@ prop> (lengthS $ t +: l) - 1 <= lengthS (l :: Sum Integer Integer)
         t1_basis = basisElement t1
         scalar_sum = (scalar t1) + (scalar t2)
 
+{- | The semigroup structure of the sum is the addition of terms.
+
+Examples:
+
+>>> (term 1 [1]) +: (term 1 [2]) +: Zero <> ((term 1 [1]) +: (term (-1) [2]) +: (term 1 [3]) +: Zero)
+2 *^ [1] + 1 *^ [3]
+
+Properties:
+
+prop> s1 <> s2 == s2 <> (s1 :: Sum Integer Integer)
+-}
 instance (Scalar k, Basis a) => Semigroup (Sum k a) where
     Zero <> s2 = s2
     s1 <> Zero = s1
@@ -219,16 +230,53 @@ instance (Scalar k, Basis a) => Semigroup (Sum k a) where
 instance (Scalar k, Basis a) => Monoid (Sum k a) where
     mempty = Zero
 
+{- | The inverse of a sum is the sum of the inverses of the terms.
+
+Examples:
+
+>>> invert $ (term 1 [1]) +: (term 1 [2]) +: Zero
+-1 *^ [1] + -1 *^ [2]
+
+Properties:
+
+prop> invert s <> s == (mempty :: Sum Integer Integer)
+prop> s <> invert s == (mempty :: Sum Integer Integer)
+prop> invert (invert s) == (s :: Sum Integer Integer)
+-}
 instance (Scalar k, Basis a) => Group (Sum k a) where
     invert Zero = Zero
     invert (t :+ s) = (term (negate $ scalar t) (basisElement t)) +: (invert s)
 
+{- | Two sums are equal if their difference is zero.
+
+Examples:
+
+>>> (term 1 [1]) +: (term 1 [2]) +: Zero == (term 1 [2]) +: (term 1 [1]) +: Zero
+True
+
+Properties:
+
+prop> (s1 == s2) == (s1 - s2 == (mempty :: Sum Integer Integer))
+-}
 instance (Scalar k, Basis a) => Eq (Sum k a) where
     Zero == Zero = True
     (_ :+ _) == Zero = False
     Zero == (_ :+ _) = False
     s1 == s2 = (s1 <> (invert s2)) == Zero
 
+{- | Both sum and product are well-defined over @Sum k a@. We use distributive property to define the product.
+
+Examples:
+
+>>> ((term 1 [1]) +: (term 1 [2]) +: Zero) * ((term 1 [1]) +: (term 1 [2]) +: Zero)
+1 *^ [1,1] + 1 *^ [2,1] + 1 *^ [1,2] + 1 *^ [2,2]
+
+Properties:
+
+> s1 * (s2 * s3) == (s1 * s2) * (s3 :: Sum Integer Integer)
+> s1 * (s2 + s3) == (s1 * s2) + (s1 * s3 :: Sum Integer Integer)
+> (s1 + s2) * s3 == (s1 * s3) + (s2 * s3 :: Sum Integer Integer)
+-}
 instance (Scalar k, Basis a) => Num (Sum k a) where
     (+) = (<>)
 
@@ -279,7 +327,7 @@ instance (Show k, Show a) => Show (PowerSeries k a) where
 
 Examples:
 
->>> vector [term 1 [1], term 1 [2], term 1 [1,1]] <> (vector [term 1 [1], term 1 [2], term 2 [3], term 1 [1,2]])
+>>> (vector $ (term 1 [1]) +: (term 1 [2]) +: (term 1 [1,1]) +: Zero) <> (vector $ (term 1 [1]) +: (term 1 [2]) +: (term 2 [3]) +: (term 1 [1,2]) +: Zero)
 (2 *^ [1] + 2 *^ [2] + 2 *^ [3])_1 + (1 *^ [1,1] + 1 *^ [1,2])_2
 
 Properties:
@@ -297,7 +345,7 @@ Examples:
 
 >>> mempty :: PowerSeries Integer Integer
 _0
->>> vector [term 1 [1], term 1 [2]] <> mempty
+>>> (vector $ (term 1 [1]) +: (term 1 [2]) +: Zero) <> mempty
 (1 *^ [1] + 1 *^ [2])_1
 
 Properties:
@@ -312,9 +360,9 @@ instance (Scalar k, Basis a) => Monoid (PowerSeries k a) where
 
 Examples:
 
->>> invert $ vector [term 1 [1], term 1 [2]]
+>>> invert $ vector $ (term 1 [1]) +: (term 1 [2]) +: Zero
 (-1 *^ [1] + -1 *^ [2])_1
->>> vector [term 1 [1], term 1 [2]] <> invert (vector [term 1 [1], term 1 [2]])
+>>> (vector $ (term 1 [1]) +: (term 1 [2]) +: Zero) <> invert (vector $ (term 1 [1]) +: (term 1 [2]) +: Zero)
 (0)_1
 
 Properties:
@@ -331,7 +379,7 @@ instance (Scalar k, Basis a) => Group (PowerSeries k a) where
 
 Examples:
 
->>> (vector [term 1 [1, 2], term 1 [3, 4]]) * (vector [term 1 [11, 12], term 1 [13, 14]])
+>>> (vector $ (term 1 [1, 2]) +: (term 1 [3, 4]) +: Zero) * (vector $ (term 1 [11, 12]) +: (term 1 [13, 14]) +: Zero)
 (1 *^ [1,2,11,12] + 1 *^ [3,4,11,12] + 1 *^ [1,2,13,14] + 1 *^ [3,4,13,14])_6
 -}
 instance (Scalar k, Basis a) => Num (PowerSeries k a) where
@@ -361,19 +409,52 @@ Examples:
 terms :: (Scalar k, Basis a) => PowerSeries k a -> [Term k a]
 terms = (concatMap toListS) . toListPS
 
-{- | Construct a vector from a list of terms. The list must be finite.
+-- | A class of types that can be cast to a vector, i.e. PowerSeries k a.
+class Vector v where
+    type VectorScalar v 
+    type VectorBasis v
+    vector :: v -> PowerSeries (VectorScalar v) (VectorBasis v)
+
+{- | A product is cast to a vector with integer scalars. The implementation relies on the @Vector@ instance of @Term k a@.
 
 Examples:
 
->>> vector [term 1 [1], term 1 [2], term 1 [1], term 1 [2]]
+>>> vector [1,2,3]
+(1 *^ [1,2,3])_3
+-}
+instance (Basis a) => Vector [a] where
+    type VectorScalar [a] = Integer
+    type VectorBasis [a] = a
+    vector = vector . (term 1)
+
+{- | A term is cast to a vector with the same scalar and basis element. The implementation relies on the @Vector@ instance of @Sum k a@.
+
+Examples:
+
+>>> vector $ term 1 [1]
+(1 *^ [1])_1
+-}
+instance (Scalar k, Basis a) => Vector (Term k a) where
+    type VectorScalar (Term k a) = k
+    type VectorBasis (Term k a) = a
+    vector = vector . (+: Zero)
+
+{- | Construct a vector from a sum.
+
+Examples:
+
+>>> vector $ (term 1 [1]) +: (term 1 [2]) +: (term 1 [1]) +: (term 1 [2]) +: Zero
 (2 *^ [1] + 2 *^ [2])_1
->>> vector [term 1 [1], term 1 [2], term 1 [1], term (-1) [2], term 1 [3]]
+>>> vector $ (term 1 [1]) +: (term 1 [2]) +: (term 1 [1]) +: (term (-1) [2]) +: (term 1 [3]) +: Zero
 (2 *^ [1] + 1 *^ [3])_1
 -}
-vector :: (Scalar k, Basis a) => [Term k a] -> PowerSeries k a
-vector = vectorG . (L.sortBy compareGrading)
-  where
-    compareGrading x y = compare (grading x) (grading y)
+instance (Scalar k, Basis a) => Vector (Sum k a) where
+    type VectorScalar (Sum k a) = k
+    type VectorBasis (Sum k a) = a
+    vector = vectorG . (L.sortBy compareGrading) . toListS
+      where
+        compareGrading x y = compare (grading x) (grading y)
+
 
 {- |  Construct a vector from a list of terms. The list must be graded with finite number of terms having the same grading. The list itself may be infinite.
 
@@ -387,10 +468,6 @@ Examples:
 vectorG :: (Scalar k, Basis a) => [Term k a] -> PowerSeries k a
 vectorG = (fromListPS) . (map fromListS) . groupByGrading
 
--- | The same as @vector@ but with basis elements instead of terms.
-basisVector :: (Scalar k, Basis a) => [[a]] -> PowerSeries k a
-basisVector = vector . (map basisTerm)
-
 -- | The same as @vectorG@ but with basis elements instead of terms.
 basisVectorG :: (Scalar k, Basis a) => [[a]] -> PowerSeries k a
 basisVectorG = vectorG . (map basisTerm)
@@ -399,7 +476,7 @@ basisVectorG = vectorG . (map basisTerm)
 
 Examples:
 
->>> mapV (\[b]-> [b + 1]) $ vector [term 1 [1], term 1 [2], term 1 [3], term 1 [4]]
+>>> mapV (\[b]-> [b + 1]) $ vector $ (term 1 [1]) +: (term 1 [2]) +: (term 1 [3]) +: (term 1 [4]) +: Zero
 (1 *^ [2] + 1 *^ [3] + 1 *^ [4] + 1 *^ [5])_1
 
 Properties:
@@ -411,7 +488,7 @@ as well as @(mapV f (fmap g v)) == (map (f . g) v)@ and @(mapV f (v1 <> v2)) == 
 /__TODO:__ add property-tests for the last two properties above. Difficulty: how to generate functions that are monotonically increasing with respect to the grading? Use suchThat function of QuickCheck./
 -}
 mapV :: (Scalar k, Basis a, Basis b) => ([a] -> [b]) -> PowerSeries k a -> PowerSeries k b
-mapV f = vector . (map $ fmap_ f) . terms
+mapV f = vector . fromListS . (map $ fmap_ f) . terms
   where fmap_ g t = term (scalar t) $ g $ basisElement t
 
 {- | The same as @fmap@, but the function @f@ must be monotonically increasing with respect to the grading, that is,
@@ -435,7 +512,7 @@ mapVG f = vectorG . (map $ fmap_ f) . terms
 
 Examples:
 
->>> linear (\[b] -> vector [term 1 [b], term 1 [b + 1]]) $ vector [term 1 [1], term 1 [2], term 1 [3], term 1 [4]]
+>>> linear (\[b] -> vector $ (term 1 [b]) +: (term 1 [b + 1]) +: Zero) $ vector $ (term 1 [1]) +: (term 1 [2]) +: (term 1 [3]) +: (term 1 [4]) +: Zero
 (1 *^ [1] + 2 *^ [2] + 2 *^ [3] + 2 *^ [4] + 1 *^ [5])_1
 -}
 linear
@@ -477,7 +554,7 @@ Examples:
 
 Examples:
 
->>> morphism (\b -> basisVector [[b + 1]]) $ vector [term 1 [1, 2, 3, 4], term 1 [11, 12, 13, 14]]
+>>> morphism (\b -> vector [b + 1]) $ vector $ (term 1 [1, 2, 3, 4]) +: (term 1 [11, 12, 13, 14]) +: Zero
 (1 *^ [2,3,4,5])_4 + (1 *^ [12,13,14,15])_8
 -}
 morphism
@@ -494,7 +571,7 @@ morphism f = linear $ product . (map f)
 
 Examples:
 
->>> renormalize (\s b -> s + 1) $ vector [term 1 [1], term 1 [2], term 1 [3], term 1 [4]]
+>>> renormalize (\s b -> s + 1) $ vector $ (term 1 [1]) +: (term 1 [2]) +: (term 1 [3]) +: (term 1 [4]) +: Zero
 (2 *^ [1] + 2 *^ [2] + 2 *^ [3] + 2 *^ [4])_1
 -}
 renormalize
@@ -513,7 +590,7 @@ renormalize f = vectorG . (map $ renormalizeTerm) . terms
 
 Examples:
 
->>> scaleV 2 $ vector [term 1 [1], term 1 [2], term 1 [3], term 1 [4]]
+>>> scaleV 2 $ vector $ (term 1 [1]) +: (term 1 [2]) +: (term 1 [3]) +: (term 1 [4]) +: Zero
 (2 *^ [1] + 2 *^ [2] + 2 *^ [3] + 2 *^ [4])_1
 -}
 scaleV :: (Scalar k, Basis a) => k -> PowerSeries k a -> PowerSeries k a
@@ -523,7 +600,7 @@ scaleV s = renormalize (\s0 _ -> s * s0)
 
 Examples:
 
->>> functional (\b -> fromInteger $ grading b) $ vector [term 1 [1], term 1 [2], term 1 [3], term 1 [4]]
+>>> functional (\b -> fromInteger $ grading b) $ vector $ (term 1 [1]) +: (term 1 [2]) +: (term 1 [3]) +: (term 1 [4]) +: Zero
 4
 -}
 functional :: (Scalar k, Basis a) => ([a] -> k) -> PowerSeries k a -> k
@@ -533,7 +610,7 @@ functional f = sum . (map $ \t -> (scalar t) * (f $ basisElement t)) . terms
 
 Examples:
 
->>> lengthV $ vector [term 1 [1], term 1 [2], term 1 [3], term 1 [4]]
+>>> lengthV $ vector $ (term 1 [1]) +: (term 1 [2]) +: (term 1 [3]) +: (term 1 [4]) +: Zero
 4
 
 Properties:
@@ -547,7 +624,7 @@ lengthV = sum . (map lengthS) . toListPS
 
 Examples:
 
->>> takeWhileV (\(Term i [j]) -> j < 3) $ vector [term 1 [1], term 1 [2], term 1 [3], term 1 [4]]
+>>> takeWhileV (\(Term i [j]) -> j < 3) $ vector $ (term 1 [1]) +: (term 1 [2]) +: (term 1 [3]) +: (term 1 [4]) +: Zero
 (1 *^ [1] + 1 *^ [2])_1
 >>> takeWhileV (\(Term i [j]) -> j < 5) $ basisVectorG [[i] | i <- [1..]]
 (1 *^ [1] + 1 *^ [2] + 1 *^ [3] + 1 *^ [4])_1
@@ -599,7 +676,7 @@ Examples:
 -}
 tensorCoproduct :: (Scalar k, Basis a) => [a] -> PowerSeries k [a]
 -- tensorCoproduct = product . (map (\b -> basisVector [([b],[]), ([],[b])]))
-tensorCoproduct = vector . (map (term (fromInteger 1))) . listCoproduct
+tensorCoproduct = vector . fromListS . (map basisTerm) . listCoproduct
   where
     listCoproduct [] = [[[], []]] -- sum of tensor products of products
     listCoproduct (b : bs) =
