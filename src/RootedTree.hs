@@ -86,9 +86,9 @@ Example:
 (1 *^ [3[1[2]],4[5]] + 1 *^ [3,4[1[2],5]] + 1 *^ [3,4[5[1[2]]]])_5
 -}
 graftFF :: forall a. (Basis a) => [PRTree a] -> [PRTree a] -> PowerSeries Integer (PRTree a)
-graftFF [] [] = basisVector [[]] :: PowerSeries Integer (PRTree a)
-graftFF _  [] = mempty
-graftFF [] f2 = basisVector [f2]
+graftFF [] [] = vector [] :: PowerSeries Integer (PRTree a)
+graftFF _  [] = vector Zero
+graftFF [] f2 = vector f2
 graftFF f1 (t:f2) = linear perCoproductTerm $ tensorCoproduct f1
   where
     perCoproductTerm [f11, f12] = (graftFT f11 t) * (graftFF f12 f2)
@@ -113,4 +113,4 @@ Example:
 gl :: (Basis a) => [PRTree a] -> [PRTree a] -> PowerSeries Integer (PRTree a)
 gl f1 f2 = linear perCoproductTerm $ tensorCoproduct f1
   where
-    perCoproductTerm [f11, f12] = (basisVector [f11]) * (graftFF f12 f2)
+    perCoproductTerm [f11, f12] = (vector f11) * (graftFF f12 f2)
