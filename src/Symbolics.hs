@@ -59,6 +59,10 @@ import qualified Data.List as L (
  )
 import GradedList (
     Graded,
+    nDecList,
+    HomoList,
+    homoList,
+    unHomoList,
     distributeLists,
     distributeGradedLists,
     grading,
@@ -76,7 +80,7 @@ instance Arbitrary (Term Integer Integer) where
 
 >>> :{
 instance Arbitrary (Sum Integer Integer) where
-   arbitrary = fromListS <$> (arbitrary :: Gen [Term Integer Integer])
+   arbitrary = fromListS <$> homoList <$> (arbitrary :: Gen [Term Integer Integer])
 :}
 
 >>> :{
@@ -93,13 +97,9 @@ instance Arbitrary (PowerSeries Integer Integer) where
 
 class (Num k, Eq k, Show k) => Scalar k
 
-instance Scalar Int
-
 instance Scalar Integer
 
 class (Eq a, Show a, Graded a) => Basis a
-
-instance Basis Int
 
 instance Basis Integer
 
@@ -151,18 +151,19 @@ pattern t :+ s <- Sum t s
 -- | A sum is assumed to have a finite number of terms.
 data Sum k a = Sum (Term k a) (Sum k a) | Zero
 
-{- | Construct a sum from a list of terms. The list must be finite.
+{- | Construct a sum from a list of terms with the same grading. The list must be finite.
 
 Examples:
 
->>> fromListS [term 1 [1], term 1 [2], term 1 [1], term 1 [2]]
+>>> fromListS $ homoList [term 1 [1], term 1 [2], term 1 [1], term 1 [2]]
 2 *^ [1] + 2 *^ [2]
->>> fromListS [term 1 [1], term 1 [2], term 1 [1], term (-1) [2], term 1 [3]]
+>>> fromListS $ homoList [term 1 [1], term 1 [2], term 1 [1], term (-1) [2], term 1 [3]]
 2 *^ [1] + 1 *^ [3]
 -}
-fromListS :: (Scalar k, Basis a) => [Term k a] -> Sum k a
-fromListS [] = Zero
-fromListS (h : t) = h +: fromListS t
+fromListS :: (Scalar k, Basis a) => HomoList (Term k a) -> Sum k a
+fromListS l = case (unHomoList l) of
+                [] -> Zero
+                (h : t) -> h +: (fromListS $ homoList t)
 
 toListS :: Sum k a -> [Term k a]
 toListS Zero = []
@@ -182,14 +183,14 @@ infixr 7 +:
 
 Examples:
 
->>> (term 1 [1]) +: (fromListS [term 1 [1], term 1 [2]])
+>>> (term 1 [1]) +: (term 1 [1]) +: (term 1 [2]) +: Zero
 2 *^ [1] + 1 *^ [2]
->>> (term 1 [3]) +: (fromListS [term 1 [1], term 1 [2]])
+>>> (term 1 [3]) +: (term 1 [1]) +: (term 1 [2]) +: Zero
 1 *^ [3] + 1 *^ [1] + 1 *^ [2]
 
 Properties:
 
-prop> (lengthS $ t +: l) - 1 <= lengthS (l :: Sum Integer Integer)
+> (lengthS $ t +: l) - 1 <= lengthS (l :: Sum Integer Integer)
 -}
 (+:) :: (Scalar k, Basis a) => Term k a -> Sum k a -> Sum k a
 (+:) (Term 0 _) s = s
@@ -220,7 +221,7 @@ Examples:
 
 Properties:
 
-prop> s1 <> s2 == s2 <> (s1 :: Sum Integer Integer)
+> s1 <> s2 == s2 <> (s1 :: Sum Integer Integer)
 -}
 instance (Scalar k, Basis a) => Semigroup (Sum k a) where
     Zero <> s2 = s2
@@ -239,9 +240,9 @@ Examples:
 
 Properties:
 
-prop> invert s <> s == (mempty :: Sum Integer Integer)
-prop> s <> invert s == (mempty :: Sum Integer Integer)
-prop> invert (invert s) == (s :: Sum Integer Integer)
+> invert s <> s == (mempty :: Sum Integer Integer)
+> s <> invert s == (mempty :: Sum Integer Integer)
+> invert (invert s) == (s :: Sum Integer Integer)
 -}
 instance (Scalar k, Basis a) => Group (Sum k a) where
     invert Zero = Zero
@@ -256,7 +257,7 @@ True
 
 Properties:
 
-prop> (s1 == s2) == (s1 - s2 == (mempty :: Sum Integer Integer))
+> (s1 == s2) == (s1 - s2 == (mempty :: Sum Integer Integer))
 -}
 instance (Scalar k, Basis a) => Eq (Sum k a) where
     Zero == Zero = True
@@ -282,7 +283,7 @@ instance (Scalar k, Basis a) => Num (Sum k a) where
 
     negate = invert
 
-    a * b = fromListS $ map mconcat $ distributeLists ab_list
+    a * b = fromListS $ homoList $ map mconcat $ distributeLists ab_list
       where
         ab_list = [toListS a, toListS b]
 
@@ -332,7 +333,7 @@ Examples:
 
 Properties:
 
-prop> v1 <> v2 == (v2 <> v1 :: PowerSeries Integer Integer)
+> v1 <> v2 == (v2 <> v1 :: PowerSeries Integer Integer)
 -}
 instance (Scalar k, Basis a) => Semigroup (PowerSeries k a) where
     Empty <> ps = ps
@@ -350,7 +351,7 @@ _0
 
 Properties:
 
-prop> v <> mempty == (v :: PowerSeries Integer Integer)
+> v <> mempty == (v :: PowerSeries Integer Integer)
 -}
 
 instance (Scalar k, Basis a) => Monoid (PowerSeries k a) where
@@ -367,9 +368,9 @@ Examples:
 
 Properties:
 
-prop> v <> invert v == (mempty :: PowerSeries Integer Integer)
-prop> invert v <> v == (mempty :: PowerSeries Integer Integer)
-prop> invert (invert v) == (v :: PowerSeries Integer Integer)
+> v <> invert v == (mempty :: PowerSeries Integer Integer)
+> invert v <> v == (mempty :: PowerSeries Integer Integer)
+> invert (invert v) == (v :: PowerSeries Integer Integer)
 -}
 instance (Scalar k, Basis a) => Group (PowerSeries k a) where
     invert Empty = Empty
@@ -466,7 +467,7 @@ Examples:
 (1 *^ [1] + 1 *^ [2] + 1 *^ [3] + 1 *^ [4] + 1 *^ [5] + 1 *^ [6] + 1 *^ [7] + 1 *^ [8] + 1 *^ [9])_1 + (1 *^ [10])_2
 -}
 vectorG :: (Scalar k, Basis a) => [Term k a] -> PowerSeries k a
-vectorG = (fromListPS) . (map fromListS) . groupByGrading
+vectorG = (fromListPS) . (map fromListS) . groupByGrading . nDecList
 
 -- | The same as @vectorG@ but with basis elements instead of terms.
 basisVectorG :: (Scalar k, Basis a) => [[a]] -> PowerSeries k a
@@ -481,14 +482,14 @@ Examples:
 
 Properties:
 
-prop> mapV id v == (v :: PowerSeries Integer Integer)
+> mapV id v == (v :: PowerSeries Integer Integer)
 
 as well as @(mapV f (fmap g v)) == (map (f . g) v)@ and @(mapV f (v1 <> v2)) == ((mapV f v1) <> (mapV f v2))@.
 
 /__TODO:__ add property-tests for the last two properties above. Difficulty: how to generate functions that are monotonically increasing with respect to the grading? Use suchThat function of QuickCheck./
 -}
 mapV :: (Scalar k, Basis a, Basis b) => ([a] -> [b]) -> PowerSeries k a -> PowerSeries k b
-mapV f = vector . fromListS . (map $ fmap_ f) . terms
+mapV f = vector . fromListS . homoList . (map $ fmap_ f) . terms
   where fmap_ g t = term (scalar t) $ g $ basisElement t
 
 {- | The same as @fmap@, but the function @f@ must be monotonically increasing with respect to the grading, that is,
@@ -615,7 +616,7 @@ Examples:
 
 Properties:
 
-prop> lengthV v == length (terms v :: [Term Integer Integer])
+> lengthV v == length (terms v :: [Term Integer Integer])
 -}
 lengthV :: (Scalar k, Basis a) => PowerSeries k a -> Int
 lengthV = sum . (map lengthS) . toListPS
@@ -631,8 +632,8 @@ Examples:
 
 Properties:
 
-prop> takeWhileV (\_ -> True) v == (v :: PowerSeries Integer Integer)
-prop> takeWhileV (\_ -> False) v == (mempty :: PowerSeries Integer Integer)
+> takeWhileV (\_ -> True) v == (v :: PowerSeries Integer Integer)
+> takeWhileV (\_ -> False) v == (mempty :: PowerSeries Integer Integer)
 -}
 takeWhileV :: (Scalar k, Basis a) => (Term k a -> Bool) -> PowerSeries k a -> PowerSeries k a
 takeWhileV f = vectorG . (takeWhile f) . terms
@@ -646,11 +647,11 @@ Examples:
 
 Properties:
 
-prop> filterV (\_ -> True) v == (v :: PowerSeries Integer Integer)
-prop> filterV (\_ -> False) v == (mempty :: PowerSeries Integer Integer)
+> filterV (\_ -> True) v == (v :: PowerSeries Integer Integer)
+> filterV (\_ -> False) v == (mempty :: PowerSeries Integer Integer)
 -}
 filterV :: (Scalar k, Basis a) => (Term k a -> Bool) -> PowerSeries k a -> PowerSeries k a
-filterV f = fromListPS . (map $ fromListS . (filter f) . toListS) . toListPS
+filterV f = fromListPS . (map $ fromListS .homoList . (filter f) . toListS) . toListPS
 
 {- | Take the first @n@ terms from a vector.
 
@@ -661,7 +662,7 @@ Examples:
 
 Properties:
 
-prop> takeV (lengthV v) v == (v :: PowerSeries Integer Integer)
+> takeV (lengthV v) v == (v :: PowerSeries Integer Integer)
 prop> takeV 0 v == (mempty :: PowerSeries Integer Integer)
 -}
 takeV :: (Scalar k, Basis a) => Int -> PowerSeries k a -> PowerSeries k a
@@ -676,7 +677,7 @@ Examples:
 -}
 tensorCoproduct :: (Scalar k, Basis a) => [a] -> PowerSeries k [a]
 -- tensorCoproduct = product . (map (\b -> basisVector [([b],[]), ([],[b])]))
-tensorCoproduct = vector . fromListS . (map basisTerm) . listCoproduct
+tensorCoproduct = vector . fromListS . homoList . (map basisTerm) . listCoproduct
   where
     listCoproduct [] = [[[], []]] -- sum of tensor products of products
     listCoproduct (b : bs) =
