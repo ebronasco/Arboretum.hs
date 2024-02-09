@@ -101,7 +101,7 @@ Example:
 (1 *^ [3[1[2],4]] + 1 *^ [3[4[1[2]]]])_4
 -}
 graftFT ::(Basis a) => [PRTree a] -> PRTree a -> PowerSeries Integer (PRTree a)
-graftFT f (PRTree r ts) = mapV ((:[]) . PRTree r) $ gl f ts
+graftFT f (PRTree r ts) = linear ((:[]) . PRTree r) $ gl f ts
 
 {- | Grossman-Larson product of two forests.
 

@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
 {-# OPTIONS_GHC -fno-warn-redundant-constraints #-}
 
 {- |
@@ -27,8 +28,6 @@ module Symbolics (
     vectorG,
     basisVectorG,
     terms,
-    mapV,
-    mapVG,
     linear,
 --    linearG,
     renormalize,
@@ -456,8 +455,14 @@ instance (Scalar k, Basis a) => Vector (Sum k a) where
       where
         compareGrading x y = compare (grading x) (grading y)
 
+-- | @PowerSeries@ has a trivial @Vector@ instance.
+instance (Scalar k, Basis a) => Vector (PowerSeries k a) where
+    type VectorScalar (PowerSeries k a) = k
+    type VectorBasis (PowerSeries k a) = a
+    vector = id
 
-{- |  Construct a vector from a list of terms. The list must be graded with finite number of terms having the same grading. The list itself may be infinite.
+
+{- |  Construct a vector from a list of terms. The grading of terms in the list must be non-descreasing with finite number of terms having the same grading. The list itself may be infinite.
 
 Examples:
 
@@ -473,60 +478,32 @@ vectorG = (fromListPS) . (map fromListS) . groupByGrading . nDecList
 basisVectorG :: (Scalar k, Basis a) => [[a]] -> PowerSeries k a
 basisVectorG = vectorG . (map basisTerm)
 
-{- | Extends a function @f@ that maps basis elements to basis elements to a linear map. The resulting function accepts only finite vectors.
-
-Examples:
-
->>> mapV (\[b]-> [b + 1]) $ vector $ (term 1 [1]) +: (term 1 [2]) +: (term 1 [3]) +: (term 1 [4]) +: Zero
-(1 *^ [2] + 1 *^ [3] + 1 *^ [4] + 1 *^ [5])_1
-
-Properties:
-
-> mapV id v == (v :: PowerSeries Integer Integer)
-
-as well as @(mapV f (fmap g v)) == (map (f . g) v)@ and @(mapV f (v1 <> v2)) == ((mapV f v1) <> (mapV f v2))@.
-
-/__TODO:__ add property-tests for the last two properties above. Difficulty: how to generate functions that are monotonically increasing with respect to the grading? Use suchThat function of QuickCheck./
--}
-mapV :: (Scalar k, Basis a, Basis b) => ([a] -> [b]) -> PowerSeries k a -> PowerSeries k b
-mapV f = vector . fromListS . homoList . (map $ fmap_ f) . terms
-  where fmap_ g t = term (scalar t) $ g $ basisElement t
-
-{- | The same as @fmap@, but the function @f@ must be monotonically increasing with respect to the grading, that is,
-
-@(grading b1) <= (grading b2)@ implies @(grading $ f b1) <= (grading $ f b2)@.
-
-The resulting function accepts infinite vectors.
-
-Examples:
-
->>> takeV 10 $ mapVG (\[x] -> [x*10]) $ basisVectorG [[i] | i <- [1..]]
-(1 *^ [10] + 1 *^ [20] + 1 *^ [30] + 1 *^ [40] + 1 *^ [50] + 1 *^ [60] + 1 *^ [70] + 1 *^ [80] + 1 *^ [90])_2 + (1 *^ [100])_3
--}
-mapVG :: (Scalar k, Basis a, Basis b) => ([a] -> [b]) -> PowerSeries k a -> PowerSeries k b
-mapVG f = vectorG . (map $ fmap_ f) . terms
-  where fmap_ g t = term (scalar t) $ g $ basisElement t
-
 {- | Takes a function from the basis to a vector space and extends it to a linear map. The resulting function accepts only finite vectors.
 
 !!! The function @f@ must preserve the grading.
 
 Examples:
 
+>>> linear (\[b]-> [b + 1]) $ vector $ (term 1 [1]) +: (term 1 [2]) +: (term 1 [3]) +: (term 1 [4]) +: Zero
+(1 *^ [2] + 1 *^ [3] + 1 *^ [4] + 1 *^ [5])_1
 >>> linear (\[b] -> vector $ (term 1 [b]) +: (term 1 [b + 1]) +: Zero) $ vector $ (term 1 [1]) +: (term 1 [2]) +: (term 1 [3]) +: (term 1 [4]) +: Zero
 (1 *^ [1] + 2 *^ [2] + 2 *^ [3] + 2 *^ [4] + 1 *^ [5])_1
+
 -}
 linear
     :: ( Scalar k
        , Basis a
        , Basis b
+       , Vector v
+       , VectorScalar v ~ k
+       , VectorBasis v ~ b
        )
-    => ([a] -> PowerSeries k b)
+    => ([a] -> v)
     -> PowerSeries k a
     -> PowerSeries k b
 linear f = sum . (map $ sum . (map applyf) . toListS) . toListPS
   where
-    applyf t = scaleV (scalar t) $ f $ basisElement t
+    applyf t = scaleV (scalar t) $ vector $ f $ basisElement t
 
 {- | The same as @linear@, but the function @f@ must be monotonically increasing with respect to the grading, that is,
 
@@ -555,18 +532,21 @@ Examples:
 
 Examples:
 
->>> morphism (\b -> vector [b + 1]) $ vector $ (term 1 [1, 2, 3, 4]) +: (term 1 [11, 12, 13, 14]) +: Zero
+>>> morphism (\b -> [b + 1]) $ vector $ (term 1 [1, 2, 3, 4]) +: (term 1 [11, 12, 13, 14]) +: Zero
 (1 *^ [2,3,4,5])_4 + (1 *^ [12,13,14,15])_8
 -}
 morphism
     :: ( Scalar k
        , Basis a
        , Basis b
+       , Vector v
+       , VectorScalar v ~ k
+       , VectorBasis v ~ b
        )
-    => (a -> PowerSeries k b)
+    => (a -> v)
     -> PowerSeries k a
     -> PowerSeries k b
-morphism f = linear $ product . (map f)
+morphism f = linear $ product . (map $ vector . f)
 
 {- | Change the coefficients in a vector using a function @f@ that takes the scalar and the basis element of a term and returns a new scalar.
 
