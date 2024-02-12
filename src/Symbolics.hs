@@ -17,19 +17,20 @@ An implementation of symbolic algebra using graded vector spaces with the aim of
 module Symbolics (
     Scalar,
     Basis,
-    Term(..),
+    Term (..),
     basisTerm,
     scale,
     term,
 
     -- * Graded vector space
---    VectorSpace,
+
+    --    VectorSpace,
     vector,
     vectorG,
     basisVectorG,
     terms,
     linear,
---    linearG,
+    linearG,
     renormalize,
     scaleV,
     functional,
@@ -41,12 +42,13 @@ module Symbolics (
     -- * Tensor algebra
     morphism,
     tensorCoproduct,
-
     Sum (Zero),
     fromListS,
     toListS,
     pattern (:+),
-    PowerSeries(..),
+    PowerSeries (..),
+    fromListPS,
+    toListPS,
 
     -- * Debug
     (+:),
@@ -58,14 +60,14 @@ import qualified Data.List as L (
  )
 import GradedList (
     Graded,
-    nDecList,
     HomoList,
-    homoList,
-    unHomoList,
-    distributeLists,
     distributeGradedLists,
+    distributeLists,
     grading,
     groupByGrading,
+    homoList,
+    nDecList,
+    unHomoList,
  )
 
 {- $setup
@@ -102,7 +104,7 @@ class (Eq a, Show a, Graded a) => Basis a
 
 instance Basis Integer
 
-instance Basis a => Basis [a]
+instance (Basis a) => Basis [a]
 
 --------------- Term ----------------
 
@@ -121,10 +123,10 @@ instance Functor (Term k) where
     fmap f (Term s b) = Term s (map f b)
 
 -- | Choose the product semigroup for the scalar type.
-instance Num k => Semigroup (Term k a) where
+instance (Num k) => Semigroup (Term k a) where
     (Term s1 b1) <> (Term s2 b2) = Term (s1 * s2) (b1 <> b2)
 
-instance Num k => Monoid (Term k a) where
+instance (Num k) => Monoid (Term k a) where
     mempty = Term 1 mempty
 
 term :: (Scalar k, Basis a) => k -> [a] -> Term k a
@@ -138,7 +140,6 @@ basisTerm x = term (fromInteger 1) x
 
 instance (Scalar k, Basis a) => Graded (Term k a) where
     grading = grading . basisElement
-
 
 --------------- Sum ----------------
 
@@ -161,8 +162,8 @@ Examples:
 -}
 fromListS :: (Scalar k, Basis a) => HomoList (Term k a) -> Sum k a
 fromListS l = case (unHomoList l) of
-                [] -> Zero
-                (h : t) -> h +: (fromListS $ homoList t)
+    [] -> Zero
+    (h : t) -> h +: (fromListS $ homoList t)
 
 toListS :: Sum k a -> [Term k a]
 toListS Zero = []
@@ -292,7 +293,6 @@ instance (Scalar k, Basis a) => Num (Sum k a) where
 
     signum = error "signum not implemented for Algebra"
 
-
 --------------- PowerSeries ----------------
 
 infixr 6 :&
@@ -352,7 +352,6 @@ Properties:
 
 > v <> mempty == (v :: PowerSeries Integer Integer)
 -}
-
 instance (Scalar k, Basis a) => Monoid (PowerSeries k a) where
     mempty = Empty
 
@@ -397,7 +396,6 @@ instance (Scalar k, Basis a) => Num (PowerSeries k a) where
 
     signum = error "signum not implemented for GradedAlgebra"
 
-
 --------------- PowerSeries Functions ----------------
 
 {- | A flat list of terms.
@@ -411,7 +409,7 @@ terms = (concatMap toListS) . toListPS
 
 -- | A class of types that can be cast to a vector, i.e. PowerSeries k a.
 class Vector v where
-    type VectorScalar v 
+    type VectorScalar v
     type VectorBasis v
     vector :: v -> PowerSeries (VectorScalar v) (VectorBasis v)
 
@@ -461,7 +459,6 @@ instance (Scalar k, Basis a) => Vector (PowerSeries k a) where
     type VectorBasis (PowerSeries k a) = a
     vector = id
 
-
 {- |  Construct a vector from a list of terms. The grading of terms in the list must be non-descreasing with finite number of terms having the same grading. The list itself may be infinite.
 
 Examples:
@@ -488,7 +485,6 @@ Examples:
 (1 *^ [2] + 1 *^ [3] + 1 *^ [4] + 1 *^ [5])_1
 >>> linear (\[b] -> vector $ (term 1 [b]) +: (term 1 [b + 1]) +: Zero) $ vector $ (term 1 [1]) +: (term 1 [2]) +: (term 1 [3]) +: (term 1 [4]) +: Zero
 (1 *^ [1] + 2 *^ [2] + 2 *^ [3] + 2 *^ [4] + 1 *^ [5])_1
-
 -}
 linear
     :: ( Scalar k
@@ -507,26 +503,55 @@ linear f = sum . (map $ sum . (map applyf) . toListS) . toListPS
 
 {- | The same as @linear@, but the function @f@ must be monotonically increasing with respect to the grading, that is,
 
-@(grading b1) <= (grading b2)@ implies @(min $ grading $ f b1) <= (min $ grading $ f b2)@.
+@(grading b1) <= (grading b2)@ implies @(min $ grading $ f b1) <= (min $ grading $ f b2)@,
+
+where @min@ is the minimum of the grading of the terms in the image of @f@.
 
 The resulting function accepts infinite vectors.
 
 Examples:
 
->>> takeV 10 $ linearG (\[b] -> basisVectorG [[i] | i <- [b..]]) $ basisVectorG [[i] | i <- [1..]]
-(1 *^ [1] + 2 *^ [2] + 3 *^ [3] + 4 *^ [4] + 5 *^ [5] + 6 *^ [6] + 7 *^ [7] + 8 *^ [8] + 9 *^ [9] + 10 *^ [10])
+>>> takeV 9 $ linearG (\[b] -> basisVectorG [[i] | i <- [b..]]) $ basisVectorG [[i] | i <- [1..]]
+(1 *^ [1] + 2 *^ [2] + 3 *^ [3] + 4 *^ [4] + 5 *^ [5] + 6 *^ [6] + 7 *^ [7] + 8 *^ [8] + 9 *^ [9])_1
 -}
--- linearG
---     :: ( Scalar k
---        , Basis a
---        , Basis b
---        )
---     => ([a] -> PowerSeries k b)
---     -> PowerSeries k a
---     -> PowerSeries k b
--- linearG f = vectorG . (concatMap applyf) . terms
---   where
---     applyf t = terms $ scaleV (scalar t) $ f $ basisElement t
+linearG
+    :: ( Scalar k
+       , Basis a
+       , Basis b
+       , Vector v
+       , VectorScalar v ~ k
+       , VectorBasis v ~ b
+       )
+    => ([a] -> v)
+    -> PowerSeries k a
+    -> PowerSeries k b
+linearG f = fromListPS . addLevels . (map $ toListPS . sum . (map applyf) . toListS) . toListPS
+  where
+    applyf t = scaleV (scalar t) $ vector $ f $ basisElement t
+    addLevels = map sum . transposeUntilZero 0
+    transposeUntilZero _ [] = []
+    transposeUntilZero bound l =
+        ( \(h, t) ->
+            (filter (/= Zero) $ map snd h) : (transposeUntilZero (newBound h) t)
+        )
+            $ ( \(h, t) ->
+                    ( takeWhile (\(i, x) -> x /= Zero || i <= bound) h
+                    , t
+                    )
+              )
+            $ ( \(h, t) ->
+                    ( zip [0 ..] h
+                    , filter (/= []) t
+                    )
+              )
+            $ unzip
+            $ map splitList l
+      where
+        newBound [] = bound
+        newBound [(i, _)] = i
+        newBound (_ : t) = newBound t
+        splitList (h : t) = (h, t)
+        splitList [] = (Zero, [])
 
 {- | Take a function @f@ that maps basis elements to basis elements and extends it to a morphism of the tensor algebra.
 
@@ -631,7 +656,7 @@ Properties:
 > filterV (\_ -> False) v == (mempty :: PowerSeries Integer Integer)
 -}
 filterV :: (Scalar k, Basis a) => (Term k a -> Bool) -> PowerSeries k a -> PowerSeries k a
-filterV f = fromListPS . (map $ fromListS .homoList . (filter f) . toListS) . toListPS
+filterV f = fromListPS . (map $ fromListS . homoList . (filter f) . toListS) . toListPS
 
 {- | Take the first @n@ terms from a vector.
 
