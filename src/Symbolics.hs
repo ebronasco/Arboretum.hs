@@ -47,10 +47,11 @@ module Symbolics (
     toListS,
     pattern (:+),
     PowerSeries (..),
+    fromListPS,
+    toListPS,
 
     -- * Debug
     (+:),
-    testtest,
 ) where
 
 import Data.Group
@@ -502,14 +503,16 @@ linear f = sum . (map $ sum . (map applyf) . toListS) . toListPS
 
 {- | The same as @linear@, but the function @f@ must be monotonically increasing with respect to the grading, that is,
 
-@(grading b1) <= (grading b2)@ implies @(min $ grading $ f b1) <= (min $ grading $ f b2)@.
+@(grading b1) <= (grading b2)@ implies @(min $ grading $ f b1) <= (min $ grading $ f b2)@,
+
+where @min@ is the minimum of the grading of the terms in the image of @f@.
 
 The resulting function accepts infinite vectors.
 
 Examples:
 
->>> takeV 10 $ linearG (\[b] -> basisVectorG [[i] | i <- [b..]]) $ basisVectorG [[i] | i <- [1..]]
-(1 *^ [1] + 2 *^ [2] + 3 *^ [3] + 4 *^ [4] + 5 *^ [5] + 6 *^ [6] + 7 *^ [7] + 8 *^ [8] + 9 *^ [9] + 10 *^ [10])
+>>> takeV 9 $ linearG (\[b] -> basisVectorG [[i] | i <- [b..]]) $ basisVectorG [[i] | i <- [1..]]
+(1 *^ [1] + 2 *^ [2] + 3 *^ [3] + 4 *^ [4] + 5 *^ [5] + 6 *^ [6] + 7 *^ [7] + 8 *^ [8] + 9 *^ [9])_1
 -}
 linearG
     :: ( Scalar k
@@ -525,18 +528,30 @@ linearG
 linearG f = fromListPS . addLevels . (map $ toListPS . sum . (map applyf) . toListS) . toListPS
   where
     applyf t = scaleV (scalar t) $ vector $ f $ basisElement t
-    addLevels :: [[Sum k b]] -> [Sum k b]
-    addLevels [] = []
-
--- something based on the following function:
-testtest l =
-    (\(h, t) -> h : (testtest t)) $
-        (\(h, t) -> (takeWhile (\x -> x > 0) h, t)) $
-            unzip $
-                map splitList l
-  where
-    splitList (h : t) = (h, t)
-    splitList [] = (0, [])
+    addLevels = map sum . transposeUntilZero 0
+    transposeUntilZero _ [] = []
+    transposeUntilZero bound l =
+        ( \(h, t) ->
+            (filter (/= Zero) $ map snd h) : (transposeUntilZero (newBound h) t)
+        )
+            $ ( \(h, t) ->
+                    ( takeWhile (\(i, x) -> x /= Zero || i <= bound) h
+                    , t
+                    )
+              )
+            $ ( \(h, t) ->
+                    ( zip [0 ..] h
+                    , filter (/= []) t
+                    )
+              )
+            $ unzip
+            $ map splitList l
+      where
+        newBound [] = bound
+        newBound [(i, _)] = i
+        newBound (_ : t) = newBound t
+        splitList (h : t) = (h, t)
+        splitList [] = (Zero, [])
 
 {- | Take a function @f@ that maps basis elements to basis elements and extends it to a morphism of the tensor algebra.
 
