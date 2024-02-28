@@ -9,5 +9,6 @@ import Output
 import qualified Data.MultiSet as MS
 import qualified Data.List as L
 import Data.Group
+import Control.Monad.State.Lazy
 
-main = putStrLn "Build successful."
+main = putStrLn "Hello, world!"

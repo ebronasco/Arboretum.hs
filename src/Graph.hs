@@ -24,6 +24,10 @@ module Graph (
     root,
     Rooted,
     rooted,
+    graft,
+    graftTo,
+    uniqueVertex,
+    rootedTreeGraph,
 ) where
 
 import qualified Data.List as L (
@@ -38,6 +42,17 @@ import qualified Data.MultiSet as MS (
     toList,
     union,
  )
+
+import Control.Monad.State
+
+import Symbolics
+import qualified RootedTree as RT
+
+import GradedList (
+    Graded,
+    grading,
+ )
+
 
 class GraphEdge e where
     type EndPoint e
@@ -117,3 +132,42 @@ instance (Graph g) => RootedGraph (Rooted g) where
 
 rooted :: g -> Vertex g -> Rooted g
 rooted g r = R r g
+
+-- Operations
+
+instance Eq IntegerGraph where
+    g1 == g2 = (vertices g1 == vertices g2) && (edges g1 == edges g2)
+
+instance Graded IntegerGraph where
+    grading = toInteger . length . vertices
+
+instance Basis IntegerGraph
+
+graft :: (Basis a2, RootedGraph a1, Graph a2, Edge a1 ~ Edge a2) => a1 -> a2 -> PowerSeries Integer a2
+graft rg1 g2 = basisVectorG $ map (:[]) $ map (graftTo rg1 g2) $ MS.toList $ vertices g2
+
+graftTo :: (RootedGraph a1, Graph a2, Edge a1 ~ Edge a2) => a1 -> a2 -> Vertex a2 -> a2
+graftTo rg1 g2 v = addGraph rg1 $ addEdge new_edge g2
+  where
+    new_edge = edge () (root rg1) v
+
+predecessors :: (Graph g) => g -> Vertex g -> [Vertex g]
+predecessors g v = map source $ filter ((== v) . target) $ MS.toList $ edges g
+
+removeVertex :: (Graph g) => g -> Vertex g -> g
+removeVertex g v = foldr addEdge filteredVertices $ filter (\e -> ((source e) /= v) && ((target e) /= v)) $ MS.toList $ edges g
+  where
+    filteredVertices = foldr1 addGraph $ map singleton $ filter (/= v) $ MS.toList $ vertices g
+
+rootedTreeGraph :: (RootedGraph g) => g -> RT.PRTree (Vertex g)
+rootedTreeGraph g = depthFirst g (root g)
+  where
+    -- use state monad to store the unvisited vertices
+    depthFirsts _ [] = []
+    depthFirsts g0 (v:vs) = (\(tree, leftover) -> tree : depthFirsts leftover vs) $ depthFirst g0 v
+    depthFirst g0 v = depthFirsts (removeVertex g0 v) $ predecessors g0 v
+
+-- State monad
+
+uniqueVertex :: State [a] a
+uniqueVertex = state $ \l -> (head l, tail l)
