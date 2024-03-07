@@ -75,9 +75,6 @@ Note that the grading of an integer is the number of digits.
 instance (Graded a) => Graded (PRTree a) where
     grading (PRTree r xs) = (grading r) + sum (map grading xs)
 
--- | Planar rooted trees can serve as a basis for a vector space.
-instance (Basis a) => Basis (PRTree a)
-
 {- | Grafting of two planar rooted forests using the @tensorCoproduct@ function that splits @f1@ into subforests in all possible ways and @graftFT@ function that grafts forests onto trees.
 
 Example:
@@ -85,7 +82,14 @@ Example:
 >>> graftFF [PRTree 1 [PRTree 2 []]] [PRTree 3 [], PRTree 4 [PRTree 5 []]]
 (1 *^ [3[1[2]],4[5]] + 1 *^ [3,4[1[2],5]] + 1 *^ [3,4[5[1[2]]]])_5
 -}
-graftFF :: forall a. (Basis a) => [PRTree a] -> [PRTree a] -> PowerSeries Integer (PRTree a)
+graftFF
+    :: forall a
+    .  ( Eq a
+       , Graded a
+       )
+    => [PRTree a]
+    -> [PRTree a]
+    -> PowerSeries Integer (PRTree a)
 graftFF [] [] = vector [] :: PowerSeries Integer (PRTree a)
 graftFF _  [] = vector Zero
 graftFF [] f2 = vector f2
@@ -100,7 +104,13 @@ Example:
 >>> graftFT [PRTree 1 [PRTree 2 []]] (PRTree 3 [PRTree 4 []])
 (1 *^ [3[1[2],4]] + 1 *^ [3[4[1[2]]]])_4
 -}
-graftFT ::(Basis a) => [PRTree a] -> PRTree a -> PowerSeries Integer (PRTree a)
+graftFT
+    :: ( Eq a
+       , Graded a
+       ) 
+    => [PRTree a]
+    -> PRTree a
+    -> PowerSeries Integer (PRTree a)
 graftFT f (PRTree r ts) = linear ((:[]) . PRTree r) $ gl f ts
 
 {- | Grossman-Larson product of two forests.
@@ -110,7 +120,13 @@ Example:
 >>> gl [PRTree 1 [PRTree 2 []]] [PRTree 3 [], PRTree 4 [PRTree 5 []]]
 (1 *^ [1[2],3,4[5]] + 1 *^ [3[1[2]],4[5]] + 1 *^ [3,4[1[2],5]] + 1 *^ [3,4[5[1[2]]]])_5
 -}
-gl :: (Basis a) => [PRTree a] -> [PRTree a] -> PowerSeries Integer (PRTree a)
+gl
+    :: ( Eq a
+       , Graded a
+       )
+    => [PRTree a]
+    -> [PRTree a]
+    -> PowerSeries Integer (PRTree a)
 gl f1 f2 = linear perCoproductTerm $ tensorCoproduct f1
   where
     perCoproductTerm [f11, f12] = (vector f11) * (graftFF f12 f2)

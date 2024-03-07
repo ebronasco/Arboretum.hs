@@ -1,2 +1,4 @@
 .stack-work/
 *~
+texput/tmp*
+texput/pythontex-files-tmp/

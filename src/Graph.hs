@@ -27,7 +27,6 @@ module Graph (
     graft,
     graftTo,
     uniqueVertex,
-    rootedTreeGraph,
 ) where
 
 import qualified Data.List as L (
@@ -45,12 +44,14 @@ import qualified Data.MultiSet as MS (
 
 import Control.Monad.State
 
-import Symbolics
-import qualified RootedTree as RT
-
 import GradedList (
     Graded,
     grading,
+ )
+
+import Symbolics (
+    PowerSeries,
+    basisVectorG,
  )
 
 
@@ -141,31 +142,22 @@ instance Eq IntegerGraph where
 instance Graded IntegerGraph where
     grading = toInteger . length . vertices
 
-instance Basis IntegerGraph
-
-graft :: (Basis a2, RootedGraph a1, Graph a2, Edge a1 ~ Edge a2) => a1 -> a2 -> PowerSeries Integer a2
+graft
+    :: ( Eq a2
+       , Graded a2
+       , RootedGraph a1
+       , Graph a2
+       , Edge a1 ~ Edge a2
+       )
+    => a1
+    -> a2
+    -> PowerSeries Integer a2
 graft rg1 g2 = basisVectorG $ map (:[]) $ map (graftTo rg1 g2) $ MS.toList $ vertices g2
 
 graftTo :: (RootedGraph a1, Graph a2, Edge a1 ~ Edge a2) => a1 -> a2 -> Vertex a2 -> a2
 graftTo rg1 g2 v = addGraph rg1 $ addEdge new_edge g2
   where
     new_edge = edge () (root rg1) v
-
-predecessors :: (Graph g) => g -> Vertex g -> [Vertex g]
-predecessors g v = map source $ filter ((== v) . target) $ MS.toList $ edges g
-
-removeVertex :: (Graph g) => g -> Vertex g -> g
-removeVertex g v = foldr addEdge filteredVertices $ filter (\e -> ((source e) /= v) && ((target e) /= v)) $ MS.toList $ edges g
-  where
-    filteredVertices = foldr1 addGraph $ map singleton $ filter (/= v) $ MS.toList $ vertices g
-
-rootedTreeGraph :: (RootedGraph g) => g -> RT.PRTree (Vertex g)
-rootedTreeGraph g = depthFirst g (root g)
-  where
-    -- use state monad to store the unvisited vertices
-    depthFirsts _ [] = []
-    depthFirsts g0 (v:vs) = (\(tree, leftover) -> tree : depthFirsts leftover vs) $ depthFirst g0 v
-    depthFirst g0 v = depthFirsts (removeVertex g0 v) $ predecessors g0 v
 
 -- State monad
 

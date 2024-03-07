@@ -12,7 +12,13 @@ import System.Process.Typed
 import System.Directory(copyFile)
 import Text.Printf
 
-import Symbolics
+import Symbolics (
+    Term(..),
+    PowerSeries(..),
+    lengthV,
+    terms
+ )
+
 
 class Texifiable a where
     texify :: a -> String          -- use texify or texifyP for recursion when defining this
@@ -50,7 +56,7 @@ instance (Texifiable k, Texifiable a) => Texifiable (Term k a) where
     texify (Term k v)          = (texifyP k) ++ " " ++ (texifyP v)
     texifyDebug i j (Term k v) = (texifyD i j k) ++ " \\cdot " ++ (texifyD i j v)
 
-instance (Texifiable k, Scalar k, Basis a, Texifiable a) => Texifiable (PowerSeries k a) where
+instance (Texifiable k, Texifiable a) => Texifiable (PowerSeries k a) where
     texifyID _                = "PowSer"
     texify v                  = intercalate " + " $ map texify $ terms v
     texifyDebug i j v         = intercalate " + " $ map (texifyD i j) $ terms v
@@ -75,8 +81,8 @@ printPdf str = do
     runProcess_ $ shell "zathura --synctex-forward :: output.pdf > /dev/null &"
     return ()
 
-display :: (Texifiable k, Texifiable a, Scalar k, Basis a) => PowerSeries k a -> IO ()
+display :: (Texifiable k, Texifiable a) => PowerSeries k a -> IO ()
 display v = printPdf $ " $ " ++ (texify v) ++ " $ "
 
-displayDebug :: (Texifiable k, Texifiable a, Scalar k, Basis a) => Integer -> Integer -> PowerSeries k a -> IO ()
+displayDebug :: (Texifiable k, Texifiable a) => Integer -> Integer -> PowerSeries k a -> IO ()
 displayDebug startLevel endLevel v = printPdf $ " $ " ++ (texifyDebug startLevel endLevel v) ++ " $ "
