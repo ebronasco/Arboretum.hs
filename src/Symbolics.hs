@@ -1,4 +1,3 @@
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
@@ -51,20 +50,20 @@ module Symbolics (
     (+:),
 ) where
 
+import qualified Data.Bifunctor as BF (
+    bimap,
+ )
 import Data.Group
 import qualified Data.List as L (
     sortBy,
  )
 import GradedList (
     Graded,
-    HomoList,
     distributeGradedLists,
     distributeLists,
     grading,
     groupByGrading,
-    homoList,
     nDecList,
-    unHomoList,
  )
 
 {- $setup
@@ -78,7 +77,7 @@ instance Arbitrary (Term Integer Integer) where
 
 >>> :{
 instance Arbitrary (Sum Integer Integer) where
-   arbitrary = fromListS <$> homoList <$> (arbitrary :: Gen [Term Integer Integer])
+   arbitrary = fromListS <$> (arbitrary :: Gen [Term Integer Integer])
 :}
 
 >>> :{
@@ -103,7 +102,7 @@ data Term k a = Term
     deriving (Eq)
 
 instance (Show k, Show a) => Show (Term k a) where
-    show (Term s b) = (show s) ++ " *^ " ++ (show b)
+    show (Term s b) = show s ++ " *^ " ++ show b
 
 -- | Take a functions and extend it to a morphism.
 instance Functor (Term k) where
@@ -119,38 +118,38 @@ instance (Num k) => Monoid (Term k a) where
 term :: k -> [a] -> Term k a
 term = Term
 
-scale :: Num k => k -> Term k a -> Term k a
-scale c1 t = term (c1 * (scalar t)) $ basisElement t
+scale :: (Num k) => k -> Term k a -> Term k a
+scale c1 t = term (c1 * scalar t) $ basisElement t
 
-basisTerm :: Num k => [a] -> Term k a
-basisTerm x = term (fromInteger 1) x
+basisTerm :: (Num k) => [a] -> Term k a
+basisTerm = term 1
 
-instance Graded a => Graded (Term k a) where
+instance (Graded a) => Graded (Term k a) where
     grading = grading . basisElement
 
 --------------- Sum ----------------
 
 pattern (:+) :: Term k a -> Sum k a -> Sum k a
-pattern t :+ s <- Sum t s
+pattern t :+ s <- Sum _ t s
 
 {-# COMPLETE (:+), Zero #-}
 
--- | A sum is assumed to have a finite number of terms.
-data Sum k a = Sum (Term k a) (Sum k a) | Zero
+-- | A sum is assumed to have a finite number of terms and a grading associated to it.
+data Sum k a = Sum Integer (Term k a) (Sum k a) | Zero
 
 {- | Construct a sum from a list of terms with the same grading. The list must be finite.
 
 Examples:
 
->>> fromListS $ homoList [term 1 [1], term 1 [2], term 1 [1], term 1 [2]]
+>>> fromListS [term 1 [1], term 1 [2], term 1 [1], term 1 [2]]
 2 *^ [1] + 2 *^ [2]
->>> fromListS $ homoList [term 1 [1], term 1 [2], term 1 [1], term (-1) [2], term 1 [3]]
+>>> fromListS [term 1 [1], term 1 [2], term 1 [1], term (-1) [2], term 1 [3]]
 2 *^ [1] + 1 *^ [3]
 -}
-fromListS :: (Num k, Eq k, Graded a, Eq a) => HomoList (Term k a) -> Sum k a
-fromListS l = case (unHomoList l) of
+fromListS :: (Num k, Eq k, Graded a, Eq a) => [Term k a] -> Sum k a
+fromListS l = case l of
     [] -> Zero
-    (h : t) -> h +: (fromListS $ homoList t)
+    (h : t) -> h +: fromListS t
 
 toListS :: Sum k a -> [Term k a]
 toListS Zero = []
@@ -158,6 +157,10 @@ toListS (h :+ s) = h : toListS s
 
 lengthS :: Sum k a -> Int
 lengthS = length . toListS
+
+instance Graded (Sum k a) where
+    grading Zero = 0
+    grading (Sum g _ _) = g
 
 instance (Show k, Show a) => Show (Sum k a) where
     show (t :+ Zero) = show t
@@ -179,25 +182,36 @@ Properties:
 
 > (lengthS $ t +: l) - 1 <= lengthS (l :: Sum Integer Integer)
 -}
-(+:) :: (Num k, Eq k, Eq a) => Term k a -> Sum k a -> Sum k a
+(+:)
+    :: ( Num k
+       , Eq k
+       , Eq a
+       , Graded a
+       )
+    => Term k a
+    -> Sum k a
+    -> Sum k a
 (+:) (Term 0 _) s = s
-(+:) t s = case maybeAddTerm t s of
-    Nothing -> Sum t s
-    Just s' -> s'
+(+:) t Zero = Sum (grading t) t Zero
+(+:) t s@(Sum g _ _)
+    | grading t /= g = error "Grading mismatch between a term and a sum"
+    | otherwise = case maybeAddTerm t s of
+        Nothing -> Sum g t s
+        Just s' -> s'
   where
     maybeAddTerm _ Zero = Nothing
     maybeAddTerm t1 (t2 :+ s2) =
-        if t1_basis == (basisElement t2)
+        if t1_basis == basisElement t2
             then
                 if scalar_sum /= 0
-                    then Just $ Sum (term scalar_sum t1_basis) s2
+                    then Just $ Sum g (term scalar_sum t1_basis) s2
                     else Just s2
             else case maybeAddTerm t1 s2 of
                 Nothing -> Nothing
-                Just s2' -> Just $ Sum t2 s2'
+                Just s2' -> Just $ Sum g t2 s2'
       where
         t1_basis = basisElement t1
-        scalar_sum = (scalar t1) + (scalar t2)
+        scalar_sum = scalar t1 + scalar t2
 
 {- | The semigroup structure of the sum is the addition of terms.
 
@@ -210,12 +224,12 @@ Properties:
 
 > s1 <> s2 == s2 <> (s1 :: Sum Integer Integer)
 -}
-instance (Num k, Eq k, Eq a) => Semigroup (Sum k a) where
+instance (Num k, Eq k, Eq a, Graded a) => Semigroup (Sum k a) where
     Zero <> s2 = s2
     s1 <> Zero = s1
     (t :+ s1) <> s2 = t +: (s1 <> s2)
 
-instance (Num k, Eq k, Eq a) => Monoid (Sum k a) where
+instance (Num k, Eq k, Eq a, Graded a) => Monoid (Sum k a) where
     mempty = Zero
 
 {- | The inverse of a sum is the sum of the inverses of the terms.
@@ -231,9 +245,9 @@ Properties:
 > s <> invert s == (mempty :: Sum Integer Integer)
 > invert (invert s) == (s :: Sum Integer Integer)
 -}
-instance (Num k, Eq k, Eq a) => Group (Sum k a) where
+instance (Num k, Eq k, Eq a, Graded a) => Group (Sum k a) where
     invert Zero = Zero
-    invert (t :+ s) = (term (negate $ scalar t) (basisElement t)) +: (invert s)
+    invert (t :+ s) = term (negate $ scalar t) (basisElement t) +: invert s
 
 {- | Two sums are equal if their difference is zero.
 
@@ -246,11 +260,11 @@ Properties:
 
 > (s1 == s2) == (s1 - s2 == (mempty :: Sum Integer Integer))
 -}
-instance (Num k, Eq k, Eq a) => Eq (Sum k a) where
+instance (Num k, Eq k, Eq a, Graded a) => Eq (Sum k a) where
     Zero == Zero = True
     (_ :+ _) == Zero = False
     Zero == (_ :+ _) = False
-    s1 == s2 = (s1 <> (invert s2)) == Zero
+    s1 == s2 = (s1 <> invert s2) == Zero
 
 {- | Both sum and product are well-defined over @Sum k a@. We use distributive property to define the product.
 
@@ -270,11 +284,11 @@ instance (Num k, Eq k, Eq a, Graded a) => Num (Sum k a) where
 
     negate = invert
 
-    a * b = fromListS $ homoList $ map mconcat $ distributeLists ab_list
+    a * b = fromListS $ map mconcat $ distributeLists ab_list
       where
         ab_list = [toListS a, toListS b]
 
-    fromInteger n = (term (fromInteger n) []) +: Zero
+    fromInteger n = term (fromInteger n) [] +: Zero
 
     abs = error "abs not implemented for Algebra"
 
@@ -288,14 +302,13 @@ infixr 6 :&
 data PowerSeries k a = (Sum k a) :& (PowerSeries k a) | Empty
 
 fromListPS :: [Sum k a] -> PowerSeries k a
-fromListPS [] = Empty
-fromListPS (h : t) = h :& fromListPS t
+fromListPS = foldr (:&) Empty
 
 toListPS :: PowerSeries k a -> [Sum k a]
 toListPS Empty = []
 toListPS (h :& ps) = h : toListPS ps
 
-instance (Num k, Eq k, Eq a) => Eq (PowerSeries k a) where
+instance (Num k, Eq k, Eq a, Graded a) => Eq (PowerSeries k a) where
     Empty == Empty = True
     Empty == (Zero :& ps) = Empty == ps
     (Zero :& ps) == Empty = ps == Empty
@@ -303,8 +316,9 @@ instance (Num k, Eq k, Eq a) => Eq (PowerSeries k a) where
     _ == _ = False
 
 instance (Show k, Show a) => Show (PowerSeries k a) where
-    show ps = show_ 0 ps
+    show = show_ 0
       where
+        show_ :: (Show k, Show a) => Integer -> PowerSeries k a -> String
         show_ n Empty = "_" ++ show n
         show_ n (h :& Empty) = "(" ++ show h ++ ")_" ++ show n
         show_ n (Zero :& ps') = show_ (n + 1) ps'
@@ -314,14 +328,14 @@ instance (Show k, Show a) => Show (PowerSeries k a) where
 
 Examples:
 
->>> (vector $ (term 1 [1]) +: (term 1 [2]) +: (term 1 [1,1]) +: Zero) <> (vector $ (term 1 [1]) +: (term 1 [2]) +: (term 2 [3]) +: (term 1 [1,2]) +: Zero)
-(2 *^ [1] + 2 *^ [2] + 2 *^ [3])_1 + (1 *^ [1,1] + 1 *^ [1,2])_2
+>>> (vector $ (term 1 [1]) +: (term 1 [2]) +: Zero) <> (vector $ (term 1 [1]) +: (term 1 [2]) +: (term 2 [3]) +: Zero)
+(2 *^ [1] + 2 *^ [2] + 2 *^ [3])_1
 
 Properties:
 
 > v1 <> v2 == (v2 <> v1 :: PowerSeries Integer Integer)
 -}
-instance (Num k, Eq k, Eq a) => Semigroup (PowerSeries k a) where
+instance (Num k, Eq k, Eq a, Graded a) => Semigroup (PowerSeries k a) where
     Empty <> ps = ps
     ps <> Empty = ps
     (h1 :& ps1) <> (h2 :& ps2) = (h1 <> h2) :& (ps1 <> ps2)
@@ -339,7 +353,7 @@ Properties:
 
 > v <> mempty == (v :: PowerSeries Integer Integer)
 -}
-instance (Num k, Eq k, Eq a) => Monoid (PowerSeries k a) where
+instance (Num k, Eq k, Eq a, Graded a) => Monoid (PowerSeries k a) where
     mempty = Empty
 
 {- | PowerSeries is a group with addition as the operation and negation as the inverse.
@@ -357,9 +371,9 @@ Properties:
 > invert v <> v == (mempty :: PowerSeries Integer Integer)
 > invert (invert v) == (v :: PowerSeries Integer Integer)
 -}
-instance (Num k, Eq k, Eq a) => Group (PowerSeries k a) where
+instance (Num k, Eq k, Eq a, Graded a) => Group (PowerSeries k a) where
     invert Empty = Empty
-    invert (h :& ps) = (invert h) :& (invert ps)
+    invert (h :& ps) = invert h :& invert ps
 
 {- | To ensure that the product of two power series is also a power series, the product is distributed over the basis elements of the two power series.
 
@@ -373,11 +387,11 @@ instance (Num k, Eq k, Eq a, Graded a) => Num (PowerSeries k a) where
 
     negate = invert
 
-    a * b = fromListPS $ map sum $ map (map product) $ distributeGradedLists ab_list
+    a * b = fromListPS $ map (sum . map product) $ distributeGradedLists ab_list
       where
         ab_list = [toListPS a, toListPS b]
 
-    fromInteger n = (fromInteger n) :& Empty
+    fromInteger n = fromInteger n :& Empty
 
     abs = error "abs not implemented for GradedAlgebra"
 
@@ -392,7 +406,7 @@ Examples:
 [1 *^ [1],1 *^ [2]]
 -}
 terms :: PowerSeries k a -> [Term k a]
-terms = (concatMap toListS) . toListPS
+terms = concatMap toListS . toListPS
 
 -- | A class of types that can be cast to a vector, i.e. PowerSeries k a.
 class Vector v where
@@ -410,7 +424,7 @@ Examples:
 instance (Eq a, Graded a) => Vector [a] where
     type VectorScalar [a] = Integer
     type VectorBasis [a] = a
-    vector = vector . (term 1)
+    vector = vector . term 1
 
 {- | A term is cast to a vector with the same scalar and basis element. The implementation relies on the @Vector@ instance of @Sum k a@.
 
@@ -419,7 +433,7 @@ Examples:
 >>> vector $ term 1 [1]
 (1 *^ [1])_1
 -}
-instance ( Num k, Eq k, Eq a, Graded a ) => Vector (Term k a) where
+instance (Num k, Eq k, Eq a, Graded a) => Vector (Term k a) where
     type VectorScalar (Term k a) = k
     type VectorBasis (Term k a) = a
     vector = vector . (+: Zero)
@@ -433,10 +447,10 @@ Examples:
 >>> vector $ (term 1 [1]) +: (term 1 [2]) +: (term 1 [1]) +: (term (-1) [2]) +: (term 1 [3]) +: Zero
 (2 *^ [1] + 1 *^ [3])_1
 -}
-instance ( Num k, Eq k, Eq a, Graded a ) => Vector (Sum k a) where
+instance (Num k, Eq k, Eq a, Graded a) => Vector (Sum k a) where
     type VectorScalar (Sum k a) = k
     type VectorBasis (Sum k a) = a
-    vector = vectorG . (L.sortBy compareGrading) . toListS
+    vector = vectorG . L.sortBy compareGrading . toListS
       where
         compareGrading x y = compare (grading x) (grading y)
 
@@ -455,14 +469,15 @@ Examples:
 >>> takeV 10 $ vectorG [term 1 [i] | i <- [1..]]
 (1 *^ [1] + 1 *^ [2] + 1 *^ [3] + 1 *^ [4] + 1 *^ [5] + 1 *^ [6] + 1 *^ [7] + 1 *^ [8] + 1 *^ [9])_1 + (1 *^ [10])_2
 -}
-vectorG :: ( Num k
-           , Eq k
-           , Eq a
-           , Graded a
-           )
-      => [Term k a]
-      -> PowerSeries k a
-vectorG = (fromListPS) . (map fromListS) . groupByGrading . nDecList
+vectorG
+    :: ( Num k
+       , Eq k
+       , Eq a
+       , Graded a
+       )
+    => [Term k a]
+    -> PowerSeries k a
+vectorG = fromListPS . map fromListS . groupByGrading . nDecList
 
 -- | The same as @vectorG@ but with basis elements instead of terms.
 basisVectorG
@@ -473,7 +488,7 @@ basisVectorG
        )
     => [[a]]
     -> PowerSeries k a
-basisVectorG = vectorG . (map basisTerm)
+basisVectorG = vectorG . map basisTerm
 
 {- | Takes a function from the basis to a vector space and extends it to a linear map. The resulting function accepts only finite vectors.
 
@@ -499,7 +514,7 @@ linear
     => ([a] -> v)
     -> PowerSeries k a
     -> PowerSeries k b
-linear f = sum . (map $ sum . (map applyf) . toListS) . toListPS
+linear f = sum . map (sum . map applyf . toListS) . toListPS
   where
     applyf t = scaleV (scalar t) $ vector $ f $ basisElement t
 
@@ -529,25 +544,19 @@ linearG
     => ([a] -> v)
     -> PowerSeries k a
     -> PowerSeries k b
-linearG f = fromListPS . addLevels . (map $ toListPS . sum . (map applyf) . toListS) . toListPS
+linearG f = fromListPS . addLevels . map (toListPS . sum . map applyf . toListS) . toListPS
   where
     applyf t = scaleV (scalar t) $ vector $ f $ basisElement t
     addLevels = map sum . transposeUntilZero 0
+    transposeUntilZero :: (Num k, Eq k, Eq b, Graded b) => Integer -> [[Sum k b]] -> [[Sum k b]]
     transposeUntilZero _ [] = []
     transposeUntilZero bound l =
         ( \(h, t) ->
-            (filter (/= Zero) $ map snd h) : (transposeUntilZero (newBound h) t)
+            filter (/= Zero) (map snd h) : transposeUntilZero (newBound h) t
         )
-            $ ( \(h, t) ->
-                    ( takeWhile (\(i, x) -> x /= Zero || i <= bound) h
-                    , t
-                    )
-              )
-            $ ( \(h, t) ->
-                    ( zip [0 ..] h
-                    , filter (/= []) t
-                    )
-              )
+            $ BF.bimap
+                (takeWhile (\(i, x) -> x /= Zero || i <= bound) . zip [0 ..])
+                (filter (/= []))
             $ unzip
             $ map splitList l
       where
@@ -561,8 +570,8 @@ linearG f = fromListPS . addLevels . (map $ toListPS . sum . (map applyf) . toLi
 
 Examples:
 
->>> morphism (\b -> [b + 1]) $ vector $ (term 1 [1, 2, 3, 4]) +: (term 1 [11, 12, 13, 14]) +: Zero
-(1 *^ [2,3,4,5])_4 + (1 *^ [12,13,14,15])_8
+>>> morphism (\b -> [b + 1]) $ vector $ (term 1 [1, 2, 3, 4]) +: (term 1 [5, 6, 7, 8]) +: Zero
+(1 *^ [2,3,4,5] + 1 *^ [6,7,8,9])_4
 -}
 morphism
     :: ( Num k
@@ -577,7 +586,7 @@ morphism
     => (a -> v)
     -> PowerSeries k a
     -> PowerSeries k b
-morphism f = linear $ product . (map $ vector . f)
+morphism f = linear $ product . map (vector . f)
 
 {- | Change the coefficients in a vector using a function @f@ that takes the scalar and the basis element of a term and returns a new scalar.
 
@@ -586,7 +595,7 @@ Examples:
 >>> renormalize (\s b -> s + 1) $ vector $ (term 1 [1]) +: (term 1 [2]) +: (term 1 [3]) +: (term 1 [4]) +: Zero
 (2 *^ [1] + 2 *^ [2] + 2 *^ [3] + 2 *^ [4])_1
 -}
-renormalize 
+renormalize
     :: ( Num k2
        , Eq k2
        , Eq a
@@ -595,7 +604,7 @@ renormalize
     => (k1 -> [a] -> k2)
     -> PowerSeries k1 a
     -> PowerSeries k2 a
-renormalize f = vectorG . (map $ renormalizeTerm) . terms
+renormalize f = vectorG . map renormalizeTerm . terms
   where
     renormalizeTerm t = term (f (scalar t) (basisElement t)) $ basisElement t
 
@@ -624,7 +633,7 @@ Examples:
 >>> functional (\b -> fromInteger $ grading b) $ vector $ (term 1 [1]) +: (term 1 [2]) +: (term 1 [3]) +: (term 1 [4]) +: Zero
 4
 -}
-functional 
+functional
     :: ( Num k
        , Eq k
        , Eq a
@@ -632,7 +641,7 @@ functional
     => ([a] -> k)
     -> PowerSeries k a
     -> k
-functional f = sum . (map $ \t -> (scalar t) * (f $ basisElement t)) . terms
+functional f = sum . map (\t -> scalar t * f (basisElement t)) . terms
 
 {- | The length of a vector is the number of terms in it.
 
@@ -646,7 +655,7 @@ Properties:
 > lengthV v == length (terms v :: [Term Integer Integer])
 -}
 lengthV :: PowerSeries k a -> Int
-lengthV = sum . (map lengthS) . toListPS
+lengthV = sum . map lengthS . toListPS
 
 {- | Take terms from a vector until the first term that does not satisfy the condition given by @f@.
 
@@ -671,7 +680,7 @@ takeWhileV
     => (Term k a -> Bool)
     -> PowerSeries k a
     -> PowerSeries k a
-takeWhileV f = vectorG . (takeWhile f) . terms
+takeWhileV f = vectorG . takeWhile f . terms
 
 {- | Filter terms from a vector that satisfy the condition given by @f@.
 
@@ -685,15 +694,16 @@ Properties:
 > filterV (\_ -> True) v == (v :: PowerSeries Integer Integer)
 > filterV (\_ -> False) v == (mempty :: PowerSeries Integer Integer)
 -}
-filterV :: ( Num k
-           , Eq k
-           , Eq a
-           , Graded a
-           )
-        => (Term k a -> Bool)
-        -> PowerSeries k a
-        -> PowerSeries k a
-filterV f = fromListPS . (map $ fromListS . homoList . (filter f) . toListS) . toListPS
+filterV
+    :: ( Num k
+       , Eq k
+       , Eq a
+       , Graded a
+       )
+    => (Term k a -> Bool)
+    -> PowerSeries k a
+    -> PowerSeries k a
+filterV f = fromListPS . map (fromListS . filter f . toListS) . toListPS
 
 {- | Take the first @n@ terms from a vector.
 
@@ -707,15 +717,16 @@ Properties:
 > takeV (lengthV v) v == (v :: PowerSeries Integer Integer)
 prop> takeV 0 v == (mempty :: PowerSeries Integer Integer)
 -}
-takeV :: ( Num k
-         , Eq k
-         , Eq a
-         , Graded a
-         )
-      => Int
-      -> PowerSeries k a
-      -> PowerSeries k a
-takeV n = vectorG . (take n) . terms
+takeV
+    :: ( Num k
+       , Eq k
+       , Eq a
+       , Graded a
+       )
+    => Int
+    -> PowerSeries k a
+    -> PowerSeries k a
+takeV n = vectorG . take n . terms
 
 {- | Takes a product of basis elements and returns a tensor product of the corresponding basis vectors.
 
@@ -733,18 +744,16 @@ tensorCoproduct
     => [a]
     -> PowerSeries k [a]
 -- tensorCoproduct = product . (map (\b -> basisVector [([b],[]), ([],[b])]))
-tensorCoproduct = vector . fromListS . homoList . (map basisTerm) . listCoproduct
+tensorCoproduct = vector . fromListS . map basisTerm . listCoproduct
   where
     listCoproduct [] = [[[], []]] -- sum of tensor products of products
     listCoproduct (b : bs) =
-        ( map
+        map
             (zipWith (<>) [[b], []])
             tailCoproduct
-        )
-            ++ ( map
-                    (zipWith (<>) [[], [b]])
-                    tailCoproduct
-               )
+            ++ map
+                (zipWith (<>) [[], [b]])
+                tailCoproduct
       where
         tailCoproduct = listCoproduct bs
 

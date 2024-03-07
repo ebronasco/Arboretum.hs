@@ -17,7 +17,7 @@ module RootedTree (
     gl,
 ) where
 
-import Data.List (intersperse)
+import Data.List (intercalate)
 import GradedList
 import Output
 import Symbolics
@@ -52,15 +52,15 @@ Example:
 "\\forest{i_1[i_2,i_3]}"
 -}
 instance (Texifiable a) => Texifiable (PRTree a) where
-    texify t = "\\forest{" ++ (texify_ t) ++ "}"
+    texify t = "\\forest{" ++ texify_ t ++ "}"
 
 texify_ :: (Texifiable a) => PRTree a -> String
 texify_ (PRTree r xs) =
     "i_"
-        ++ (texify r)
+        ++ texify r
         ++ ( case xs of
                 [] -> ""
-                _ -> "[" ++ (concat $ intersperse "," $ map texify_ xs) ++ "]"
+                _ -> "[" ++ intercalate "," (map texify_ xs) ++ "]"
            )
 
 {- | Grading of a planar rooted tree is the sum of gradings of the nodes.
@@ -73,7 +73,7 @@ Example:
 Note that the grading of an integer is the number of digits.
 -}
 instance (Graded a) => Graded (PRTree a) where
-    grading (PRTree r xs) = (grading r) + sum (map grading xs)
+    grading (PRTree r xs) = grading r + sum (map grading xs)
 
 {- | Grafting of two planar rooted forests using the @tensorCoproduct@ function that splits @f1@ into subforests in all possible ways and @graftFT@ function that grafts forests onto trees.
 
@@ -95,7 +95,7 @@ graftFF _  [] = vector Zero
 graftFF [] f2 = vector f2
 graftFF f1 (t:f2) = linear perCoproductTerm $ tensorCoproduct f1
   where
-    perCoproductTerm [f11, f12] = (graftFT f11 t) * (graftFF f12 f2)
+    perCoproductTerm [f11, f12] = graftFT f11 t * graftFF f12 f2
 
 {- | Graft a forest onto a tree using the Grossman-Larson product implemented by the @gl@ function.
 
@@ -129,4 +129,4 @@ gl
     -> PowerSeries Integer (PRTree a)
 gl f1 f2 = linear perCoproductTerm $ tensorCoproduct f1
   where
-    perCoproductTerm [f11, f12] = (vector f11) * (graftFF f12 f2)
+    perCoproductTerm [f11, f12] = vector f11 * graftFF f12 f2

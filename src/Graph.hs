@@ -26,7 +26,7 @@ module Graph (
     rooted,
     graft,
     graftTo,
-    uniqueVertex,
+    getVertex,
 ) where
 
 import qualified Data.List as L (
@@ -102,7 +102,7 @@ instance Graph IntegerGraph where
     singleton v = IG (MS.singleton v) MS.empty
     edges (IG _ es) = es
     vertices (IG vs _) = vs
-    addGraph g (IG vs es) = IG ((vertices g) `MS.union` vs) ((edges g) `MS.union` es)
+    addGraph g (IG vs es) = IG (vertices g `MS.union` vs) (edges g `MS.union` es)
     addEdge e (IG vs es) = IG vs (e `MS.insert` es)
 
 integerGraph :: [Integer] -> [(Integer, Integer)] -> IntegerGraph
@@ -116,7 +116,7 @@ class (Graph g) => RootedGraph g where
 data Rooted g = R (Vertex g) g
 
 instance (Show g, Show (Vertex g)) => Show (Rooted g) where
-    show (R r g) = "Rooted" ++ trimmedShowG ++ ", R=" ++ (show r) ++ ")"
+    show (R r g) = "Rooted" ++ trimmedShowG ++ ", R=" ++ show r ++ ")"
       where
         trimmedShowG = L.init $ show g
 
@@ -152,7 +152,7 @@ graft
     => a1
     -> a2
     -> PowerSeries Integer a2
-graft rg1 g2 = basisVectorG $ map (:[]) $ map (graftTo rg1 g2) $ MS.toList $ vertices g2
+graft rg1 g2 = basisVectorG $ map ((: []) . graftTo rg1 g2) $ MS.toList $ vertices g2
 
 graftTo :: (RootedGraph a1, Graph a2, Edge a1 ~ Edge a2) => a1 -> a2 -> Vertex a2 -> a2
 graftTo rg1 g2 v = addGraph rg1 $ addEdge new_edge g2
