@@ -1,5 +1,3 @@
-{-# LANGUAGE PatternSynonyms #-}
-
 module SymLists (
 --     Sum (Zero),
 --     pattern (:+),

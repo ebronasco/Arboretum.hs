@@ -34,15 +34,15 @@ class Texifiable a where
 
     -- returns tex code with parentheses
     texifyP :: a -> String
-    texifyP x = (fst $ texifyParentheses x) ++ (texify x) ++ (snd $ texifyParentheses x)
+    texifyP x = fst (texifyParentheses x) ++ texify x ++ snd (texifyParentheses x)
 
     -- returns tex code of the math expression with debug information
     texifyD :: Integer -> Integer -> a -> String
-    texifyD i j x = underbrace i j (texifyID x) $ (fst $ texifyParentheses x) ++ (texifyDebug (i-1) (j-1) x) ++ (snd $ texifyParentheses x)
+    texifyD i j x = underbrace i j (texifyID x) $ fst (texifyParentheses x) ++ texifyDebug (i-1) (j-1) x ++ snd (texifyParentheses x)
 
 underbrace :: Integer -> Integer -> String -> String -> String
-underbrace i j name str = if (i <= 0 && j > 0 && (length name > 0)) 
-                          then ("\\underbracket[0.1ex]{" ++ str ++ "}_{\\text{" ++ name ++ "}}") 
+underbrace i j name str = if i <= 0 && j > 0 && not (null name)
+                          then "\\underbracket[0.1ex]{" ++ str ++ "}_{\\text{" ++ name ++ "}}" 
                           else str
 
 instance Texifiable Char where
@@ -53,14 +53,14 @@ instance Texifiable Integer where
 
 instance (Texifiable k, Texifiable a) => Texifiable (Term k a) where
     texifyID _                 = "ScProd"
-    texify (Term k v)          = (texifyP k) ++ " " ++ (texifyP v)
-    texifyDebug i j (Term k v) = (texifyD i j k) ++ " \\cdot " ++ (texifyD i j v)
+    texify (Term k v)          = texifyP k ++ " " ++ texifyP v
+    texifyDebug i j (Term k v) = texifyD i j k ++ " \\cdot " ++ texifyD i j v
 
 instance (Texifiable k, Texifiable a) => Texifiable (PowerSeries k a) where
     texifyID _                = "PowSer"
     texify v                  = intercalate " + " $ map texify $ terms v
     texifyDebug i j v         = intercalate " + " $ map (texifyD i j) $ terms v
-    texifyParentheses x       = if (lengthV x == 0 || lengthV x == 1) then ("(",")") else ("","")
+    texifyParentheses x       = if lengthV x == 0 || lengthV x == 1 then ("(",")") else ("","")
 
 instance (Texifiable a) => Texifiable [a] where
     texifyID _                 = "Prod"
@@ -82,7 +82,7 @@ printPdf str = do
     return ()
 
 display :: (Texifiable k, Texifiable a) => PowerSeries k a -> IO ()
-display v = printPdf $ " $ " ++ (texify v) ++ " $ "
+display v = printPdf $ " $ " ++ texify v ++ " $ "
 
 displayDebug :: (Texifiable k, Texifiable a) => Integer -> Integer -> PowerSeries k a -> IO ()
-displayDebug startLevel endLevel v = printPdf $ " $ " ++ (texifyDebug startLevel endLevel v) ++ " $ "
+displayDebug startLevel endLevel v = printPdf $ " $ " ++ texifyDebug startLevel endLevel v ++ " $ "
