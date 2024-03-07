@@ -161,5 +161,5 @@ graftTo rg1 g2 v = addGraph rg1 $ addEdge new_edge g2
 
 -- State monad
 
-uniqueVertex :: State [a] a
-uniqueVertex = state $ \l -> (head l, tail l)
+getVertex :: State [a] a
+getVertex = state $ \l -> (head l, tail l)

@@ -15,13 +15,13 @@ import Control.Monad.State.Lazy
  -- Using Graph.hs
 
 buildGraphs = do
-    v <- uniqueVertex
-    u <- uniqueVertex
+    v <- getVertex
+    u <- getVertex
     let g1 = integerGraph [v,u] [(u,v)]
     let rg1 = rooted g1 v
 
-    v <- uniqueVertex
-    u <- uniqueVertex
+    v <- getVertex
+    u <- getVertex
     let g2 = integerGraph [v,u] [(u,u)]
 
     return (rg1, g1, g2)
