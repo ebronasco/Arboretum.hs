@@ -24,6 +24,9 @@ module Graph (
     root,
     Rooted,
     rooted,
+    graft,
+    graftTo,
+    uniqueVertex,
 ) where
 
 import qualified Data.List as L (
@@ -38,6 +41,19 @@ import qualified Data.MultiSet as MS (
     toList,
     union,
  )
+
+import Control.Monad.State
+
+import GradedList (
+    Graded,
+    grading,
+ )
+
+import Symbolics (
+    PowerSeries,
+    basisVectorG,
+ )
+
 
 class GraphEdge e where
     type EndPoint e
@@ -117,3 +133,33 @@ instance (Graph g) => RootedGraph (Rooted g) where
 
 rooted :: g -> Vertex g -> Rooted g
 rooted g r = R r g
+
+-- Operations
+
+instance Eq IntegerGraph where
+    g1 == g2 = (vertices g1 == vertices g2) && (edges g1 == edges g2)
+
+instance Graded IntegerGraph where
+    grading = toInteger . length . vertices
+
+graft
+    :: ( Eq a2
+       , Graded a2
+       , RootedGraph a1
+       , Graph a2
+       , Edge a1 ~ Edge a2
+       )
+    => a1
+    -> a2
+    -> PowerSeries Integer a2
+graft rg1 g2 = basisVectorG $ map (:[]) $ map (graftTo rg1 g2) $ MS.toList $ vertices g2
+
+graftTo :: (RootedGraph a1, Graph a2, Edge a1 ~ Edge a2) => a1 -> a2 -> Vertex a2 -> a2
+graftTo rg1 g2 v = addGraph rg1 $ addEdge new_edge g2
+  where
+    new_edge = edge () (root rg1) v
+
+-- State monad
+
+getVertex :: State [a] a
+getVertex = state $ \l -> (head l, tail l)

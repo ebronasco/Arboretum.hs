@@ -25,6 +25,7 @@ dependencies:
 - multiset
 - directory
 - typed-process
+- mtl
 
 ghc-options:
 - -Wall
@@ -65,3 +66,4 @@ tests:
     - graphal
     - doctest
     - QuickCheck
+    - mtl

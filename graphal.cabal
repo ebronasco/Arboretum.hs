@@ -42,6 +42,7 @@ library
       base >=4.7 && <5
     , directory
     , groups
+    , mtl
     , multiset
     , typed-process
   default-language: Haskell2010
@@ -56,6 +57,7 @@ executable graphal-exe
     , directory
     , graphal
     , groups
+    , mtl
     , multiset
     , typed-process
   default-language: Haskell2010
@@ -77,6 +79,7 @@ test-suite graphal-test
     , doctest
     , graphal
     , groups
+    , mtl
     , multiset
     , typed-process
   default-language: Haskell2010
