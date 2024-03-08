@@ -15,12 +15,17 @@ module RootedTree (
     graftFF,
     graftFT,
     gl,
+    RTree (..),
+    nonplanar,
 ) where
 
 import Data.List (intercalate)
+import qualified Data.MultiSet as MS
 import GradedList
 import Output
 import Symbolics
+
+-- * Planar rooted trees
 
 -- | Planar rooted trees are represented as a tree with a root and a list of children which are planar rooted trees themselves.
 data PRTree a = PRTree
@@ -130,3 +135,51 @@ gl
 gl f1 f2 = linear perCoproductTerm $ tensorCoproduct f1
   where
     perCoproductTerm [f11, f12] = vector f11 * graftFF f12 f2
+
+-- * Non-planar rooted trees
+
+-- | Non-planar rooted trees are represented as a tree with a root and a multiset of children which are non-planar rooted trees themselves.
+data RTree a = RTree 
+    { root' :: a
+    , children' :: MS.MultiSet (RTree a)
+    }
+    deriving (Eq)
+
+instance Ord a => Ord (RTree a) where
+    compare (RTree r1 c1) (RTree r2 c2) = compare (r1, c1) (r2, c2)
+
+instance (Ord a, Graded a) => Graded (RTree a) where
+    grading = grading . planar
+
+-- | Brace notation for non-planar rooted trees. Children are enclosed in curly braces.
+instance (Show a) => Show (RTree a) where
+    show (RTree r xs) =
+        show r
+            ++ ( case MS.toList xs of
+                    [] -> ""
+                    _ -> "{" ++ (tail $ init $ show $ MS.toList xs) ++ "}"
+               )
+
+{- | Forget the order of children in a planar rooted tree.
+
+Example:
+
+>>> a = nonplanar $ PRTree 1 [PRTree 2 [], PRTree 3 []]
+>>> b = nonplanar $ PRTree 1 [PRTree 3 [], PRTree 2 []]
+>>> a == b
+True
+
+-}
+nonplanar :: Ord a => PRTree a -> RTree a
+nonplanar (PRTree r xs) = RTree r (MS.fromList (map nonplanar xs))
+
+{- | Choose a canonical planar representation of a non-planar rooted tree.
+
+Example:
+
+>>> planar $ RTree 1 (MS.fromList [RTree 2 MS.empty, RTree 3 MS.empty])
+1[2,3]
+
+-}
+planar :: Ord a => RTree a -> PRTree a
+planar (RTree r xs) = PRTree r (map planar (MS.toList xs))
