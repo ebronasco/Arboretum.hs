@@ -54,22 +54,36 @@ instance Texifiable Char where
 instance Texifiable Integer where
     texify = show
 
-instance (Texifiable k, Texifiable a) => Texifiable (ScalarProduct k a) where
-    texifyID _                 = "ScProd"
-    texify (k :*^ v)          = texifyP k ++ " " ++ texifyP v
+instance (Num k, Eq k, Texifiable k, Texifiable a) => Texifiable (ScalarProduct k a) where
+    texifyID _                = "ScProd"
+    texify (k :*^ v)
+        | k == 1 = texifyP v
+        | k == -1 = "-" ++ texifyP v
+        | otherwise = texifyP k ++ texifyP v
     texifyDebug i j (k :*^ v) = texifyD i j k ++ " \\cdot " ++ texifyD i j v
 
-instance (Texifiable k, Texifiable a) => Texifiable (PowerSeries k a) where
-    texifyID _                = "PowSer"
-    texify v                  = intercalate " + " $ map texify $ terms v
-    texifyDebug i j v         = intercalate " + " $ map (texifyD i j) $ terms v
-    texifyParentheses x       = if lengthV x == 0 || lengthV x == 1 then ("(",")") else ("","")
+instance (Num k, Eq k, Texifiable k, Texifiable a) => Texifiable (PowerSeries k a) where
+    texifyID _          = "PowSer"
+    texify v            = intercalate " + " $ map texify $ terms v
+    texifyDebug i j v   = intercalate " + " $ map (texifyD i j) $ terms v
+    texifyParentheses x = if lengthV x == 0 || lengthV x == 1 then ("(",")") else ("","")
 
-instance (Texifiable a) => Texifiable [a] where
-    texifyID _                 = "Prod"
-    texify os          = intercalate " \\cdot " $ map texifyP os
-    texifyDebug i j os = intercalate " \\cdot " $ map (texifyD i j) os
-    texifyParentheses x     = if length x > 1 then ("(",")") else ("","")
+instance (Texifiable a, Eq a) => Texifiable [a] where
+    texifyID _          = "Prod"
+    texify os
+        | os == [] = "1"
+        | otherwise = intercalate " \\cdot " $ map texifyP os
+    texifyDebug i j os
+        | os == [] = "1"
+        | otherwise = intercalate " \\cdot " $ map (texifyD i j) os
+    texifyParentheses x = if length x > 1 then ("(",")") else ("","")
+
+instance (Texifiable a, Texifiable b) => Texifiable (a, b) where
+    texifyID _             = "TenProd"
+    texify (a, b)          = texifyP a ++ " \\otimes " ++ texifyP b
+    texifyDebug i j (a, b) = texifyD i j a ++ " \\otimes "++ texifyD i j b
+    texifyParentheses x    = if length x > 1 then ("(",")") else ("","")
+
 
  -- Take a string and apply pdflatex, pythontex, pdflatex to it to obtain a pdf
 printPdf :: String -> IO ()
@@ -84,8 +98,8 @@ printPdf str = do
     runProcess_ $ shell "zathura --synctex-forward :: output.pdf > /dev/null &"
     return ()
 
-display :: (Texifiable k, Texifiable a) => PowerSeries k a -> IO ()
+display :: (Num k, Eq k, Texifiable k, Texifiable a) => PowerSeries k a -> IO ()
 display v = printPdf $ " $ " ++ texify v ++ " $ "
 
-displayDebug :: (Texifiable k, Texifiable a) => Integer -> Integer -> PowerSeries k a -> IO ()
+displayDebug :: (Num k, Eq k, Texifiable k, Texifiable a) => Integer -> Integer -> PowerSeries k a -> IO ()
 displayDebug startLevel endLevel v = printPdf $ " $ " ++ texifyDebug startLevel endLevel v ++ " $ "
