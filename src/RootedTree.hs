@@ -85,7 +85,7 @@ instance (Graded a) => Graded (PRTree a) where
 Example:
 
 >>> graftFF [PRTree 1 [PRTree 2 []]] [PRTree 3 [], PRTree 4 [PRTree 5 []]]
-(1 *^ [3[1[2]],4[5]] + 1 *^ [3,4[1[2],5]] + 1 *^ [3,4[5[1[2]]]])_5
+(1 *^ [3,4[5[1[2]]]] + 1 *^ [3,4[1[2],5]] + 1 *^ [3[1[2]],4[5]])_5
 -}
 graftFF
     :: forall a
@@ -94,20 +94,20 @@ graftFF
        )
     => [PRTree a]
     -> [PRTree a]
-    -> PowerSeries Integer (PRTree a)
-graftFF [] [] = vector [] :: PowerSeries Integer (PRTree a)
+    -> PowerSeries Integer [PRTree a]
+graftFF [] [] = vector [] :: PowerSeries Integer [PRTree a]
 graftFF _  [] = vector Zero
 graftFF [] f2 = vector f2
 graftFF f1 (t:f2) = linear perCoproductTerm $ tensorCoproduct f1
   where
-    perCoproductTerm [f11, f12] = graftFT f11 t * graftFF f12 f2
+    perCoproductTerm (f11, f12) = graftFT f11 t * graftFF f12 f2
 
 {- | Graft a forest onto a tree using the Grossman-Larson product implemented by the @gl@ function.
 
 Example:
 
 >>> graftFT [PRTree 1 [PRTree 2 []]] (PRTree 3 [PRTree 4 []])
-(1 *^ [3[1[2],4]] + 1 *^ [3[4[1[2]]]])_4
+(1 *^ [3[4[1[2]]]] + 1 *^ [3[1[2],4]])_4
 -}
 graftFT
     :: ( Eq a
@@ -115,15 +115,15 @@ graftFT
        ) 
     => [PRTree a]
     -> PRTree a
-    -> PowerSeries Integer (PRTree a)
-graftFT f (PRTree r ts) = linear ((:[]) . PRTree r) $ gl f ts
+    -> PowerSeries Integer [PRTree a]
+graftFT f (PRTree r ts) = linear ((:[]) . (PRTree r)) $ gl f ts
 
 {- | Grossman-Larson product of two forests.
 
 Example:
 
 >>> gl [PRTree 1 [PRTree 2 []]] [PRTree 3 [], PRTree 4 [PRTree 5 []]]
-(1 *^ [1[2],3,4[5]] + 1 *^ [3[1[2]],4[5]] + 1 *^ [3,4[1[2],5]] + 1 *^ [3,4[5[1[2]]]])_5
+(1 *^ [3,4[5[1[2]]]] + 1 *^ [3,4[1[2],5]] + 1 *^ [3[1[2]],4[5]] + 1 *^ [1[2],3,4[5]])_5
 -}
 gl
     :: ( Eq a
@@ -131,10 +131,10 @@ gl
        )
     => [PRTree a]
     -> [PRTree a]
-    -> PowerSeries Integer (PRTree a)
+    -> PowerSeries Integer [PRTree a]
 gl f1 f2 = linear perCoproductTerm $ tensorCoproduct f1
   where
-    perCoproductTerm [f11, f12] = vector f11 * graftFF f12 f2
+    perCoproductTerm (f11, f12) = vector f11 * graftFF f12 f2
 
 -- * Non-planar rooted trees
 
