@@ -22,9 +22,10 @@ module Symbolics (
 
     --    VectorSpace,
     vector,
-    vectorG,
-    basisVectorG,
+    fromListV,
+    fromInfListV,
     terms,
+    basisElements,
     linear,
     linearG,
     renormalize,
@@ -438,19 +439,29 @@ Examples:
 terms :: PowerSeries k a -> [ScalarProduct k a]
 terms = concatMap toListS . toListPS
 
+{- | A list of basis elements of a power series.
+
+Examples:
+
+>>> basisElements $ vector $ (1 *^ 'x') +: (1 *^ 'y') +: (1 *^ 'x') +: (1 *^ 'y') +: Zero
+"xy"
+-}
+basisElements :: PowerSeries k a -> [a]
+basisElements = map basisElement . terms
+
 -- | A class of types that can be cast to a vector, i.e. PowerSeries k a.
 class Vector v where
     type VectorScalar v
     type VectorBasis v
     vector :: v -> PowerSeries (VectorScalar v) (VectorBasis v)
 
+{- | A list is often used to represent a product and as a basis of an algebra.
 
-instance (Eq a, Graded a, Eq b, Graded b) => Vector (a, b) where
-    type VectorScalar (a, b) = Integer
-    type VectorBasis (a, b) = (a, b)
-    vector = vector . (1 *^)
+Examples:
 
-
+>>> vector "xy"
+(1 *^ "xy")_2
+-}
 instance (Eq a, Graded a) =>  Vector [a] where
     type VectorScalar [a] = Integer
     type VectorBasis [a] = [a]
@@ -480,9 +491,8 @@ Examples:
 instance (Num k, Eq k, Eq a, Graded a) => Vector (Sum k a) where
     type VectorScalar (Sum k a) = k
     type VectorBasis (Sum k a) = a
-    vector = vectorG . L.sortBy compareGrading . toListS
-      where
-        compareGrading x y = compare (grading x) (grading y)
+    vector Zero = Empty
+    vector s@(Sum g _ _) = fromListPS $ (take (fromInteger g) $ repeat Zero) ++ [s]
 
 -- | @PowerSeries@ has a trivial @Vector@ instance.
 instance Vector (PowerSeries k a) where
@@ -490,16 +500,14 @@ instance Vector (PowerSeries k a) where
     type VectorBasis (PowerSeries k a) = a
     vector = id
 
-{- |  Construct a vector from a list of terms. The grading of terms in the list must be non-descreasing with finite number of terms having the same grading. The list itself may be infinite.
+{- | Construct a vector from a finite list of terms.
 
 Examples:
 
->>> vectorG [1 *^ 'x', 1 *^ 'y', 1 *^ 'x', 1 *^ 'y']
-(2 *^ 'x' + 2 *^ 'y')_1
->>> takeV 10 $ vectorG [1 *^ i | i <- [1..]]
-(1 *^ 1 + 1 *^ 2 + 1 *^ 3 + 1 *^ 4 + 1 *^ 5 + 1 *^ 6 + 1 *^ 7 + 1 *^ 8 + 1 *^ 9)_1 + (1 *^ 10)_2
+>>> fromListV [1 *^ "x", 1 *^ "y", 3 *^ "xy", 1 *^ "x", 1 *^ "y"]
+(2 *^ "x" + 2 *^ "y")_1 + (3 *^ "xy")_2
 -}
-vectorG
+fromListV
     :: ( Num k
        , Eq k
        , Eq a
@@ -507,18 +515,28 @@ vectorG
        )
     => [ScalarProduct k a]
     -> PowerSeries k a
-vectorG = fromListPS . map fromListS . groupByGrading . nDecList
+fromListV = fromInfListV . L.sortBy compareGrading 
+  where
+    compareGrading x y = compare (grading x) (grading y)
 
--- | The same as @vectorG@ but with basis elements instead of terms.
-basisVectorG
+{- |  Construct a vector from a list of terms. The grading of terms in the list must be non-descreasing with finite number of terms having the same grading. The list itself may be infinite.
+
+Examples:
+
+>>> fromInfListV [1 *^ 'x', 1 *^ 'y', 1 *^ 'x', 1 *^ 'y']
+(2 *^ 'x' + 2 *^ 'y')_1
+>>> takeV 10 $ fromInfListV [1 *^ i | i <- [1..]]
+(1 *^ 1 + 1 *^ 2 + 1 *^ 3 + 1 *^ 4 + 1 *^ 5 + 1 *^ 6 + 1 *^ 7 + 1 *^ 8 + 1 *^ 9)_1 + (1 *^ 10)_2
+-}
+fromInfListV
     :: ( Num k
        , Eq k
        , Eq a
        , Graded a
        )
-    => [a]
+    => [ScalarProduct k a]
     -> PowerSeries k a
-basisVectorG = vectorG . map (1 *^)
+fromInfListV = fromListPS . map fromListS . groupByGrading . nDecList
 
 {- | Takes a function from the basis to a vector space and extends it to a linear map. The resulting function accepts only finite vectors.
 
@@ -558,7 +576,7 @@ The resulting function accepts infinite vectors.
 
 Examples:
 
->>> takeV 9 $ linearG (\b -> basisVectorG [i | i <- [b..]]) $ basisVectorG [i | i <- [1..]]
+>>> takeV 9 $ linearG (\b -> fromInfListV [1 *^ i | i <- [b..]]) $ fromInfListV [1 *^ i | i <- [1..]]
 (1 *^ 1 + 2 *^ 2 + 3 *^ 3 + 4 *^ 4 + 5 *^ 5 + 6 *^ 6 + 7 *^ 7 + 8 *^ 8 + 9 *^ 9)_1
 -}
 linearG
@@ -637,7 +655,7 @@ renormalize
     => (k1 -> a -> k2)
     -> PowerSeries k1 a
     -> PowerSeries k2 a
-renormalize f = vectorG . map renormalizeTerm . terms
+renormalize f = fromInfListV . map renormalizeTerm . terms
   where
     renormalizeTerm t = (f (scalar t) (basisElement t)) *^ basisElement t
 
@@ -696,7 +714,7 @@ Examples:
 
 >>> takeWhileV (\(i :*^ j) -> j < 3) $ vector $ (1 *^ 1) +: (1 *^ 2) +: (1 *^ 3) +: (1 *^ 4) +: Zero
 (1 *^ 1 + 1 *^ 2)_1
->>> takeWhileV (\(i :*^ j) -> j < 5) $ basisVectorG [i | i <- [1..]]
+>>> takeWhileV (\(i :*^ j) -> j < 5) $ fromInfListV [1 *^ i | i <- [1..]]
 (1 *^ 1 + 1 *^ 2 + 1 *^ 3 + 1 *^ 4)_1
 
 Properties:
@@ -713,13 +731,13 @@ takeWhileV
     => (ScalarProduct k a -> Bool)
     -> PowerSeries k a
     -> PowerSeries k a
-takeWhileV f = vectorG . takeWhile f . terms
+takeWhileV f = fromInfListV . takeWhile f . terms
 
 {- | Filter terms from a vector that satisfy the condition given by @f@.
 
 Examples:
 
->>> takeV 10 $ filterV (\(_ :*^ j) -> j `mod` 3 == 0) $ basisVectorG [i | i <- [1..]]
+>>> takeV 10 $ filterV (\(_ :*^ j) -> j `mod` 3 == 0) $ fromInfListV [1 *^ i | i <- [1..]]
 (1 *^ 3 + 1 *^ 6 + 1 *^ 9)_1 + (1 *^ 12 + 1 *^ 15 + 1 *^ 18 + 1 *^ 21 + 1 *^ 24 + 1 *^ 27 + 1 *^ 30)_2
 
 Properties:
@@ -742,7 +760,7 @@ filterV f = fromListPS . map (fromListS . filter f . toListS) . toListPS
 
 Examples:
 
->>> takeV 10 $ basisVectorG [i | i <- [1..]]
+>>> takeV 10 $ fromInfListV [1 *^ i | i <- [1..]]
 (1 *^ 1 + 1 *^ 2 + 1 *^ 3 + 1 *^ 4 + 1 *^ 5 + 1 *^ 6 + 1 *^ 7 + 1 *^ 8 + 1 *^ 9)_1 + (1 *^ 10)_2
 
 Properties:
@@ -759,8 +777,7 @@ takeV
     => Int
     -> PowerSeries k a
     -> PowerSeries k a
-takeV n = vectorG . take n . terms
-
+takeV n = fromInfListV . take n . terms
 
 -----------------------------------------------------------------------------
 
@@ -768,9 +785,13 @@ takeV n = vectorG . take n . terms
 
 -----------------------------------------------------------------------------
 
+instance (Eq a, Graded a, Eq b, Graded b) => Vector (a, b) where
+    type VectorScalar (a, b) = Integer
+    type VectorBasis (a, b) = (a, b)
+    vector = vector . (1 *^)
+
 instance (Graded a, Graded b) => Graded (a,b) where
     grading (a, b) = grading a + grading b
-
 
 {- | Takes a product of basis elements and returns a tensor product of the corresponding basis vectors.
 
@@ -786,18 +807,3 @@ tensorCoproduct
     => [a]
     -> PowerSeries Integer ([a],[a])
 tensorCoproduct = product . (map (\b -> vector ([], [b]) + vector ([b], [])))
-
--- tensorCoproduct = vector . fromListS . map basisTerm . listCoproduct
---   where
---     listCoproduct [] = [[[], []]] -- sum of tensor products of products
---     listCoproduct (b : bs) =
---         map
---             (zipWith (<>) [[b], []])
---             tailCoproduct
---             ++ map
---                 (zipWith (<>) [[], [b]])
---                 tailCoproduct
---       where
---         tailCoproduct = listCoproduct bs
-
--- TODO: define a product class with projections from and injections to the tensor algebra? This way the num and morphisms can be defined through those.
