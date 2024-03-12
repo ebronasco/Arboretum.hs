@@ -51,7 +51,8 @@ import GradedList (
 
 import Symbolics (
     PowerSeries,
-    basisVectorG,
+    fromInfListV,
+    (*^),
  )
 
 
@@ -152,7 +153,7 @@ graft
     => a1
     -> a2
     -> PowerSeries Integer a2
-graft rg1 g2 = basisVectorG $ map (graftTo rg1 g2) $ MS.toList $ vertices g2
+graft rg1 g2 = fromInfListV $ map (1 *^) $ map (graftTo rg1 g2) $ MS.toList $ vertices g2
 
 graftTo :: (RootedGraph a1, Graph a2, Edge a1 ~ Edge a2) => a1 -> a2 -> Vertex a2 -> a2
 graftTo rg1 g2 v = addGraph rg1 $ addEdge new_edge g2
