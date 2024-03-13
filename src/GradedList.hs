@@ -1,3 +1,14 @@
+{- |
+Module      : GradedList
+Description : Utilities for lists of graded elements.
+Copyright   : (c) University of Geneva, 2024
+License     : MIT
+Maintainer  : Eugen Bronasco (ebronasco@gmail.com)
+Stability   : experimental
+
+Implementation of a @Graded@ typeclass and utilities for lists of
+graded elements used in @Symbolics@ module.
+-}
 module GradedList (
     Graded,
     grading,
@@ -9,11 +20,15 @@ module GradedList (
     groupByGrading,
 ) where
 
--- | Use @Integer@ since it can be converted to any numeric type using @fromInteger@.
+-- | The @Graded@ typeclass is used to define the grading of an
+-- element. 
 class Graded t where
     grading :: t -> Integer
 
-{- | @Integer@ is used to generate basis elements for testing @Symbolics.hs@. The grading of an integer is the number of digits in its absolute value.
+{- |
+  @Integer@ is used to generate basis elements for testing
+  @Symbolics.hs@. The grading of an integer is the number of digits
+  in its absolute value.
 
 Example:
 
@@ -28,11 +43,22 @@ instance Graded Integer where
       where
         abs_n = abs n
 
--- | @Char@ can be useful to denote variables like @'x', 'y', 'z'@ when using @Symbolics.hs@. The grading of a character is 1.
+{- | 
+  @Char@ can be useful to denote variables like @'x', 'y', 'z'@ when
+  using @Symbolics.hs@. The grading of a character is 1.
+
+Example:
+
+>>> grading 'x'
+1
+-}
 instance Graded Char where
     grading _ = 1
 
-{- | The Haskell list structure is used to represent the free product in @Symbolics.hs@. The grading of a list is the sum of the gradings of its elements.
+{- |
+  The list structure is used to represent the non-commutative
+  associative product in @Symbolics.hs@. The grading of a list is
+  the sum of the gradings of its elements.
 
 Example:
 
@@ -57,7 +83,9 @@ instance Functor NonDecreasingList where
 instance Foldable NonDecreasingList where
     foldr f z (NDecList l) = foldr f z l
 
-{- | Construct a graded list by checking that the grading is non-decreasing.
+{- |
+  Construct a graded list by checking that the grading is
+  non-decreasing.
 
 Example:
 
@@ -80,14 +108,31 @@ nDecList (x : y : t) =
 -- | A list in which all elements have the same grading.
 type HomoList a = [a]
 
--- | Groups the elements of a non-decreasing list by their grading. With the smallest grading given by @k@.
-groupByGradingWith :: (Graded a) => Integer -> NonDecreasingList a -> [HomoList a]
-groupByGradingWith _ (NDecList []) = []
-groupByGradingWith k (NDecList l) =
-    (\(g, t) -> g : groupByGradingWith (k + 1) (NDecList t)) $
-        span (\x -> grading x == k) l
+{- |
+  Groups the elements of a non-decreasing list by their grading.
+  With the smallest grading given by @k@.
 
-{- | Same as @groupByGradingWith@ but uses the grading of the elements and starts with grading @0@.
+  Note that if the list starts with an element of grading smaller
+  than @k@, the function will hang.
+
+Example:
+
+>>> groupByGradingFrom 1 $ nDecList [1, 2, 10, 10, 12, 20, 201, 200]
+[[1,2],[10,10,12,20],[201,200]]
+-}
+groupByGradingFrom
+    :: Graded a
+    => Integer
+    -> NonDecreasingList a
+    -> [HomoList a]
+groupByGradingFrom _ (NDecList []) = []
+groupByGradingFrom k (NDecList l) = case span ((== k) . grading) l of
+    (pre, post) -> pre : groupByGradingFrom (k + 1) (NDecList post)
+        
+
+{- |
+  Same as @groupByGradingFrom@ but uses the grading of the elements
+  and starts with grading @0@.
 
 Example:
 
@@ -95,8 +140,12 @@ Example:
 [[],[3,1,2],[10,10,12,20],[201,200]]
 -}
 groupByGrading :: (Graded a) => NonDecreasingList a -> [HomoList a]
-groupByGrading = groupByGradingWith 0
+groupByGrading = groupByGradingFrom 0
 
+{- |
+  We define the tree structure and the functions to build it and
+  flatten it in order to distribute lists of graded elements.
+-}
 data Tree_ a = T_ [a] [Tree_ a] | Empty_ deriving (Show)
 
 _buildTree :: (Eq a) => Int -> [[a]] -> Tree_ a
@@ -130,9 +179,12 @@ _flattenTree :: Eq a => Tree_ a -> [[[a]]]
 _flattenTree Empty_ = []
 _flattenTree tree_ = takeWhile (/= []) $ map (`getElementsFromLevel` tree_) [0 ..]
 
-{- | Cartesian product of lists in which lists can be infinite. It works in the following way:
-@distributeLists [[a_1, a_2], [b_1, b_2]]@ will return:
-@[[a_1, b_1], [a_1, b_2], [a_2, b_1], [a_2, b_2]]@.
+{- |
+  Cartesian product of lists in which lists can be infinite. It
+  works in the following way:
+  @distributeLists [[a_1, a_2], [b_1, b_2]]@
+  will return:
+  @[[a_1, b_1], [a_1, b_2], [a_2, b_1], [a_2, b_2]]@.
 
 Example:
 
@@ -142,9 +194,14 @@ Example:
 distributeLists :: Eq a => [[a]] -> [[a]]
 distributeLists = concat . _flattenTree . _buildTree 1
 
-{- | The same as @distributeLists@ but it groups the resulting terms by the sums of their indices. It works in the following way:
-@distributeLists [[a_1, a_2, a_3], [b_1, b_2], [c_1, c_2]]@ will return:
-@[[[a_1,b_1,c_1]],[[a_2,b_1,c_1],[a_1,b_2,c_1],[a_1,b_1,c_2]],[[a_3,b_1,c_1],[a_2,b_2,c_1],[a_2,b_1,c_2],[a_1,b_2,c_2]],[[a_3,b_2,c_1],[a_3,b_1,c_2],[a_2,b_2,c_2]],[[a_3,b_2,c_2]]]@.
+{- |
+  The same as @distributeLists@ but it groups the resulting terms by
+  the sums of their indices. It works in the following way:
+  @distributeLists [[a_1, a_2, a_3], [b_1, b_2], [c_1, c_2]]@
+  will return:
+  @[[[a_1,b_1,c_1]],[[a_2,b_1,c_1],[a_1,b_2,c_1],[a_1,b_1,c_2]],
+  [[a_3,b_1,c_1],[a_2,b_2,c_1],[a_2,b_1,c_2],[a_1,b_2,c_2]],
+  [[a_3,b_2,c_1],[a_3,b_1,c_2],[a_2,b_2,c_2]],[[a_3,b_2,c_2]]]@.
 
 Example:
 
