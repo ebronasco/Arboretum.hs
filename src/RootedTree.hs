@@ -8,7 +8,8 @@ License     : MIT
 Maintainer  : Eugen Bronasco (ebronasco@gmail.com)
 Stability   : experimental
 
-Implementation of the post-Lie algebra of planar rooted trees and pre-Lie algebra of non-planar rooted trees.
+Implementation of the post-Lie algebra of planar rooted trees and
+pre-Lie algebra of non-planar rooted trees.
 -}
 module RootedTree (
     PRTree (..),

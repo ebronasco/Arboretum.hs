@@ -12,7 +12,11 @@ License     : MIT
 Maintainer  : Eugen Bronasco (ebronasco@gmail.com)
 Stability   : experimental
 
-Implementation of the general Graph and RootedGraph typeclasses. As an example, the @IntegerGraph@ type is defined as an instance of @Graph@. The data @Rooted@ is defined as a map from @Graph@ to @RootedGraph@. The @graft@ and @graftTo@ functions are also defined here.
+Implementation of the general Graph and RootedGraph typeclasses. As
+an example, the @IntegerGraph@ type is defined as an instance of
+@Graph@. The data @Rooted@ is defined as a map from @Graph@ to
+@RootedGraph@. The @graft@ and @graftTo@ functions are also defined
+here.
 -}
 module Graph (
     GraphEdge,

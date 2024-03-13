@@ -10,7 +10,9 @@ License     : MIT
 Maintainer  : Eugen Bronasco (ebronasco@gmail.com)
 Stability   : experimental
 
-An implementation of symbolic algebra using graded vector spaces with the aim of being able to represent and manipulate algebras over the vector spaces of graphs.
+An implementation of symbolic algebra using graded vector spaces
+with the aim of being able to represent and manipulate algebras over
+the vector spaces of graphs.
 -}
 module Symbolics (
     ScalarProduct,
