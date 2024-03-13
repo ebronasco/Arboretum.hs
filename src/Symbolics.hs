@@ -5,9 +5,9 @@
 {- |
 Module      : Symbolics
 Description : Symbolic algebra in Haskell using graded vector spaces.
-Copyright   : (c) Eugen Bronasco, 2024
+Copyright   : (c) University of Geneva, 2024
 License     : MIT
-Maintainer  : ebronasco@gmail.com
+Maintainer  : Eugen Bronasco (ebronasco@gmail.com)
 Stability   : experimental
 
 An implementation of symbolic algebra using graded vector spaces with the aim of being able to represent and manipulate algebras over the vector spaces of graphs.
@@ -110,7 +110,7 @@ instance (Show k, Show a) => Show (ScalarProduct k a) where
 
 -- | Take a functions and extend it linearly
 instance Num k => Functor (ScalarProduct k) where
-    fmap f (s :*^ b) = s *^ (f b)
+    fmap f (s :*^ b) = s *^ f b
 
 -- | Choose the product semigroup for the scalar type.
 instance (Num k, Semigroup a) => Semigroup (ScalarProduct k a) where
@@ -250,7 +250,7 @@ Properties:
 -}
 instance (Num k, Eq k, Eq a, Graded a) => Group (Sum k a) where
     invert Zero = Zero
-    invert (t :+ s) = (negate $ scalar t) *^ (basisElement t) +: invert s
+    invert (t :+ s) = negate (scalar t) *^ basisElement t +: invert s
 
 {- | Two sums are equal if their difference is zero.
 
@@ -299,7 +299,7 @@ instance
       where
         ab_list = [toListS a, toListS b]
 
-    fromInteger n = (fromInteger n) *^ mempty +: Zero
+    fromInteger n = fromInteger n *^ mempty +: Zero
 
     abs = error "abs not implemented for Algebra"
 
@@ -492,7 +492,7 @@ instance (Num k, Eq k, Eq a, Graded a) => Vector (Sum k a) where
     type VectorScalar (Sum k a) = k
     type VectorBasis (Sum k a) = a
     vector Zero = Empty
-    vector s@(Sum g _ _) = fromListPS $ (take (fromInteger g) $ repeat Zero) ++ [s]
+    vector s@(Sum g _ _) = fromListPS $ replicate (fromInteger g) Zero ++ [s]
 
 -- | @PowerSeries@ has a trivial @Vector@ instance.
 instance Vector (PowerSeries k a) where
@@ -657,7 +657,7 @@ renormalize
     -> PowerSeries k2 a
 renormalize f = fromInfListV . map renormalizeTerm . terms
   where
-    renormalizeTerm t = (f (scalar t) (basisElement t)) *^ basisElement t
+    renormalizeTerm t = f (scalar t) (basisElement t) *^ basisElement t
 
 {- | Scale a vector by a scalar.
 
@@ -806,4 +806,4 @@ tensorCoproduct
        )
     => [a]
     -> PowerSeries Integer ([a],[a])
-tensorCoproduct = product . (map (\b -> vector ([], [b]) + vector ([b], [])))
+tensorCoproduct = product . map (\b -> vector ([], [b]) + vector ([b], []))

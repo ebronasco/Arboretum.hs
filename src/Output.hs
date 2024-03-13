@@ -1,5 +1,15 @@
 {-# LANGUAGE PatternSynonyms #-}
 
+{- |
+Module      : Output
+Description : Generate TeX output, pdf, and display it in a pdf viewer.
+Copyright   : (c) University of Geneva, 2024
+License     : MIT
+Maintainer  : Eugen Bronasco (ebronasco@gmail.com)
+Stability   : experimental
+
+Implementation of the @Texifiable@ typeclass, its instances for the @Symbolics@ module and functions to display the output in a pdf viewer.
+-}
 module Output (
     Texifiable,
     texify,
@@ -71,10 +81,10 @@ instance (Num k, Eq k, Texifiable k, Texifiable a) => Texifiable (PowerSeries k 
 instance (Texifiable a, Eq a) => Texifiable [a] where
     texifyID _          = "Prod"
     texify os
-        | os == [] = "1"
+        | null os = "1"
         | otherwise = intercalate " \\cdot " $ map texifyP os
     texifyDebug i j os
-        | os == [] = "1"
+        | null os = "1"
         | otherwise = intercalate " \\cdot " $ map (texifyD i j) os
     texifyParentheses x = if length x > 1 then ("(",")") else ("","")
 

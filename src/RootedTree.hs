@@ -1,14 +1,14 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 {- |
-Module      : PRTree
-Description : Planar rooted trees and the grafting product.
-Copyright   : (c) Eugen Bronasco, 2024
+Module      : RootedTree
+Description : Planar and non-planar rooted trees and the grafting product.
+Copyright   : (c) University of Geneva, 2024
 License     : MIT
-Maintainer  : ebronasco@gmail.com
+Maintainer  : Eugen Bronasco (ebronasco@gmail.com)
 Stability   : experimental
 
-Implementation of the post-Lie algebra of planar rooted trees.
+Implementation of the post-Lie algebra of planar rooted trees and pre-Lie algebra of non-planar rooted trees.
 -}
 module RootedTree (
     PRTree (..),
@@ -16,7 +16,10 @@ module RootedTree (
     graftFT,
     gl,
     RTree (..),
-    nonplanar,
+    nonplanarT,
+    nonplanarF,
+    planarT,
+    planarF,
 ) where
 
 import Data.List (intercalate)
@@ -116,7 +119,7 @@ graftFT
     => [PRTree a]
     -> PRTree a
     -> PowerSeries Integer [PRTree a]
-graftFT f (PRTree r ts) = linear ((:[]) . (PRTree r)) $ gl f ts
+graftFT f (PRTree r ts) = linear ((:[]) . PRTree r) $ gl f ts
 
 {- | Grossman-Larson product of two forests.
 
@@ -149,7 +152,16 @@ instance Ord a => Ord (RTree a) where
     compare (RTree r1 c1) (RTree r2 c2) = compare (r1, c1) (r2, c2)
 
 instance (Ord a, Graded a) => Graded (RTree a) where
-    grading = grading . planar
+    grading = grading . planarT
+
+instance (Ord a, Graded a) => Graded (MS.MultiSet a) where
+    grading = grading . MS.toList
+
+instance (Ord a, Texifiable a) => Texifiable (RTree a) where
+    texify = texify . planarT
+
+instance (Eq a, Texifiable a) => Texifiable (MS.MultiSet a) where
+    texify = texify . MS.toList
 
 -- | Brace notation for non-planar rooted trees. Children are enclosed in curly braces.
 instance (Show a) => Show (RTree a) where
@@ -157,29 +169,50 @@ instance (Show a) => Show (RTree a) where
         show r
             ++ ( case MS.toList xs of
                     [] -> ""
-                    _ -> "{" ++ (tail $ init $ show $ MS.toList xs) ++ "}"
+                    _ -> "{" ++ (tail . init . show . MS.toList) xs ++ "}"
                )
 
 {- | Forget the order of children in a planar rooted tree.
 
 Example:
 
->>> a = nonplanar $ PRTree 1 [PRTree 2 [], PRTree 3 []]
->>> b = nonplanar $ PRTree 1 [PRTree 3 [], PRTree 2 []]
+>>> a =  nonplanarT $ PRTree 1 [PRTree 2 [], PRTree 3 []]
+>>> b =  nonplanarT $ PRTree 1 [PRTree 3 [], PRTree 2 []]
 >>> a == b
 True
-
 -}
-nonplanar :: Ord a => PRTree a -> RTree a
-nonplanar (PRTree r xs) = RTree r (MS.fromList (map nonplanar xs))
+nonplanarT :: Ord a => PRTree a -> RTree a
+nonplanarT (PRTree r xs) = RTree r (nonplanarF xs)
+
+{- | Forget the order of trees and children in a planar rooted forest.
+
+Example:
+
+>>> a = nonplanarF $ [PRTree 1 [PRTree 2 [], PRTree 3 []], PRTree 4 []]
+>>> b = nonplanarF $ [PRTree 4 [], PRTree 1 [PRTree 3 [], PRTree 2 []]]
+>>> a == b
+True
+-}
+nonplanarF :: Ord a => [PRTree a] -> MS.MultiSet (RTree a)
+nonplanarF = MS.fromList . map nonplanarT
 
 {- | Choose a canonical planar representation of a non-planar rooted tree.
 
 Example:
 
->>> planar $ RTree 1 (MS.fromList [RTree 2 MS.empty, RTree 3 MS.empty])
+>>> planarT $ RTree 1 (MS.fromList [RTree 2 MS.empty, RTree 3 MS.empty])
 1[2,3]
-
 -}
-planar :: Ord a => RTree a -> PRTree a
-planar (RTree r xs) = PRTree r (map planar (MS.toList xs))
+
+planarT :: Ord a => RTree a -> PRTree a
+planarT (RTree r xs) = PRTree r (planarF xs)
+
+{- | Choose a canonical planar representation of a non-planar rooted forest.
+
+Example:
+
+>>> planarF $ MS.fromList [RTree 1 (MS.fromList [RTree 2 MS.empty, RTree 3 MS.empty]), RTree 4 MS.empty]
+[1[2,3],4]
+-}
+planarF :: Ord a => MS.MultiSet (RTree a) -> [PRTree a]
+planarF = map planarT . MS.toList
