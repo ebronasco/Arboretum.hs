@@ -60,6 +60,7 @@ Example:
 "\\forest{i_1[i_2,i_3]}"
 -}
 instance (Texifiable a) => Texifiable (PRTree a) where
+    texifyID _ = "PRTree"
     texify t = "\\forest{" ++ texify_ t ++ "}"
 
 texify_ :: (Texifiable a) => PRTree a -> String
@@ -158,10 +159,13 @@ instance (Ord a, Graded a) => Graded (MS.MultiSet a) where
     grading = grading . MS.toList
 
 instance (Ord a, Texifiable a) => Texifiable (RTree a) where
+    texifyID _ = "RTree"
     texify = texify . planarT
 
 instance (Eq a, Texifiable a) => Texifiable (MS.MultiSet a) where
+    texifyID _ = "MultiSet"
     texify = texify . MS.toList
+    texifyDebug i j = texifyDebug i j . MS.toList
 
 -- | Brace notation for non-planar rooted trees. Children are enclosed in curly braces.
 instance (Show a) => Show (RTree a) where
