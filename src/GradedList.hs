@@ -77,6 +77,9 @@ newtype NonDecreasingList a = NDecList {unNDecList :: [a]} deriving (Eq)
 instance (Show a) => Show (NonDecreasingList a) where
     show (NDecList l) = "NonDecreasingList " ++ show l
 
+-- !!!
+-- NO
+-- ? FreeFunctor
 instance Functor NonDecreasingList where
     fmap f (NDecList l) = NDecList $ map f l
 
