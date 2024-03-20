@@ -1,11 +1,17 @@
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module AromaticTree (
     Aroma (Aroma),
+    graftOnAroma,
+    graftOnMultiAroma,
 ) where
 
 import qualified Data.List as L
 import qualified Data.MultiSet as MS
+import Data.Maybe (fromJust)
+import Output
+import GradedList
 import RootedTree
 import Symbolics
 
@@ -23,29 +29,42 @@ instance (Eq a) => Eq (Aroma a) where
 instance (Show a) => Show (Aroma a) where
     show (Aroma l) = "(" ++ init (tail $ show l) ++ ")"
 
-type ATree a =
-    ( MS.MultiSet (Aroma a)
-    , RTree a
+instance (Graded a) => Graded (Aroma a) where
+    grading (Aroma l) = sum $ map grading l
+
+instance (Texifiable a, Eq a) => Texifiable (Aroma (PRTree a)) where
+    texify (Aroma l) = "\\forest{(" ++ (L.intercalate "," $ map bracketNotation l) ++ ")}"
+      where
+        bracketNotation = init . fromJust . L.stripPrefix "\\forest{" . texify
+
+type APTree a =
+    ( [Aroma a]
+    , PRTree a
     )
 
-type AForest a =
-    ( MS.MultiSet (Aroma a)
-    , MS.MultiSet (RTree a)
+type APForest a =
+    ( [Aroma a]
+    , [PRTree a]
     )
 
-graft
-    :: (Ord a)
-    => AForest a
-    -> AForest a
-    -> PowerSeries Integer (AForest a)
-graft (a1, f1) (a2, f2) = linear perCoproductTerm $ tensorCoproduct f1
+graftOnAroma
+    :: ( Eq a
+       , Graded a
+       )
+    => [PRTree a]
+    -> Aroma (PRTree a)
+    -> PowerSeries Integer (Aroma (PRTree a))
+graftOnAroma f = linear ((1 *^) . Aroma) . (f `graftFF`) . unAroma
+
+graftOnMultiAroma
+    :: ( Eq a
+       , Graded a
+       )
+    => [PRTree a]
+    -> [Aroma (PRTree a)]
+    -> PowerSeries Integer [Aroma (PRTree a)]
+graftOnMultiAroma [] ma = vector (1 *^ ma)
+graftOnMultiAroma f [] = vector Zero
+graftOnMultiAroma f (a:ma) = linear perCoproductTerm $ tensorCoproduct f
   where
-    perCoproductTerm (x, y) = vector (a1, MS.empty) * graftX x * graftY y
-    graftX x =
-        linear (\a -> 1 *^ (MS.map Aroma a, MS.empty)) $
-            linear ((1 *^) . nonplanarF) $
-                graftFF (planarF x) (planarF $ MS.map unAroma a2)
-    graftY y =
-        linear (\f -> (MS.empty, f)) $
-            linear ((1 *^) . nonplanarF) $
-                graftFF (planarF y) (planarF f2)
+    perCoproductTerm (x, y) = (linear (: []) $ x `graftOnAroma` a) * (y `graftOnMultiAroma` ma)
