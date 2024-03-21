@@ -6,6 +6,7 @@ import Graph
 import Symbolics
 import Output
 import RootedTree
+import AromaticTree
 
 import qualified Data.MultiSet as MS
 import qualified Data.List as L
