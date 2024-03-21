@@ -8,7 +8,8 @@ module AromaticTree (
     graftAF,
     elemComp,
     branchPath,
-    divergence,
+    divergenceT,
+    divergenceAT,
     nonplanarAF,
     planarAF,
 ) where
@@ -51,6 +52,11 @@ instance (Texifiable a, Eq a) => Texifiable (Aroma (PRTree a)) where
     texify (Aroma l) = "\\forest{(" ++ L.intercalate "," (map bracketNotation l) ++ ")}"
       where
         bracketNotation = init . fromJust . L.stripPrefix "\\forest{" . texify
+
+type APTree a =
+    ( [Aroma (PRTree a)]
+    , PRTree a
+    )
 
 type APForest a =
     ( [Aroma (PRTree a)]
@@ -99,12 +105,15 @@ elemComp [] = []
 elemComp (x : xs) = (x, xs) : map (second (x :)) (elemComp xs)
 
 branchPath :: PRTree a -> [[PRTree a]]
-branchPath t@(PRTree r cts) = [t] : (recurs $ map (second $ PRTree r) $ elemComp cts)
+branchPath t@(PRTree r cts) = [t] : recurs (map (second $ PRTree r) $ elemComp cts)
   where
     recurs = concatMap (\(x, y) -> map (y :) (branchPath x)) 
 
-divergence :: (Eq a, Graded a) => PRTree a -> PowerSeries Integer (Aroma (PRTree a))
-divergence t = vector $ fromListS $ map (1 *^) $ map Aroma $ branchPath t
+divergenceT :: (Eq a, Graded a) => PRTree a -> PowerSeries Integer (Aroma (PRTree a))
+divergenceT t = vector $ fromListS $ map ((1 *^) . Aroma) $ branchPath t
+
+divergenceAT :: (Eq a, Graded a) => APTree a -> PowerSeries Integer [Aroma (PRTree a)]
+divergenceAT (ma, t) = ([t] `graftOnMultiAroma` ma) + linear (:ma) (divergenceT t)
 
 -- * Non-planar aromatic forests
 
