@@ -8,4 +8,5 @@ main =
         , "src/RootedTree.hs"
         , "src/GradedList.hs"
         , "src/Graph.hs"
+        , "src/AromaticTree.hs"
         ]
