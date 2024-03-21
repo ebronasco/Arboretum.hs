@@ -6,12 +6,16 @@ module AromaticTree (
     graftOnAroma,
     graftOnMultiAroma,
     graftAF,
+    elemComp,
+    branchPath,
+    divergence,
     nonplanarAF,
     planarAF,
 ) where
 
 import qualified Data.List as L
 import Data.Maybe (fromJust)
+import Data.Bifunctor (second)
 import qualified Data.MultiSet as MS
 import GradedList
 import Output
@@ -44,7 +48,7 @@ instance (Graded a) => Graded (Aroma a) where
 -- * Planar aromatic forests
 
 instance (Texifiable a, Eq a) => Texifiable (Aroma (PRTree a)) where
-    texify (Aroma l) = "\\forest{(" ++ (L.intercalate "," $ map bracketNotation l) ++ ")}"
+    texify (Aroma l) = "\\forest{(" ++ L.intercalate "," (map bracketNotation l) ++ ")}"
       where
         bracketNotation = init . fromJust . L.stripPrefix "\\forest{" . texify
 
@@ -75,7 +79,7 @@ graftOnMultiAroma [] ma = vector (1 *^ ma)
 graftOnMultiAroma _ [] = vector Zero
 graftOnMultiAroma f (a : ma) = linear perCoproductTerm $ tensorCoproduct f
   where
-    perCoproductTerm (x, y) = (linear (: []) $ x `graftOnAroma` a) * (y `graftOnMultiAroma` ma)
+    perCoproductTerm (x, y) = linear (: []) (x `graftOnAroma` a) * (y `graftOnMultiAroma` ma)
 
 graftAF
     :: ( Eq a
@@ -84,18 +88,28 @@ graftAF
     => APForest a
     -> APForest a
     -> PowerSeries Integer (APForest a)
-graftAF (ma1, f1) (ma2, f2) = (vector (ma1, [])) * (linear perCoproductTerm $ tensorCoproduct f1)
+graftAF (ma1, f1) (ma2, f2) = vector (ma1, []) * linear perCoproductTerm (tensorCoproduct f1)
   where
-    perCoproductTerm (x, y) = (linear (\u -> (u, [])) $ x `graftOnMultiAroma` ma2) * (linear (\v -> ([], v)) $ y `graftFF` f2)
+    perCoproductTerm (x, y) = linear (, []) (x `graftOnMultiAroma` ma2) * linear ([],) (y `graftFF` f2)
 
 -- * Divergence
 
+elemComp :: [a] -> [(a, [a])]
+elemComp [] = []
+elemComp (x : xs) = (x, xs) : map (second (x :)) (elemComp xs)
 
+branchPath :: PRTree a -> [[PRTree a]]
+branchPath t@(PRTree r cts) = [t] : (recurs $ map (second $ PRTree r) $ elemComp cts)
+  where
+    recurs = concatMap (\(x, y) -> map (y :) (branchPath x)) 
+
+divergence :: (Eq a, Graded a) => PRTree a -> PowerSeries Integer (Aroma (PRTree a))
+divergence t = vector $ fromListS $ map (1 *^) $ map Aroma $ branchPath t
 
 -- * Non-planar aromatic forests
 
 instance (Texifiable a, Eq a, Ord a) => Texifiable (Aroma (RTree a)) where
-    texify (Aroma l) = "\\forest{(" ++ (L.intercalate "," $ map bracketNotation l) ++ ")}"
+    texify (Aroma l) = "\\forest{(" ++ L.intercalate "," (map bracketNotation l) ++ ")}"
       where
         bracketNotation = init . fromJust . L.stripPrefix "\\forest{" . texify
 
