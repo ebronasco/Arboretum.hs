@@ -23,6 +23,21 @@ import Output
 import RootedTree
 import Symbolics
 
+{- | Orbit of a list under cyclic permutation.
+
+Examples:
+
+>>> circulate [1, 2, 3]
+[[1,2,3],[2,3,1],[3,1,2]]
+>>> circulate [1, 2, 3, 4]
+[[1,2,3,4],[2,3,4,1],[3,4,1,2],[4,1,2,3]]
+-}
+circulate :: [a] -> [[a]]
+circulate [] = [[]]
+circulate l =
+    take (length l) $
+        map (take (length l)) (L.tails (cycle l))
+
 -- | An aroma is a list of elements up to cyclic permutation.
 newtype Aroma a = Aroma {unAroma :: [a]}
 
@@ -37,15 +52,10 @@ False
 -}
 instance (Eq a) => Eq (Aroma a) where
     (Aroma a) == (Aroma b) = a `L.elem` circulate b
-      where
-        circulate :: [a] -> [[a]]
-        circulate [] = [[]]
-        circulate l =
-            take (length l) $
-                map (take (length l)) (L.tails (cycle l))
 
+-- | Compare two aromas by comparing the maximums of their cyclic permutation orbits.
 instance (Ord a) => Ord (Aroma a) where
-    compare (Aroma a) (Aroma b) = compare a b
+    compare (Aroma a) (Aroma b) = compare (maximum $ circulate a) (maximum $ circulate b)
 
 instance Functor Aroma where
     fmap f (Aroma l) = Aroma $ map f l
