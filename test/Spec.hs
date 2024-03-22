@@ -9,4 +9,5 @@ main =
         , "src/GradedList.hs"
         , "src/Graph.hs"
         , "src/AromaticTree.hs"
+        , "src/Substitution.hs"
         ]
