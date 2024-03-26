@@ -144,7 +144,7 @@ instance
         texifyD i j a
             ++ " \\otimes "
             ++ texifyD i j b
-    texifyParentheses x = ("(", ")")
+    texifyParentheses _ = ("(", ")")
 
 -- | Instances for the types of the @Symbolics@ module.
 instance

@@ -1,6 +1,14 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TupleSections #-}
 
+{- |
+Module      : AromaticTree
+Description : Implementation of planar/non-planar aromatic trees, forests, their grafting, and divergence.
+Copyright   : (c) University of Geneva, 2024
+License     : MIT
+Maintainer  : Eugen Bronasco (ebronasco@gmail.com)
+Stability   : experimental
+-}
 module AromaticTree (
     Aroma (Aroma),
     graftOnAroma,
