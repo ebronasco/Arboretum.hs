@@ -810,6 +810,13 @@ tensorCoproduct
     -> PowerSeries Integer ([a], [a])
 tensorCoproduct = product . map (\b -> vector ([], [b]) + vector ([b], []))
 
+{- | Takes a function with two arguments and extends it to a bilinear map.
+
+Examples:
+
+>>> bilinear (\a b -> [a + b]) (vector $ (1 *^ 1) +: (1 *^ 2) +: (1 *^ 3) +: (1 *^ 4) +: Zero) (vector $ (1 *^ 1) +: (1 *^ 2) +: (1 *^ 3) +: (1 *^ 4) +: Zero)
+(1 *^ [2] + 2 *^ [3] + 3 *^ [4] + 4 *^ [5] + 3 *^ [6] + 2 *^ [7] + 1 *^ [8])_1
+-}
 bilinear
     :: ( Vector v
        , Num k
