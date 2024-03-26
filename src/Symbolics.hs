@@ -1,4 +1,5 @@
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
@@ -37,10 +38,7 @@ module Symbolics (
     takeWhileV,
     filterV,
     takeV,
-
-    -- * Tensor algebra
     morphism,
-    tensorCoproduct,
     Sum (Zero),
     fromListS,
     toListS,
@@ -49,6 +47,8 @@ module Symbolics (
     PowerSeries (..),
     fromListPS,
     toListPS,
+    tensorCoproduct,
+    bilinear,
 ) where
 
 import qualified Data.Bifunctor as BF (
@@ -111,7 +111,7 @@ instance (Show k, Show a) => Show (ScalarProduct k a) where
     show (s :*^ b) = show s ++ " *^ " ++ show b
 
 -- | Take a functions and extend it linearly
-instance Num k => Functor (ScalarProduct k) where
+instance (Num k) => Functor (ScalarProduct k) where
     fmap f (s :*^ b) = s *^ f b
 
 -- | Choose the product semigroup for the scalar type.
@@ -464,7 +464,7 @@ Examples:
 >>> vector "xy"
 (1 *^ "xy")_2
 -}
-instance (Eq a, Graded a) =>  Vector [a] where
+instance (Eq a, Graded a) => Vector [a] where
     type VectorScalar [a] = Integer
     type VectorBasis [a] = [a]
     vector = vector . (1 *^)
@@ -517,7 +517,7 @@ fromListV
        )
     => [ScalarProduct k a]
     -> PowerSeries k a
-fromListV = fromInfListV . L.sortBy compareGrading 
+fromListV = fromInfListV . L.sortBy compareGrading
   where
     compareGrading x y = compare (grading x) (grading y)
 
@@ -792,7 +792,7 @@ instance (Eq a, Graded a, Eq b, Graded b) => Vector (a, b) where
     type VectorBasis (a, b) = (a, b)
     vector = vector . (1 *^)
 
-instance (Graded a, Graded b) => Graded (a,b) where
+instance (Graded a, Graded b) => Graded (a, b) where
     grading (a, b) = grading a + grading b
 
 {- | Takes a product of basis elements and returns a tensor product of the corresponding basis vectors.
@@ -807,5 +807,33 @@ tensorCoproduct
        , Graded a
        )
     => [a]
-    -> PowerSeries Integer ([a],[a])
+    -> PowerSeries Integer ([a], [a])
 tensorCoproduct = product . map (\b -> vector ([], [b]) + vector ([b], []))
+
+{- | Takes a function with two arguments and extends it to a bilinear map.
+
+Examples:
+
+>>> bilinear (\a b -> [a + b]) (vector $ (1 *^ 1) +: (1 *^ 2) +: (1 *^ 3) +: (1 *^ 4) +: Zero) (vector $ (1 *^ 1) +: (1 *^ 2) +: (1 *^ 3) +: (1 *^ 4) +: Zero)
+(1 *^ [2] + 2 *^ [3] + 3 *^ [4] + 4 *^ [5] + 3 *^ [6] + 2 *^ [7] + 1 *^ [8])_1
+-}
+bilinear
+    :: ( Vector v
+       , Num k
+       , Eq k
+       , Eq a
+       , Eq b
+       , Eq c
+       , Graded a
+       , Graded b
+       , Graded c
+       , VectorScalar v ~ k
+       , VectorBasis v ~ c
+       )
+    => (a -> b -> v)
+    -> PowerSeries k a
+    -> PowerSeries k b
+    -> PowerSeries k c
+bilinear f ps1 ps2 =
+    linear (uncurry f . BF.bimap head head) $
+        linear ((1 *^) . (,[]) . (: [])) ps1 * linear ((1 *^) . ([],) . (: [])) ps2
