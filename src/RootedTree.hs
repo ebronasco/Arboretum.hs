@@ -156,9 +156,6 @@ instance Ord a => Ord (RTree a) where
 instance (Ord a, Graded a) => Graded (RTree a) where
     grading = grading . planarT
 
-instance (Ord a, Graded a) => Graded (MS.MultiSet a) where
-    grading = grading . MS.toList
-
 instance (Ord a, Texifiable a) => Texifiable (RTree a) where
     texifyID _ = "RTree"
     texify = texify . planarT

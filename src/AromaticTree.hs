@@ -18,7 +18,15 @@ module AromaticTree (
     branchPaths,
     divergenceT,
     divergenceAT,
+    APTree,
+    ATree,
+    APForest,
+    AForest,
+    nonplanarA,
+    nonplanarAT,
     nonplanarAF,
+    planarA,
+    planarAT,
     planarAF,
 ) where
 
@@ -213,10 +221,58 @@ instance (Texifiable a, Eq a, Ord a) => Texifiable (Aroma (RTree a)) where
       where
         bracketNotation = init . fromJust . L.stripPrefix "\\forest{" . texify
 
+type ATree a =
+    ( MS.MultiSet (Aroma (RTree a))
+    , RTree a
+    )
+
 type AForest a =
     ( MS.MultiSet (Aroma (RTree a))
     , MS.MultiSet (RTree a)
     )
+
+{- | Forget the order of aromas in a multi-aroma.
+
+Examples:
+
+>>> ma1 = [Aroma [PRTree 1 []], Aroma [PRTree 2 []]]
+>>> ma2 = [Aroma [PRTree 2 []], Aroma [PRTree 1 []]]
+>>> ma1 == ma2
+False
+>>> nonplanarA ma1 == nonplanarA ma2
+True
+-}
+nonplanarA
+    :: ( Eq a
+       , Graded a
+       , Ord a
+       )
+    => [Aroma (PRTree a)]
+    -> MS.MultiSet (Aroma (RTree a))
+nonplanarA ma = MS.fromList $ map (fmap nonplanarT) ma
+
+
+
+{- | Forget the order of aromas and branches of the rooted tree.
+
+Examples:
+
+>>> at1 = ([Aroma [PRTree 1 []], Aroma [PRTree 2 []]], PRTree 1 [PRTree 2 [], PRTree 3 []])
+>>> at2 = ([Aroma [PRTree 2 []], Aroma [PRTree 1 []]], PRTree 1 [PRTree 3 [], PRTree 2 []])
+>>> at1 == at2
+False
+>>> nonplanarAT at1 == nonplanarAT at2
+True
+-}
+nonplanarAT
+    :: ( Eq a
+       , Graded a
+       , Ord a
+       )
+    => APTree a
+    -> ATree a
+nonplanarAT (ma, t) = (nonplanarA ma, nonplanarT t)
+
 
 {- | Forget the order of aromas and all rooted trees involved.
 
@@ -236,7 +292,40 @@ nonplanarAF
        )
     => APForest a
     -> AForest a
-nonplanarAF (ma, f) = (MS.fromList $ map (fmap nonplanarT) ma, nonplanarF f)
+nonplanarAF (ma, f) = (nonplanarA ma, nonplanarF f)
+
+{- | Choose a canonical planar representation of a multi-aroma.
+
+Examples:
+
+>>> planarA $ MS.fromList [Aroma [RTree 1 MS.empty], Aroma [RTree 2 MS.empty]]
+[(1),(2)]
+-}
+planarA
+    :: ( Eq a
+       , Graded a
+       , Ord a
+       )
+    => MS.MultiSet (Aroma (RTree a))
+    -> [Aroma (PRTree a)]
+planarA ma = map (fmap planarT) $ MS.toList ma
+
+
+{- | Choose a canonical planar representation of an aromatic tree.
+
+Examples:
+
+>>> planarAT (MS.fromList [Aroma [RTree 1 MS.empty], Aroma [RTree 2 MS.empty]], RTree 1 $ MS.fromList [RTree 2 MS.empty, RTree 3 MS.empty])
+([(1),(2)],1[2,3])
+-}
+planarAT
+    :: ( Eq a
+       , Graded a
+       , Ord a
+       )
+    => ATree a
+    -> APTree a
+planarAT (ma, t) = (planarA ma, planarT t)
 
 {- | Choose a canonical planar representation of an aromatic forest.
 
@@ -252,4 +341,4 @@ planarAF
        )
     => AForest a
     -> APForest a
-planarAF (ma, f) = (map (fmap planarT) $ MS.toList ma, planarF f)
+planarAF (ma, f) = (planarA ma, planarF f)

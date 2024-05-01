@@ -9,45 +9,93 @@ Stability   : experimental
 We use the operadic approach to substitution of planar rooted trees.
 -}
 module Substitution (
-    GraftOp (..),
+    ForestOp (..),
     evaluate,
     toOperad,
-    substituteOp,
-    substituteOpBy,
+    permComposeOp,
+    composeOp,
     countLeaves,
     substitute,
 ) where
 
 import Data.Group
 import qualified Data.List as L
+import Data.Maybe
 import GradedList
+import Output
 import RootedTree
 import Symbolics
 
-data GraftOp a = Node (GraftOp a) (GraftOp a) | Leaf a deriving (Eq)
+-- * Aromas
 
-instance (Graded a) => Graded (GraftOp a) where
+data Marked a = Marked a | Mark deriving (Eq)
+
+instance (Show a) => Show (Marked a) where
+    show (Marked a) = show a
+    show Mark = "x"
+
+instance (Graded a) => Graded (Marked a) where
+    grading (Marked a) = grading a
+    grading Mark = 0
+
+instance (Texifiable a) => Texifiable (Marked a) where
+    texify (Marked a) = texify a
+    texify Mark = "x"
+
+data AromaOp a = AromaOp [ForestOp (Marked a)] deriving (Eq)
+
+instance (Show a) => Show (AromaOp a) where
+    show (AromaOp as) = show as
+
+instance (Graded a) => Graded (AromaOp a) where
+    grading (AromaOp as) = sum $ map grading as
+
+instance (Texifiable a) => Texifiable (AromaOp a) where
+    texify (AromaOp as) = texify $ as
+
+
+-- * Forests
+
+data ForestOp a
+    = Concat [ForestOp a]
+    | Graft (ForestOp a) (ForestOp a)
+    | Leaf a deriving (Eq)
+
+instance (Graded a) => Graded (ForestOp a) where
     grading (Leaf a) = grading a
-    grading (Node a b) = grading a + grading b
+    grading (Graft a b) = grading a + grading b
+    grading (Concat as) = sum $ map grading as
 
-instance Show a => Show (GraftOp a) where
+instance (Show a) => Show (ForestOp a) where
     show (Leaf a) = show a
-    show (Node a b) = "(" ++ show a ++ " graft " ++ show b ++ ")"
+    show (Graft a b) = "(" ++ show a ++ " graft " ++ show b ++ ")"
+    show (Concat as) = show as
+
+toPRTree :: ForestOp a -> PRTree (Maybe a)
+toPRTree (Leaf a) = PRTree (Just a) []
+toPRTree (Graft a b) = PRTree Nothing [toPRTree a, toPRTree b]
+toPRTree (Concat as) = PRTree Nothing $ map toPRTree as
+
+instance (Texifiable a) => Texifiable (Maybe a) where
+    texify (Just a) = texify a
+    texify Nothing = "_"
+
+instance (Texifiable a) => Texifiable (ForestOp a) where
+    texify = texify . toPRTree
 
 {- | Evaluate the @GraftOp@ by replacing nodes with @graftFF@ and evaluating.
 
 Example:
 
->>> evaluate $ Node (Leaf 1) (Leaf 2)
+>>> evaluate $ Graft (Leaf 1) (Leaf 2)
 (1 *^ 2[1])_2
->>> evaluate $ Node (Leaf 1) (Node (Leaf 2) (Leaf 3))
+>>> evaluate $ Graft (Leaf 1) (Graft (Leaf 2) (Leaf 3))
 (1 *^ 3[2[1]] + 1 *^ 3[1,2])_3
 -}
-evaluate :: (Eq a, Graded a) => GraftOp a -> PowerSeries Integer (PRTree a)
-evaluate (Leaf a) = vector $ 1 *^ PRTree a []
-evaluate (Node a b) =
-    linear ((1 *^) . head) $
-        bilinear graftFF (linear (: []) $ evaluate a) (linear (: []) $ evaluate b)
+evaluate :: (Eq a, Graded a) => ForestOp a -> PowerSeries Integer [PRTree a]
+evaluate (Leaf a) = vector $ 1 *^ [PRTree a []]
+evaluate (Graft a b) = bilinear graftFF (evaluate a) (evaluate b)
+evaluate (Concat as) = product $ map evaluate as
 
 {- | Represent a @PRTree@ using the @graftFF@ operation encoding the binary tree using @GraftOp@.
 
@@ -58,64 +106,79 @@ Example:
 >>> toOperad $ PRTree 1 [PRTree 2 [PRTree 4 [], PRTree 5 []], PRTree 3 []]
 (1 *^ ((4 graft (5 graft 2)) graft (3 graft 1)) + -1 *^ (((4 graft 5) graft 2) graft (3 graft 1)) + -1 *^ (((4 graft (5 graft 2)) graft 3) graft 1) + 1 *^ ((((4 graft 5) graft 2) graft 3) graft 1))_5
 -}
-toOperad :: (Eq a, Graded a) => PRTree a -> PowerSeries Integer (GraftOp a)
-toOperad (PRTree a []) = vector $ (1 *^) $ Leaf a
-toOperad (PRTree a (b : bs)) =
-    bilinear (\x y -> 1 *^ Node x y) (toOperad b) (toOperad $ PRTree a bs)
-        <> invert (linear (toOperad . PRTree a) ([b] `graftFF` bs))
+toOperad :: (Eq a, Graded a) => [PRTree a] -> ForestOp a
+toOperad [] = Concat []
+toOperad [PRTree a []] = Leaf a
+toOperad [PRTree a bs] = Graft (toOperad bs) (Leaf a)
+toOperad ts = Concat  $ map (toOperad . (:[])) ts
 
-{- | Count the number of leaves of @GraftOp@. Equivalently, count the number of inputs of the corresponding operad element.
+{- | Count leaves of @GraphOp a@ decorated by @x@.
 
 Example:
 
->>> countLeaves $ Node (Leaf 1) (Leaf 2)
+>>> countLeaves 1 $ Graft (Leaf 1) (Leaf 2)
+1
+>>> countLeaves 1 $ Graft (Leaf 1) (Graft (Leaf 1) (Leaf 2))
 2
->>> countLeaves $ Node (Leaf 1) (Node (Leaf 2) (Leaf 3))
-3
 -}
-countLeaves :: GraftOp a -> Int
-countLeaves (Leaf _) = 1
-countLeaves (Node a b) = countLeaves a + countLeaves b
+countLeaves :: (Eq a) => a -> ForestOp a -> Int
+countLeaves x (Leaf y) = if x == y then 1 else 0
+countLeaves x (Graft a b) = countLeaves x a + countLeaves x b
+countLeaves x (Concat as) = sum $ map (countLeaves x) as
 
-{- | Substitute the leaves of @obj@ by the `GraftOp` elements in @ops@ in all possible orders.
+{- | Substitute the leaves decorated by @X@ of @obj@ by the `GraftOp` elements in @ops@ in all possible orders.
 
 Example:
 
->>> substituteOp [Leaf 1, Leaf 2] $ Node (Leaf 3) (Leaf 4)
+>>> substituteOp 3 [Leaf 1, Leaf 2] $ Graft (Leaf 3) (Leaf 3)
 (1 *^ (1 graft 2) + 1 *^ (2 graft 1))_2
->>> substituteOp [Node (Leaf 1) (Leaf 2), Leaf 3, Leaf 4] $ Node (Leaf 5) (Node (Leaf 6) (Leaf 7))
+>>> substituteOp 5 [Graft (Leaf 1) (Leaf 2), Leaf 3, Leaf 4] $ Graft (Leaf 5) (Graft (Leaf 5) (Leaf 5))
 (1 *^ ((1 graft 2) graft (3 graft 4)) + 1 *^ (3 graft ((1 graft 2) graft 4)) + 1 *^ (4 graft (3 graft (1 graft 2))) + 1 *^ (3 graft (4 graft (1 graft 2))) + 1 *^ (4 graft ((1 graft 2) graft 3)) + 1 *^ ((1 graft 2) graft (4 graft 3)))_4
 -}
-substituteOp :: (Eq b, Graded b) => [GraftOp b] -> GraftOp a -> PowerSeries Integer (GraftOp b)
-substituteOp ops obj = vector $ fromListS $ map ((1 *^) . (`substituteOpBy` obj)) $ L.permutations ops
+permComposeOp :: (Eq a, Graded a) => a -> [ForestOp a] -> ForestOp a -> PowerSeries Integer (ForestOp a)
+permComposeOp x ops obj =
+    mconcat
+        $ map
+            ( \perm_ops -> case composeOp x perm_ops obj of
+                Just g -> vector (1 *^ g)
+                Nothing -> vector Zero
+            )
+        $ L.permutations ops
 
-{- | Substitute the leaves of @obj@ by the `GraftOp` elements in @ops@ following the given order.
+{- | Substitute the leaves decorated by @x@ of @obj@ by the `GraftOp` elements in @ops@ following the given order.
 
 Example:
 
->>> substituteOpBy [Leaf 1, Leaf 2] $ Node (Leaf 3) (Leaf 4)
+>>> substituteOpBy 3 [Leaf 1, Leaf 2] $ Graft (Leaf 3) (Leaf 3)
 (1 graft 2)
->>> substituteOpBy [Node (Leaf 1) (Leaf 2), Leaf 3, Leaf 4] $ Node (Leaf 5) (Node (Leaf 6) (Leaf 7))
+>>> substituteOpBy 5 [Graft (Leaf 1) (Leaf 2), Leaf 3, Leaf 4] $ Graft (Leaf 5) (Graft (Leaf 5) (Leaf 5))
 ((1 graft 2) graft (3 graft 4))
 -}
-substituteOpBy :: [GraftOp b] -> GraftOp a -> GraftOp b
-substituteOpBy [x] (Leaf _) = x
-substituteOpBy _ (Leaf _) = error "substituteOpBy: too many arguments"
-substituteOpBy ops obj@(Node a b)
-    | countLeaves obj == length ops =
-        Node (substituteOpBy (take (countLeaves a) ops) a) (substituteOpBy (drop (countLeaves a) ops) b)
-    | otherwise = error "substituteOpBy: wrong number of arguments"
+composeOp :: (Eq a) => a -> [ForestOp a] -> ForestOp a -> Maybe (ForestOp a)
+composeOp _ [] (Leaf y) = Just $ Leaf y
+composeOp _ [y] (Leaf _) = Just y
+composeOp _ _ (Leaf _) = Nothing
+composeOp _ _ (Concat []) = Just $ Concat []
+composeOp x ops obj
+    | countLeaves x obj == length ops =
+        Just $ case obj of
+            Graft a b -> Graft
+                (fromJust $ composeOp x (take (countLeaves x a) ops) a)
+                (fromJust $ composeOp x (drop (countLeaves x a) ops) b)
+            Concat as -> Concat $ map (\(a, ops_a) -> fromJust $ composeOp x ops_a a) $ spreadOps ops as
+    | otherwise = Nothing
+  where
+    spreadOps os [a] = [(a, os)]
+    spreadOps os (a:as) = (a, take (countLeaves x a) os) : (spreadOps (drop (countLeaves x a) os) as)
 
-{- | Substitute the vertices of @obj@ by the @PRTree@ elements in @gens@.
+{- | Substitute the vertices decorated by @x@ of @obj@ by the @PRTree@ elements in @gens@.
 
 Example:
 
->>> substitute [PRTree 1 [], PRTree 2 []] $ PRTree 3 [PRTree 4 []]
+>>> substitute 3 [PRTree 1 [], PRTree 2 []] $ PRTree 3 [PRTree 3 []]
 (1 *^ 2[1] + 1 *^ 1[2])_2
->>> substitute [PRTree 1 [PRTree 2 []], PRTree 3 []] $ PRTree 4 [PRTree 5 []]
+>>> substitute 4 [PRTree 1 [PRTree 2 []], PRTree 3 []] $ PRTree 4 [PRTree 4 []]
 (1 *^ 3[1[2]] + 1 *^ 1[2[3]] + 1 *^ 1[3,2])_3
 -}
-substitute :: (Eq a, Graded a, Eq b, Graded b) => [PRTree b] -> PRTree a -> PowerSeries Integer (PRTree b)
-substitute gens obj = linear evaluate $ bilinear substituteOp gensLinComb $ toOperad obj
-  where
-    gensLinComb = morphism (linear (: []) . toOperad) $ vector gens
+substitute :: (Eq a, Graded a) => a -> [PRTree a] -> [PRTree a] -> PowerSeries Integer [PRTree a]
+substitute x gens obj = linear evaluate $ permComposeOp x (map (toOperad . (:[])) gens) (toOperad obj)

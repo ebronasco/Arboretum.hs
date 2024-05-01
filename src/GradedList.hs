@@ -20,6 +20,8 @@ module GradedList (
     groupByGrading,
 ) where
 
+import qualified Data.MultiSet as MS
+
 -- | The @Graded@ typeclass is used to define the grading of an
 -- element. 
 class Graded t where
@@ -70,6 +72,22 @@ Example:
 instance (Graded a) => Graded [a] where
     grading [] = 0
     grading (h : t) = grading h + grading t
+
+{- |
+  The MultiSet structure is used to represent the commutative
+  associative product in @Symbolics.hs@. The grading of a MultiSet is
+  the sum of the gradings of its elements.
+
+Example:
+
+>>> grading $ MS.fromList [1, 2, 3]
+3
+>>> grading $ MS.fromList [MS.fromList [1, 2], MS.fromList [3, 4]]
+4
+-}
+instance (Graded a) => Graded (MS.MultiSet a) where
+  grading = grading . MS.toList
+
 
 -- | A list in which the gradings of the elements is non-decreasing.
 newtype NonDecreasingList a = NDecList {unNDecList :: [a]} deriving (Eq)

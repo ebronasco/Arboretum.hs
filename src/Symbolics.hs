@@ -58,6 +58,10 @@ import Data.Group
 import qualified Data.List as L (
     sortBy,
  )
+import qualified Data.MultiSet as MS (
+    MultiSet,
+    fromList,
+ )
 import GradedList (
     Graded,
     distributeGradedLists,
@@ -456,6 +460,19 @@ class Vector v where
     type VectorScalar v
     type VectorBasis v
     vector :: v -> PowerSeries (VectorScalar v) (VectorBasis v)
+
+{- | A MultiSet is often used to represent a commutative product and as a basis of an algebra.
+
+Examples:
+
+>>> vector $ MS.fromList "xy"
+(1 *^ "xy")_2
+-}
+instance (Eq a, Graded a) => Vector (MS.MultiSet a) where
+    type VectorScalar (MS.MultiSet a) = Integer
+    type VectorBasis (MS.MultiSet a) = MS.MultiSet a
+    vector = vector . (1 *^)
+
 
 {- | A list is often used to represent a product and as a basis of an algebra.
 
