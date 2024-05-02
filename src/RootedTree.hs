@@ -60,14 +60,14 @@ Example:
 >>> texify $ PRTree 1 [PRTree 2 [], PRTree 3 []]
 "\\forest{i_1[i_2,i_3]}"
 -}
-instance (Texifiable a) => Texifiable (PRTree a) where
+instance (Show a, Texifiable a) => Texifiable (PRTree a) where
     texifyID _ = "PRTree"
     texify t = "\\forest{" ++ texify_ t ++ "}"
 
-texify_ :: (Texifiable a) => PRTree a -> String
+texify_ :: (Show a, Texifiable a) => PRTree a -> String
 texify_ (PRTree r xs) =
     "i_"
-        ++ texify r
+        ++ (filter (/= '"') $ show r)
         ++ ( case xs of
                 [] -> ""
                 _ -> "[" ++ intercalate "," (map texify_ xs) ++ "]"
@@ -156,7 +156,7 @@ instance Ord a => Ord (RTree a) where
 instance (Ord a, Graded a) => Graded (RTree a) where
     grading = grading . planarT
 
-instance (Ord a, Texifiable a) => Texifiable (RTree a) where
+instance (Ord a, Show a, Texifiable a) => Texifiable (RTree a) where
     texifyID _ = "RTree"
     texify = texify . planarT
 

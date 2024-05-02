@@ -1,4 +1,5 @@
-{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeFamilies #-}
+
 {- |
 Module      : Substitution
 Description : Implementation of substitution of planar rooted trees
@@ -9,12 +10,8 @@ Stability   : experimental
 
 We use the operadic approach to substitution of planar rooted trees.
 -}
-module Substitution (
-    Marked (..),
-    marked,
-    markedOp,
-    unmark,
-    AForestOp (..),
+module Substitution2 (
+    ForestOp (..),
     evaluate,
     toOperad,
     permComposeOp,
@@ -24,7 +21,6 @@ module Substitution (
 ) where
 
 import Data.Group
-import Data.Typeable
 import qualified Data.List as L
 import Data.Maybe
 
@@ -34,7 +30,7 @@ import RootedTree
 import AromaticTree
 import Symbolics
 
--- * Aromas
+-- * Mark
 
 data Marked a = Marked a | Mark deriving (Eq)
 
@@ -50,47 +46,87 @@ instance (Texifiable a) => Texifiable (Marked a) where
     texify (Marked a) = texify a
     texify Mark = "x"
 
-marked :: PRTree a -> PRTree (Marked a)
-marked (PRTree a bs) = PRTree (Marked a) (map marked bs)
+-- * Operad
 
-markedOp :: AForestOp a -> AForestOp (Marked a)
-markedOp (Leaf a) = Leaf $ Marked a
-markedOp (Graft a b) = Graft (markedOp a) (markedOp b)
-markedOp (Concat as) = Concat $ map markedOp as
-markedOp (Trace a) = Trace $ markedOp a
+class Operad a where
+    type Decoration a
+    type AlgebraBasis a
+    type AlgebraScalars a
 
-unmark :: (Eq a) => PRTree (Marked a) -> PRTree a
-unmark (PRTree (Marked a) bs) = PRTree a (map unmark $ filter ((/= Mark) . root) bs)
+    evaluate :: a -> PowerSeries (AlgebraScalars a) (AlgebraBasis a)
+
+    toOperad :: AlgebraBasis a -> PowerSeries (AlgebraScalars a) a
+
+    compose :: (Decoration a) -> [a] -> a -> a
+
+-- * Trees
+
+data TreeOp a
+    = Graft (ForestOp a) (TreeOp a)
+    | TLeaf a deriving (Eq)
+
+instance (Graded a) => Graded (TreeOp a) where
+    grading (TLeaf a) = grading a
+    grading (Graft a b) = grading a + grading b
+
+instance (Show a) => Show (TreeOp a) where
+    show (TLeaf a) = show a
+    show (Graft a b) = "(" ++ show a ++ " graft " ++ show b ++ ")"
+
+instance (Eq a) => Operad (TreeOp a) where
+    type Decoration (TreeOp a) = a
+    type AlgebraBasis (TreeOp a) = PRTree a
+    type AlgebraScalars (TreeOp a) = Integer
+
+    evaluate (TLeaf a) = vector $ 1 *^ PRTree a []
+    evaluate (Graft a b) = bilinear graftFT (evaluate a) (evaluate b)
+
+    toOperad (PRTree a bs) = Graft (toOperad bs) (TLeaf a)
+
+    compose x [y] (TLeaf z) = if x == z then y else TLeaf z
+    compose x ts (Graft a b) =
+        Graft
+            (compose (take n_leaves_b ts) a)
+            (compose (drop n_leaves_b ts) b)
+      where
+        n_leaves_b = countLeaves x b
+        countLeaves (TLeaf y) = if x == y then 1 else 0
+        countLeaves (Graft a b) = countLeaves a + countLeaves b
+
+
+instance Texifiable (TreeOp a) where
+    texify = texify . toTree
+      where
+        toTree (TLeaf a) = PRTree (show a) []
+        toTree (Graft a b) = PRTree "i_$\\curvearrowright$" [toTree a, toTree b]
 
 -- * Forests
 
-data AForestOp a
-    = Trace (AForestOp (Marked a))
-    | Concat [AForestOp a]
-    | Graft (AForestOp a) (AForestOp a)
-    | Leaf a deriving (Eq)
+data ForestOp a = Concat [TreeOp a] deriving (Eq)
 
-instance (Graded a) => Graded (AForestOp a) where
-    grading (Leaf a) = grading a
-    grading (Graft a b) = grading a + grading b
+instance (Graded a) => Graded (ForestOp a) where
     grading (Concat as) = sum $ map grading as
-    grading (Trace a) = grading a
 
-instance (Show a) => Show (AForestOp a) where
-    show (Leaf a) = show a
-    show (Graft a b) = "(" ++ show a ++ " graft " ++ show b ++ ")"
+instance (Show a) => Show (ForestOp a) where
     show (Concat as) = show as
-    show (Trace a) = "Tr " ++ show a
 
-toPRTree :: (Show a) => AForestOp a -> PRTree String
-toPRTree (Leaf a) = PRTree (show a) []
-toPRTree (Graft a b) = PRTree "$\\curvearrowright$" [toPRTree a, toPRTree b]
-toPRTree (Concat as) = PRTree "$\\cdot$" $ map toPRTree as
-toPRTree (Trace a) = PRTree "Tr" [toPRTree a]
+instance (Show a) => Operad (ForestOp a) where
+    type AlgebraBasis (ForestOp a) = [PRTree a]
+    type AlgebraScalars (ForestOp a) = Integer
 
-instance (Show a, Texifiable a) => Texifiable (AForestOp a) where
-    texify = texify . toPRTree
+    evaluate (Concat as) = product $ map evaluate as
 
+    toOperad ts = linear Concat $ product $ map ((linear (:[])) . toOperad) ts
+
+
+
+instance Texifiable (TreeOp a) where
+    texify = texify . toTree
+      where
+        toTree (Concat as) = PRTree "i_$\\curvearrowright$" $ map toTree as
+
+
+{-
 {- | Evaluate the @GraftOp@ by replacing nodes with @graftFF@ and evaluating.
 
 Example:
@@ -100,19 +136,13 @@ Example:
 >>> evaluate $ Graft (Leaf 1) (Graft (Leaf 2) (Leaf 3))
 (1 *^ 3[2[1]] + 1 *^ 3[1,2])_3
 -}
-evaluate :: (Show a, Texifiable a, Typeable a, Eq a, Graded a) => AForestOp a -> PowerSeries Integer (APForest a)
-evaluate (Leaf a) = vector $ 1 *^ ([], [PRTree a []])
-evaluate (Graft a b) = bilinear graftAF (evaluate a) (evaluate b)
+evaluate :: (Eq a, Graded a) => ForestOp a -> PowerSeries Integer [PRTree a]
+evaluate (Leaf a) = vector $ 1 *^ [PRTree a []]
+evaluate (Graft a b) = bilinear graftFF (evaluate a) (evaluate b)
 evaluate (Concat as) = product $ map evaluate as
-evaluate (Trace a) = linear connectRootToMarked $ evaluate a
+evaluate (Trace a) = connectRootToMarked $ evaluate a
   where
-      connectRootToMarked =  . (\(as, t:ts) -> (as, t))
-        
-{-
-          case (filter ((== "x") . show . last) $ branchPaths $ head ts) of
-            [] -> error $ "No marked root found in " ++ show (branchPaths $ head ts)
-            l -> Aroma $ map unmark $ init $ head l
--}
+      connectRootToMarked t = Aroma $ head $ filter ((== Mark) . last) $ branchPaths t
 
 {- | Represent a @PRTree@ using the @graftFF@ operation encoding the binary tree using @GraftOp@.
 
@@ -123,20 +153,11 @@ Example:
 >>> toOperad $ PRTree 1 [PRTree 2 [PRTree 4 [], PRTree 5 []], PRTree 3 []]
 (1 *^ ((4 graft (5 graft 2)) graft (3 graft 1)) + -1 *^ (((4 graft 5) graft 2) graft (3 graft 1)) + -1 *^ (((4 graft (5 graft 2)) graft 3) graft 1) + 1 *^ ((((4 graft 5) graft 2) graft 3) graft 1))_5
 -}
-toOperad :: (Eq a, Graded a) => APForest a -> AForestOp a
-toOperad ([], []) = Concat []
-
-toOperad ([Aroma ts], []) = Trace $ toOperad $ ([],) $ (:[]) $ breakCycle ts
-  where
-    breakCycle [] = PRTree Mark []
-    breakCycle (t:ts) = addBranch (breakCycle ts) $ marked t
-    addBranch b (PRTree a bs) = PRTree a (b : bs)
-
-toOperad ([], [PRTree a []]) = Leaf a
-toOperad ([], [PRTree a bs]) = Graft (toOperad ([],bs)) (Leaf a)
-
-toOperad (as, ts) = Concat $ (map (toOperad . (,[]) . (:[])) as) ++ (map (toOperad . ([],) . (:[])) ts)
-
+toOperad :: (Eq a, Graded a) => [PRTree a] -> ForestOp a
+toOperad [] = Concat []
+toOperad [PRTree a []] = Leaf a
+toOperad [PRTree a bs] = Graft (toOperad bs) (Leaf a)
+toOperad ts = Concat  $ map (toOperad . (:[])) ts
 
 {- | Count leaves of @GraphOp a@ decorated by @x@.
 
@@ -147,11 +168,10 @@ Example:
 >>> countLeaves 1 $ Graft (Leaf 1) (Graft (Leaf 1) (Leaf 2))
 2
 -}
-countLeaves :: (Eq a) => a -> AForestOp a -> Int
+countLeaves :: (Eq a) => a -> ForestOp a -> Int
 countLeaves x (Leaf y) = if x == y then 1 else 0
 countLeaves x (Graft a b) = countLeaves x a + countLeaves x b
 countLeaves x (Concat as) = sum $ map (countLeaves x) as
-countLeaves x (Trace a) = countLeaves (Marked x) a
 
 {- | Substitute the leaves decorated by @X@ of @obj@ by the `GraftOp` elements in @ops@ in all possible orders.
 
@@ -162,7 +182,7 @@ Example:
 >>> substituteOp 5 [Graft (Leaf 1) (Leaf 2), Leaf 3, Leaf 4] $ Graft (Leaf 5) (Graft (Leaf 5) (Leaf 5))
 (1 *^ ((1 graft 2) graft (3 graft 4)) + 1 *^ (3 graft ((1 graft 2) graft 4)) + 1 *^ (4 graft (3 graft (1 graft 2))) + 1 *^ (3 graft (4 graft (1 graft 2))) + 1 *^ (4 graft ((1 graft 2) graft 3)) + 1 *^ ((1 graft 2) graft (4 graft 3)))_4
 -}
-permComposeOp :: (Eq a, Graded a) => a -> [AForestOp a] -> AForestOp a -> PowerSeries Integer (AForestOp a)
+permComposeOp :: (Eq a, Graded a) => a -> [ForestOp a] -> ForestOp a -> PowerSeries Integer (ForestOp a)
 permComposeOp x ops obj =
     mconcat
         $ map
@@ -181,7 +201,7 @@ Example:
 >>> substituteOpBy 5 [Graft (Leaf 1) (Leaf 2), Leaf 3, Leaf 4] $ Graft (Leaf 5) (Graft (Leaf 5) (Leaf 5))
 ((1 graft 2) graft (3 graft 4))
 -}
-composeOp :: (Eq a) => a -> [AForestOp a] -> AForestOp a -> Maybe (AForestOp a)
+composeOp :: (Eq a) => a -> [ForestOp a] -> ForestOp a -> Maybe (ForestOp a)
 composeOp _ [] (Leaf y) = Just $ Leaf y
 composeOp _ [y] (Leaf _) = Just y
 composeOp _ _ (Leaf _) = Nothing
@@ -193,7 +213,6 @@ composeOp x ops obj
                 (fromJust $ composeOp x (take (countLeaves x a) ops) a)
                 (fromJust $ composeOp x (drop (countLeaves x a) ops) b)
             Concat as -> Concat $ map (\(a, ops_a) -> fromJust $ composeOp x ops_a a) $ spreadOps ops as
-            Trace a -> Trace $ fromJust $ composeOp (Marked x) (map markedOp ops) a
     | otherwise = Nothing
   where
     spreadOps os [a] = [(a, os)]
@@ -208,6 +227,6 @@ Example:
 >>> substitute 4 [PRTree 1 [PRTree 2 []], PRTree 3 []] $ PRTree 4 [PRTree 4 []]
 (1 *^ 3[1[2]] + 1 *^ 1[2[3]] + 1 *^ 1[3,2])_3
 -}
-substitute :: (Eq a, Graded a, Show a, Texifiable a, Typeable a) => a -> [APTree a] -> APForest a -> PowerSeries Integer (APForest a)
-substitute x gens obj = linear evaluate $ permComposeOp x (map (toOperad . (\(as, t) -> (as, [t]))) gens) (toOperad obj)
-
+substitute :: (Eq a, Graded a) => a -> [PRTree a] -> [PRTree a] -> PowerSeries Integer [PRTree a]
+substitute x gens obj = linear evaluate $ permComposeOp x (map (toOperad . (:[])) gens) (toOperad obj)
+-}

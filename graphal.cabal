@@ -31,6 +31,7 @@ library
       Output
       RootedTree
       Substitution
+      Substitution2
       Symbolics
   other-modules:
       Paths_graphal

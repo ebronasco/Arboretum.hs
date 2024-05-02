@@ -140,6 +140,11 @@ class Node(object):
 
 class Cycle(Node):
 
+    def __init__(self, style=''):
+        self.style = style
+
+        super().__init__()
+
     def __repr__(self):
         string = f"Cycle\n--- Trees ---\n"
         for child in self.children:
@@ -149,14 +154,29 @@ class Cycle(Node):
         return string
 
     def __str__(self):
+
+        cycle_arrow = ''
+
+        if self.style == 'oriented':
+            cycle_arrow = 'latex'
+
         string = ""
 
         for child1, child2 in zip(self.children[:-1], self.children[1:]):
-            string += "\\draw ({0},1.0) edge ({1},1.0);\n".format(child1.x_pos, child2.x_pos)
+            string += "\\draw ({0},1.0) edge[{2}-] ({1},1.0);\n".format(
+                child1.x_pos,
+                child2.x_pos,
+                cycle_arrow,
+            )
 
         string += "\\draw ({0},1.0) arc (90:270:0.5);\n".format(self.children[0].x_pos)
         string += "\\draw ({0},1.0) arc (90:-90:0.5);\n".format(self.children[-1].x_pos)
-        string += "\\draw ({0},0.0) edge ({1},0.0);\n".format(self.children[0].x_pos, self.children[-1].x_pos)
+
+        string += "\\draw ({0},0.0) edge[-{2}] ({1},0.0);\n".format(
+            self.children[0].x_pos,
+            self.children[-1].x_pos + (0.3 if len(self.children) == 1 else 0.0),
+            cycle_arrow,
+        )
 
         string += f"\\node [draw=none] at ({self.x_pos}, 0.0) {{ }} \n"
 
@@ -197,7 +217,7 @@ class Stolon:
         self.nodes.append(node)
 
 class Forest(object):
-    def __init__(self, nodes=None, stolons=None):
+    def __init__(self, nodes=None, stolons=None, style=''):
         if nodes is None:
             nodes = []
         if stolons is None:
@@ -206,6 +226,7 @@ class Forest(object):
         self.stolons = stolons
         self.border_left = []
         self.border_right = []
+        self.style = style
 
     def __repr__(self):
         string = "Forest()\n--- Trees ---\n"
@@ -217,7 +238,7 @@ class Forest(object):
 
     def __str__(self):
         """Generate TikZ commands to draw the forest."""
-        string = "\\tikz[planar forest] {\n"
+        string = "\\tikz[planar forest " + self.style + "] {\n"
         string += "\n"
 
         for stolon in self.stolons:
@@ -337,7 +358,7 @@ def decode_node_info(string):
 
     return (color, inner_label, outer_label, label_direction)
 
-def generate_forest(string):
+def generate_forest(string, style=''):
 
     #log = open("log.txt", "w")
 
@@ -345,7 +366,7 @@ def generate_forest(string):
         return "\emptyset"
 
     level = 0
-    forest = Forest()
+    forest = Forest([], style=style)
 
     cache = ''
     level = 0
@@ -357,7 +378,7 @@ def generate_forest(string):
         # create new node
         if c in ['[', ',', '=', ']', '(', ')']:
             if c == '(':
-                new_node = Cycle()
+                new_node = Cycle(style=style)
 
             elif cache != '':
                 color, inner_label, outer_label, label_direction = decode_node_info(cache)

@@ -85,7 +85,7 @@ instance (Graded a) => Graded (Aroma a) where
 -- * Planar aromatic forests
 
 -- Relies on the fact that @texify@ of @PRTree@ is @\\forest{...}@.
-instance (Texifiable a, Eq a) => Texifiable (Aroma (PRTree a)) where
+instance (Show a, Texifiable a, Eq a) => Texifiable (Aroma (PRTree a)) where
     texify (Aroma l) = "\\forest{(" ++ L.intercalate "," (map bracketNotation l) ++ ")}"
       where
         bracketNotation = init . fromJust . L.stripPrefix "\\forest{" . texify
@@ -216,7 +216,7 @@ divergenceAT (ma, t) = ([t] `graftOnMultiAroma` ma) + linear (: ma) (divergenceT
 -- * Non-planar aromatic forests
 
 -- Relies on the fact that @texify@ of @RTree@ is @\\forest{...}@.
-instance (Texifiable a, Eq a, Ord a) => Texifiable (Aroma (RTree a)) where
+instance (Show a, Texifiable a, Eq a, Ord a) => Texifiable (Aroma (RTree a)) where
     texify (Aroma l) = "\\forest{(" ++ L.intercalate "," (map bracketNotation l) ++ ")}"
       where
         bracketNotation = init . fromJust . L.stripPrefix "\\forest{" . texify
