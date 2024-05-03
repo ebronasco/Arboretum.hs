@@ -14,6 +14,7 @@ module Substitution (
     marked,
     markedOp,
     unmark,
+    unmarkAF,
     AForestOp (..),
     evaluate,
     toOperad,
@@ -22,6 +23,8 @@ module Substitution (
     countLeaves,
     substitute,
 ) where
+
+import Debug.Trace
 
 import Data.Group
 import Data.Typeable
@@ -39,7 +42,7 @@ import Symbolics
 data Marked a = Marked a | Mark deriving (Eq)
 
 instance (Show a) => Show (Marked a) where
-    show (Marked a) = show a
+    show (Marked a) = "m" ++ show a
     show Mark = "x"
 
 instance (Graded a) => Graded (Marked a) where
@@ -61,6 +64,13 @@ markedOp (Trace a) = Trace $ markedOp a
 
 unmark :: (Eq a) => PRTree (Marked a) -> PRTree a
 unmark (PRTree (Marked a) bs) = PRTree a (map unmark $ filter ((/= Mark) . root) bs)
+
+unmarkA :: (Eq a) => Aroma (PRTree  (Marked a)) -> Aroma (PRTree a)
+unmarkA (Aroma ts) = Aroma $ map unmark ts
+
+unmarkAF :: (Eq a) => APForest (Marked a) -> APForest a
+unmarkAF (as, ts) = (map unmarkA as, map unmark ts)
+
 
 -- * Forests
 
@@ -101,18 +111,24 @@ Example:
 (1 *^ 3[2[1]] + 1 *^ 3[1,2])_3
 -}
 evaluate :: (Show a, Texifiable a, Typeable a, Eq a, Graded a) => AForestOp a -> PowerSeries Integer (APForest a)
+{-
+evaluate (Leaf a) = (\res -> trace ("leaf " ++ show a ++ " = " ++ show res) res) $ vector $ 1 *^ ([], [PRTree a []])
+evaluate (Graft a b) = (\res -> trace ("graft " ++ show a ++ " onto " ++ show b ++ " = " ++ show res) res) $ bilinear graftAF (evaluate a) (evaluate b)
+evaluate (Concat as) = (\res -> trace ("concat " ++ show as ++ " = " ++ show res) res) $ product $ map evaluate as
+evaluate (Trace a) =(\res -> trace ("trace " ++ show a ++ " = " ++ show res) res) $ linear connectRootToMarked $ evaluate a
+-}
 evaluate (Leaf a) = vector $ 1 *^ ([], [PRTree a []])
 evaluate (Graft a b) = bilinear graftAF (evaluate a) (evaluate b)
 evaluate (Concat as) = product $ map evaluate as
-evaluate (Trace a) = linear connectRootToMarked $ evaluate a
+evaluate (Trace a) =linear connectRootToMarked $ evaluate a
   where
-      connectRootToMarked =  . (\(as, t:ts) -> (as, t))
-        
-{-
-          case (filter ((== "x") . show . last) $ branchPaths $ head ts) of
-            [] -> error $ "No marked root found in " ++ show (branchPaths $ head ts)
-            l -> Aroma $ map unmark $ init $ head l
--}
+      connectRootToMarked (as, t:ts) = case (searchMarkTree (as, t)) of
+        Nothing -> searchMarkAroma (as, t)
+        Just x -> vector $ 1 *^ x
+      searchMarkTree (as, t) = case (filter ((== PRTree Mark []) . last) $ branchPaths t) of
+                                 [] -> Nothing
+                                 l -> Just $ (, []) $ (: (map unmarkA as)) $ Aroma $ map unmark $ init $ head l
+      searchMarkAroma (as, t) = linear unmarkAF $ substitute Mark [([], t)] (as, [])
 
 {- | Represent a @PRTree@ using the @graftFF@ operation encoding the binary tree using @GraftOp@.
 

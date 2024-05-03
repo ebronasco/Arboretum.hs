@@ -93,4 +93,13 @@ pt2 = PRTree 1 [PRTree 1 [], PRTree 1 []]
    display $ substitute [pt1, PRTree 1 [], PRTree 1 []] pt2
 -}
 
+at1 = ([Aroma [PRTree 1 []]], PRTree 2 [])
+at2 = ([], PRTree 1 [PRTree 2 []])
+af1 = ([Aroma [PRTree 3 []]], [PRTree 3 [PRTree 4 []]])
+
+{-
+    display $ substitute 3 [at2, at2] af1
+    display $ substitute 3 [at1, at1] af1
+-}
+
 main = putStrLn "Hello, world!"
