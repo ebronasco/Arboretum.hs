@@ -59,6 +59,8 @@ class Operad a where
 
     compose :: (Decoration a) -> [a] -> a -> a
 
+--  fromTree :: TreeOp b -> a
+
 -- * Trees
 
 data TreeOp a

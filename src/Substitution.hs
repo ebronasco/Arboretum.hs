@@ -1,4 +1,5 @@
 {-# LANGUAGE TupleSections #-}
+
 {- |
 Module      : Substitution
 Description : Implementation of substitution of planar rooted trees
@@ -24,17 +25,15 @@ module Substitution (
     substitute,
 ) where
 
-import Debug.Trace
-
+import AromaticTree
 import Data.Group
-import Data.Typeable
 import qualified Data.List as L
 import Data.Maybe
-
+import Data.Typeable
+import Debug.Trace
 import GradedList
 import Output
 import RootedTree
-import AromaticTree
 import Symbolics
 
 -- * Aromas
@@ -53,24 +52,37 @@ instance (Texifiable a) => Texifiable (Marked a) where
     texify (Marked a) = texify a
     texify Mark = "x"
 
-marked :: PRTree a -> PRTree (Marked a)
-marked (PRTree a bs) = PRTree (Marked a) (map marked bs)
-
 markedOp :: AForestOp a -> AForestOp (Marked a)
 markedOp (Leaf a) = Leaf $ Marked a
 markedOp (Graft a b) = Graft (markedOp a) (markedOp b)
 markedOp (Concat as) = Concat $ map markedOp as
 markedOp (Trace a) = Trace $ markedOp a
 
-unmark :: (Eq a) => PRTree (Marked a) -> PRTree a
-unmark (PRTree (Marked a) bs) = PRTree a (map unmark $ filter ((/= Mark) . root) bs)
+class Markable a where
+    mark' :: a b -> a (Marked b)
+    unmark' :: Int -> a (Marked b) -> a b
 
-unmarkA :: (Eq a) => Aroma (PRTree  (Marked a)) -> Aroma (PRTree a)
-unmarkA (Aroma ts) = Aroma $ map unmark ts
+instance Markable PRTree where
+    mark' (PRTree a bs) = PRTree (Marked a) (map mark' bs)
+    unmark' n (PRTree (Marked a) bs) = PRTree a $ map (unmark' n) bs
 
-unmarkAF :: (Eq a) => APForest (Marked a) -> APForest a
-unmarkAF (as, ts) = (map unmarkA as, map unmark ts)
+instance Markable PAroma where
+    mark' (PAroma (Cycle ts)) = PAroma $ Cycle $ map mark' ts
+    unmark' n (PAroma (Cycle ts)) = PAroma $ Cycle $ map (unmark' n) ts
 
+instance Markable APForest where
+    mark' (as, ts) = (map mark' as, map mark' ts)
+    unmark' n (as, ts) = (map (unmark' n) as, map (unmark' n) ts)
+
+instance Markable AForestOp where
+    mark' (Leaf a) = Leaf $ Marked a
+    mark' (Graft a b) = Graft (mark' a) (mark' b)
+    mark' (Concat as) = Concat $ map mark' as
+    mark' (Trace a) = Trace $ mark' a
+    unmark' n (Leaf (Marked a)) = Leaf a
+    unmark' n (Graft a b) = Graft (unmark' n a) (unmark' n b)
+    unmark' n (Concat as) = Concat $ map (unmark' n) as
+    unmark' n (Trace a) = Trace $ unmark' (n-1) a
 
 -- * Forests
 
@@ -78,7 +90,8 @@ data AForestOp a
     = Trace (AForestOp (Marked a))
     | Concat [AForestOp a]
     | Graft (AForestOp a) (AForestOp a)
-    | Leaf a deriving (Eq)
+    | Leaf a
+    deriving (Eq)
 
 instance (Graded a) => Graded (AForestOp a) where
     grading (Leaf a) = grading a
@@ -120,15 +133,15 @@ evaluate (Trace a) =(\res -> trace ("trace " ++ show a ++ " = " ++ show res) res
 evaluate (Leaf a) = vector $ 1 *^ ([], [PRTree a []])
 evaluate (Graft a b) = bilinear graftAF (evaluate a) (evaluate b)
 evaluate (Concat as) = product $ map evaluate as
-evaluate (Trace a) =linear connectRootToMarked $ evaluate a
+evaluate (Trace a) = linear connectRootToMarked $ evaluate a
   where
-      connectRootToMarked (as, t:ts) = case (searchMarkTree (as, t)) of
+    connectRootToMarked (as, t : ts) = case (searchMarkTree (as, t)) of
         Nothing -> searchMarkAroma (as, t)
         Just x -> vector $ 1 *^ x
-      searchMarkTree (as, t) = case (filter ((== PRTree Mark []) . last) $ branchPaths t) of
-                                 [] -> Nothing
-                                 l -> Just $ (, []) $ (: (map unmarkA as)) $ Aroma $ map unmark $ init $ head l
-      searchMarkAroma (as, t) = linear unmarkAF $ substitute Mark [([], t)] (as, [])
+    searchMarkTree (as, t) = case (filter ((== PRTree Mark []) . last) $ branchPaths t) of
+        [] -> Nothing
+        l -> Just $ (,[]) $ (: (map unmarkA as)) $ Aroma $ map unmark $ init $ head l
+    searchMarkAroma (as, t) = linear unmarkAF $ substitute Mark [([], t)] (as, [])
 
 {- | Represent a @PRTree@ using the @graftFF@ operation encoding the binary tree using @GraftOp@.
 
@@ -141,18 +154,14 @@ Example:
 -}
 toOperad :: (Eq a, Graded a) => APForest a -> AForestOp a
 toOperad ([], []) = Concat []
-
-toOperad ([Aroma ts], []) = Trace $ toOperad $ ([],) $ (:[]) $ breakCycle ts
+toOperad ([Aroma ts], []) = Trace $ toOperad $ ([],) $ (: []) $ breakCycle ts
   where
     breakCycle [] = PRTree Mark []
-    breakCycle (t:ts) = addBranch (breakCycle ts) $ marked t
+    breakCycle (t : ts) = addBranch (breakCycle ts) $ marked t
     addBranch b (PRTree a bs) = PRTree a (b : bs)
-
 toOperad ([], [PRTree a []]) = Leaf a
-toOperad ([], [PRTree a bs]) = Graft (toOperad ([],bs)) (Leaf a)
-
-toOperad (as, ts) = Concat $ (map (toOperad . (,[]) . (:[])) as) ++ (map (toOperad . ([],) . (:[])) ts)
-
+toOperad ([], [PRTree a bs]) = Graft (toOperad ([], bs)) (Leaf a)
+toOperad (as, ts) = Concat $ (map (toOperad . (,[]) . (: [])) as) ++ (map (toOperad . ([],) . (: [])) ts)
 
 {- | Count leaves of @GraphOp a@ decorated by @x@.
 
@@ -205,15 +214,16 @@ composeOp _ _ (Concat []) = Just $ Concat []
 composeOp x ops obj
     | countLeaves x obj == length ops =
         Just $ case obj of
-            Graft a b -> Graft
-                (fromJust $ composeOp x (take (countLeaves x a) ops) a)
-                (fromJust $ composeOp x (drop (countLeaves x a) ops) b)
+            Graft a b ->
+                Graft
+                    (fromJust $ composeOp x (take (countLeaves x a) ops) a)
+                    (fromJust $ composeOp x (drop (countLeaves x a) ops) b)
             Concat as -> Concat $ map (\(a, ops_a) -> fromJust $ composeOp x ops_a a) $ spreadOps ops as
             Trace a -> Trace $ fromJust $ composeOp (Marked x) (map markedOp ops) a
     | otherwise = Nothing
   where
     spreadOps os [a] = [(a, os)]
-    spreadOps os (a:as) = (a, take (countLeaves x a) os) : (spreadOps (drop (countLeaves x a) os) as)
+    spreadOps os (a : as) = (a, take (countLeaves x a) os) : (spreadOps (drop (countLeaves x a) os) as)
 
 {- | Substitute the vertices decorated by @x@ of @obj@ by the @PRTree@ elements in @gens@.
 
@@ -226,4 +236,3 @@ Example:
 -}
 substitute :: (Eq a, Graded a, Show a, Texifiable a, Typeable a) => a -> [APTree a] -> APForest a -> PowerSeries Integer (APForest a)
 substitute x gens obj = linear evaluate $ permComposeOp x (map (toOperad . (\(as, t) -> (as, [t]))) gens) (toOperad obj)
-

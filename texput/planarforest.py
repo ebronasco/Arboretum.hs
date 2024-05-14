@@ -172,11 +172,12 @@ class Cycle(Node):
         string += "\\draw ({0},1.0) arc (90:270:0.5);\n".format(self.children[0].x_pos)
         string += "\\draw ({0},1.0) arc (90:-90:0.5);\n".format(self.children[-1].x_pos)
 
-        string += "\\draw ({0},0.0) edge[-{2}] ({1},0.0);\n".format(
-            self.children[0].x_pos,
-            self.children[-1].x_pos + (0.3 if len(self.children) == 1 else 0.0),
-            cycle_arrow,
-        )
+        if len(self.children) > 1:
+            string += "\\draw ({0},0.0) edge[-{2}] ({1},0.0);\n".format(
+                self.children[0].x_pos,
+                self.children[-1].x_pos + (0.3 if len(self.children) == 1 else 0.0),
+                cycle_arrow,
+            )
 
         string += f"\\node [draw=none] at ({self.x_pos}, 0.0) {{ }} \n"
 
