@@ -45,13 +45,13 @@ f2 = [PRTree 1 [], PRTree 1 [PRTree 1 [], PRTree 1 []]]
 -- Using AromaticTree.hs
 
 paf1 =
-    ( [Aroma [PRTree 1 [], PRTree 1 []], Aroma [PRTree 1 []], Aroma [PRTree 1 []]]
+    ( [PAroma $ Cycle [PRTree 1 [], PRTree 1 []], PAroma $ Cycle [PRTree 1 []], PAroma $ Cycle [PRTree 1 []]]
     , [PRTree 1 [PRTree 1 [], PRTree 1 []]]
     )
         :: APForest Integer
 
 paf2 =
-    ( [Aroma [PRTree 1 []]]
+    ( [PAroma $ Cycle [PRTree 1 []]]
     , [PRTree 1 []]
     )
         :: APForest Integer
@@ -64,7 +64,7 @@ paf2 =
 -}
 
 pat1 =
-    ( [Aroma [PRTree 1 [], PRTree 1 []], Aroma [PRTree 1 []], Aroma [PRTree 1 []]]
+    ( [PAroma $ Cycle [PRTree 1 [], PRTree 1 []], PAroma $ Cycle [PRTree 1 []], PAroma $ Cycle [PRTree 1 []]]
     , PRTree 1 [PRTree 1 [], PRTree 1 []]
     )
         :: APTree Integer
@@ -93,9 +93,11 @@ pt2 = PRTree 1 [PRTree 1 [], PRTree 1 []]
    display $ substitute [pt1, PRTree 1 [], PRTree 1 []] pt2
 -}
 
-at1 = ([Aroma [PRTree 1 []]], PRTree 2 [])
+at1 = ([PAroma $ Cycle [PRTree 1 []]], PRTree 2 [])
 at2 = ([], PRTree 1 [PRTree 2 []])
-af1 = ([Aroma [PRTree 3 []]], [PRTree 3 [PRTree 4 []]])
+at3 = ([PAroma $ Cycle [PRTree 1 [], PRTree 2 []]], PRTree 3 [])
+af1 = ([PAroma $ Cycle [PRTree 3 []]], [PRTree 3 [PRTree 4 []]])
+af2 = ([PAroma $ Cycle [PRTree 3 [PRTree 5 []], PRTree 3 []]], [PRTree 3 [PRTree 4 []]])
 
 {-
     display $ substitute 3 [at2, at2] af1

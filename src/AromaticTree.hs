@@ -10,7 +10,9 @@ Maintainer  : Eugen Bronasco (ebronasco@gmail.com)
 Stability   : experimental
 -}
 module AromaticTree (
+    Cycle (Cycle),
     Aroma (Aroma),
+    PAroma (PAroma),
     graftOnAroma,
     graftOnMultiAroma,
     graftAF,

@@ -12,10 +12,6 @@ We use the operadic approach to substitution of planar rooted trees.
 -}
 module Substitution (
     Marked (..),
-    marked,
-    markedOp,
-    unmark,
-    unmarkAF,
     AForestOp (..),
     evaluate,
     toOperad,
@@ -36,6 +32,8 @@ import Output
 import RootedTree
 import Symbolics
 
+-- !!! TODO: Make all leaves of AForestOp marked. Then, when you evaluate, you get marked forest which you can unmark at the very end. Since all vertices are homogeneously marked, you don't need to nest the marks and mark/unmark all the time.
+
 -- * Aromas
 
 data Marked a = Marked a | Mark deriving (Eq)
@@ -52,45 +50,29 @@ instance (Texifiable a) => Texifiable (Marked a) where
     texify (Marked a) = texify a
     texify Mark = "x"
 
-markedOp :: AForestOp a -> AForestOp (Marked a)
-markedOp (Leaf a) = Leaf $ Marked a
-markedOp (Graft a b) = Graft (markedOp a) (markedOp b)
-markedOp (Concat as) = Concat $ map markedOp as
-markedOp (Trace a) = Trace $ markedOp a
-
 class Markable a where
-    mark' :: a b -> a (Marked b)
-    unmark' :: Int -> a (Marked b) -> a b
+    mark :: a b -> a (Marked b)
+    unmark :: a (Marked b) -> a b
 
 instance Markable PRTree where
-    mark' (PRTree a bs) = PRTree (Marked a) (map mark' bs)
-    unmark' n (PRTree (Marked a) bs) = PRTree a $ map (unmark' n) bs
+    mark (PRTree a bs) = PRTree (Marked a) (map mark bs)
+    unmark (PRTree (Marked a) bs) = PRTree a $ map unmark bs
 
 instance Markable PAroma where
-    mark' (PAroma (Cycle ts)) = PAroma $ Cycle $ map mark' ts
-    unmark' n (PAroma (Cycle ts)) = PAroma $ Cycle $ map (unmark' n) ts
+    mark (PAroma (Cycle ts)) = PAroma $ Cycle $ map mark ts
+    unmark (PAroma (Cycle ts)) = PAroma $ Cycle $ map unmark ts
 
-instance Markable APForest where
-    mark' (as, ts) = (map mark' as, map mark' ts)
-    unmark' n (as, ts) = (map (unmark' n) as, map (unmark' n) ts)
+markAPF (as, ts) = (map mark as, map mark ts)
 
-instance Markable AForestOp where
-    mark' (Leaf a) = Leaf $ Marked a
-    mark' (Graft a b) = Graft (mark' a) (mark' b)
-    mark' (Concat as) = Concat $ map mark' as
-    mark' (Trace a) = Trace $ mark' a
-    unmark' n (Leaf (Marked a)) = Leaf a
-    unmark' n (Graft a b) = Graft (unmark' n a) (unmark' n b)
-    unmark' n (Concat as) = Concat $ map (unmark' n) as
-    unmark' n (Trace a) = Trace $ unmark' (n-1) a
+unmarkAPF (as, ts) = (map unmark as, map unmark ts)
 
 -- * Forests
 
 data AForestOp a
-    = Trace (AForestOp (Marked a))
+    = Trace (AForestOp a)
     | Concat [AForestOp a]
     | Graft (AForestOp a) (AForestOp a)
-    | Leaf a
+    | Leaf (Marked a)
     deriving (Eq)
 
 instance (Graded a) => Graded (AForestOp a) where
@@ -130,18 +112,20 @@ evaluate (Graft a b) = (\res -> trace ("graft " ++ show a ++ " onto " ++ show b 
 evaluate (Concat as) = (\res -> trace ("concat " ++ show as ++ " = " ++ show res) res) $ product $ map evaluate as
 evaluate (Trace a) =(\res -> trace ("trace " ++ show a ++ " = " ++ show res) res) $ linear connectRootToMarked $ evaluate a
 -}
-evaluate (Leaf a) = vector $ 1 *^ ([], [PRTree a []])
-evaluate (Graft a b) = bilinear graftAF (evaluate a) (evaluate b)
-evaluate (Concat as) = product $ map evaluate as
-evaluate (Trace a) = linear connectRootToMarked $ evaluate a
+evaluate = linear unmarkAPF . evaluate'
   where
-    connectRootToMarked (as, t : ts) = case (searchMarkTree (as, t)) of
-        Nothing -> searchMarkAroma (as, t)
-        Just x -> vector $ 1 *^ x
-    searchMarkTree (as, t) = case (filter ((== PRTree Mark []) . last) $ branchPaths t) of
-        [] -> Nothing
-        l -> Just $ (,[]) $ (: (map unmarkA as)) $ Aroma $ map unmark $ init $ head l
-    searchMarkAroma (as, t) = linear unmarkAF $ substitute Mark [([], t)] (as, [])
+    evaluate' (Leaf a) = vector $ 1 *^ ([], [PRTree a []])
+    evaluate' (Graft a b) = bilinear graftAF (evaluate' a) (evaluate' b)
+    evaluate' (Concat as) = product $ map evaluate' as
+    evaluate' (Trace a) = linear connectRootToMarked $ evaluate' a
+      where
+        connectRootToMarked (as, t : ts) = case (searchMarkTree (as, t)) of
+            Nothing -> searchMarkAroma (as, t)
+            Just x -> vector $ 1 *^ x
+        searchMarkTree (as, t) = case (filter ((== PRTree Mark []) . last) $ branchPaths t) of
+            [] -> Nothing
+            l -> Just $ (,[]) $ (: as) $ PAroma $ Cycle $ init $ head l
+        searchMarkAroma (as, t) = substitute Mark [([], t)] (as, [])
 
 {- | Represent a @PRTree@ using the @graftFF@ operation encoding the binary tree using @GraftOp@.
 
@@ -153,15 +137,20 @@ Example:
 (1 *^ ((4 graft (5 graft 2)) graft (3 graft 1)) + -1 *^ (((4 graft 5) graft 2) graft (3 graft 1)) + -1 *^ (((4 graft (5 graft 2)) graft 3) graft 1) + 1 *^ ((((4 graft 5) graft 2) graft 3) graft 1))_5
 -}
 toOperad :: (Eq a, Graded a) => APForest a -> AForestOp a
-toOperad ([], []) = Concat []
-toOperad ([Aroma ts], []) = Trace $ toOperad $ ([],) $ (: []) $ breakCycle ts
+toOperad = toOperad' . markAPF
   where
-    breakCycle [] = PRTree Mark []
-    breakCycle (t : ts) = addBranch (breakCycle ts) $ marked t
-    addBranch b (PRTree a bs) = PRTree a (b : bs)
-toOperad ([], [PRTree a []]) = Leaf a
-toOperad ([], [PRTree a bs]) = Graft (toOperad ([], bs)) (Leaf a)
-toOperad (as, ts) = Concat $ (map (toOperad . (,[]) . (: [])) as) ++ (map (toOperad . ([],) . (: [])) ts)
+    toOperad' ([], []) = Concat []
+    toOperad' ([PAroma (Cycle ts)], []) = Trace $ toOperad' $ ([],) $ (: []) $ breakCycle ts
+      where
+        breakCycle [] = PRTree Mark []
+        breakCycle (t : ts) = addBranch (breakCycle ts) t
+        addBranch b (PRTree a bs) = PRTree a (b : bs)
+    toOperad' ([], [PRTree a []]) = Leaf a
+    toOperad' ([], [PRTree a bs]) = Graft (toOperad' ([], bs)) (Leaf a)
+    toOperad' (as, ts) =
+        Concat $
+            (map (toOperad' . (,[]) . (: [])) as)
+                ++ (map (toOperad' . ([],) . (: [])) ts)
 
 {- | Count leaves of @GraphOp a@ decorated by @x@.
 
@@ -173,10 +162,11 @@ Example:
 2
 -}
 countLeaves :: (Eq a) => a -> AForestOp a -> Int
-countLeaves x (Leaf y) = if x == y then 1 else 0
+countLeaves x (Leaf Mark) = 0
+countLeaves x (Leaf (Marked y)) = if x == y then 1 else 0
 countLeaves x (Graft a b) = countLeaves x a + countLeaves x b
 countLeaves x (Concat as) = sum $ map (countLeaves x) as
-countLeaves x (Trace a) = countLeaves (Marked x) a
+countLeaves x (Trace a) = countLeaves x a
 
 {- | Substitute the leaves decorated by @X@ of @obj@ by the `GraftOp` elements in @ops@ in all possible orders.
 
@@ -219,7 +209,7 @@ composeOp x ops obj
                     (fromJust $ composeOp x (take (countLeaves x a) ops) a)
                     (fromJust $ composeOp x (drop (countLeaves x a) ops) b)
             Concat as -> Concat $ map (\(a, ops_a) -> fromJust $ composeOp x ops_a a) $ spreadOps ops as
-            Trace a -> Trace $ fromJust $ composeOp (Marked x) (map markedOp ops) a
+            Trace a -> Trace $ fromJust $ composeOp x ops a
     | otherwise = Nothing
   where
     spreadOps os [a] = [(a, os)]
