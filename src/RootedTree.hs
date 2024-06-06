@@ -1,4 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
 
 {- |
 Module      : RootedTree
@@ -52,6 +53,13 @@ instance (Show a) => Show (PRTree a) where
                     [] -> ""
                     _ -> show xs
                )
+
+instance (Eq a, Graded a) => Vector (PRTree a) where
+    type VectorScalar (PRTree a) = Integer
+    type VectorBasis (PRTree a) = PRTree a
+
+    vector = vector . (1 *^)
+
 
 {- | LaTeX notation for planar rooted trees using @planarforest.py@ TeX package.
 

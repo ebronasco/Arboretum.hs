@@ -15,7 +15,7 @@ module Substitution (
     AForestOp (..),
     evaluate,
     toOperad,
-    permComposeOp,
+    symComposeOp,
     composeOp,
     countLeaves,
     substitute,
@@ -32,9 +32,7 @@ import Output
 import RootedTree
 import Symbolics
 
--- !!! TODO: Make all leaves of AForestOp marked. Then, when you evaluate, you get marked forest which you can unmark at the very end. Since all vertices are homogeneously marked, you don't need to nest the marks and mark/unmark all the time.
-
--- * Aromas
+-- * Mark
 
 data Marked a = Marked a | Mark deriving (Eq)
 
@@ -87,14 +85,14 @@ instance (Show a) => Show (AForestOp a) where
     show (Concat as) = show as
     show (Trace a) = "Tr " ++ show a
 
-toPRTree :: (Show a) => AForestOp a -> PRTree String
-toPRTree (Leaf a) = PRTree (show a) []
-toPRTree (Graft a b) = PRTree "$\\curvearrowright$" [toPRTree a, toPRTree b]
-toPRTree (Concat as) = PRTree "$\\cdot$" $ map toPRTree as
-toPRTree (Trace a) = PRTree "Tr" [toPRTree a]
 
 instance (Show a, Texifiable a) => Texifiable (AForestOp a) where
-    texify = texify . toPRTree
+    texify = texify . toTree
+      where 
+        toTree (Leaf a) = PRTree (show a) []
+        toTree (Graft a b) = PRTree "$\\curvearrowright$" [toTree a, toTree b]
+        toTree (Concat as) = PRTree "$\\cdot$" $ map toTree as
+        toTree (Trace a) = PRTree "Tr" [toTree a]
 
 {- | Evaluate the @GraftOp@ by replacing nodes with @graftFF@ and evaluating.
 
@@ -106,12 +104,6 @@ Example:
 (1 *^ 3[2[1]] + 1 *^ 3[1,2])_3
 -}
 evaluate :: (Show a, Texifiable a, Typeable a, Eq a, Graded a) => AForestOp a -> PowerSeries Integer (APForest a)
-{-
-evaluate (Leaf a) = (\res -> trace ("leaf " ++ show a ++ " = " ++ show res) res) $ vector $ 1 *^ ([], [PRTree a []])
-evaluate (Graft a b) = (\res -> trace ("graft " ++ show a ++ " onto " ++ show b ++ " = " ++ show res) res) $ bilinear graftAF (evaluate a) (evaluate b)
-evaluate (Concat as) = (\res -> trace ("concat " ++ show as ++ " = " ++ show res) res) $ product $ map evaluate as
-evaluate (Trace a) =(\res -> trace ("trace " ++ show a ++ " = " ++ show res) res) $ linear connectRootToMarked $ evaluate a
--}
 evaluate = linear unmarkAPF . evaluate'
   where
     evaluate' (Leaf a) = vector $ 1 *^ ([], [PRTree a []])
@@ -177,8 +169,8 @@ Example:
 >>> substituteOp 5 [Graft (Leaf 1) (Leaf 2), Leaf 3, Leaf 4] $ Graft (Leaf 5) (Graft (Leaf 5) (Leaf 5))
 (1 *^ ((1 graft 2) graft (3 graft 4)) + 1 *^ (3 graft ((1 graft 2) graft 4)) + 1 *^ (4 graft (3 graft (1 graft 2))) + 1 *^ (3 graft (4 graft (1 graft 2))) + 1 *^ (4 graft ((1 graft 2) graft 3)) + 1 *^ ((1 graft 2) graft (4 graft 3)))_4
 -}
-permComposeOp :: (Eq a, Graded a) => a -> [AForestOp a] -> AForestOp a -> PowerSeries Integer (AForestOp a)
-permComposeOp x ops obj =
+symComposeOp :: (Eq a, Graded a) => a -> [AForestOp a] -> AForestOp a -> PowerSeries Integer (AForestOp a)
+symComposeOp x ops obj =
     mconcat
         $ map
             ( \perm_ops -> case composeOp x perm_ops obj of
@@ -225,4 +217,4 @@ Example:
 (1 *^ 3[1[2]] + 1 *^ 1[2[3]] + 1 *^ 1[3,2])_3
 -}
 substitute :: (Eq a, Graded a, Show a, Texifiable a, Typeable a) => a -> [APTree a] -> APForest a -> PowerSeries Integer (APForest a)
-substitute x gens obj = linear evaluate $ permComposeOp x (map (toOperad . (\(as, t) -> (as, [t]))) gens) (toOperad obj)
+substitute x gens obj = linear evaluate $ symComposeOp x (map (toOperad . (\(as, t) -> (as, [t]))) gens) (toOperad obj)

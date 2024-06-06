@@ -24,6 +24,7 @@ module Symbolics (
     -- * Graded vector space
 
     --    VectorSpace,
+    Vector (..),
     vector,
     fromListV,
     fromInfListV,

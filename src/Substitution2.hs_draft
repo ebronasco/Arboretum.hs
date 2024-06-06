@@ -10,7 +10,7 @@ Stability   : experimental
 
 We use the operadic approach to substitution of planar rooted trees.
 -}
-module Substitution2 (
+module Substitution (
     ForestOp (..),
     evaluate,
     toOperad,
@@ -20,31 +20,15 @@ module Substitution2 (
     substitute,
 ) where
 
+import AromaticTree
 import Data.Group
 import qualified Data.List as L
 import Data.Maybe
-
 import GradedList
 import Output
 import RootedTree
-import AromaticTree
 import Symbolics
 
--- * Mark
-
-data Marked a = Marked a | Mark deriving (Eq)
-
-instance (Show a) => Show (Marked a) where
-    show (Marked a) = show a
-    show Mark = "x"
-
-instance (Graded a) => Graded (Marked a) where
-    grading (Marked a) = grading a
-    grading Mark = 0
-
-instance (Texifiable a) => Texifiable (Marked a) where
-    texify (Marked a) = texify a
-    texify Mark = "x"
 
 -- * Operad
 
@@ -57,75 +41,66 @@ class Operad a where
 
     toOperad :: AlgebraBasis a -> PowerSeries (AlgebraScalars a) a
 
+    countDecorations :: Decoration a -> a -> Int
+
     compose :: (Decoration a) -> [a] -> a -> a
 
---  fromTree :: TreeOp b -> a
+    symmetric_compose :: (Decoration a) -> [a] -> a -> PowerSeries (AlgebraScalars a) a
+    symmetric_compose x ops obj =
+        mconcat $
+            map (\perm_ops -> vector $ 1 *^ compose x perm_ops obj) $
+                L.permutations ops
 
 -- * Trees
 
-data TreeOp a
-    = Graft (ForestOp a) (TreeOp a)
-    | TLeaf a deriving (Eq)
+data TreeOp a = Graft [TreeOp a] a deriving (Eq)
 
 instance (Graded a) => Graded (TreeOp a) where
-    grading (TLeaf a) = grading a
     grading (Graft a b) = grading a + grading b
 
 instance (Show a) => Show (TreeOp a) where
-    show (TLeaf a) = show a
+    show (Graft [] b) = show b
     show (Graft a b) = "(" ++ show a ++ " graft " ++ show b ++ ")"
+
+instance (Eq a, Graded a) => Vector (TreeOp a) where
+    type VectorScalar (TreeOp a) = Integer
+    type VectorBasis (TreeOp a) = TreeOp a
+
+    vector = vector . (1 *^)
 
 instance (Eq a) => Operad (TreeOp a) where
     type Decoration (TreeOp a) = a
     type AlgebraBasis (TreeOp a) = PRTree a
     type AlgebraScalars (TreeOp a) = Integer
 
-    evaluate (TLeaf a) = vector $ 1 *^ PRTree a []
-    evaluate (Graft a b) = bilinear graftFT (evaluate a) (evaluate b)
+    evaluate (Graft a b) = linear head $ bilinear graftFT (evaluate a) (vector $ PRTree b [])
 
-    toOperad (PRTree a bs) = Graft (toOperad bs) (TLeaf a)
+    toOperad (PRTree a bs) = linear (\x -> Graft x a) $ toOperad bs
 
-    compose x [y] (TLeaf z) = if x == z then y else TLeaf z
-    compose x ts (Graft a b) =
-        Graft
-            (compose (take n_leaves_b ts) a)
-            (compose (drop n_leaves_b ts) b)
+    compose x ts (Graft a b)
+      | x == b =
+        Graft 
+            (compose x (init ts) a)
+            (last ts)
+      | otherwise = Graft (compose x ts a) b
+
+instance Operad a => Operad [a] where
+    type AlgebraBasis [a] = [AlgebraBasis a]
+    type AlgebraScalars [a] = AlgebraScalars a
+
+    evaluate = product . map (linear (:[]) . evaluate)
+
+    toOperad = product . map (linear (:[]) . toOperad)
+    
+    compose = map (\(a, ops_a) -> compose x ops_a a) $ spreadOps ops as
       where
-        n_leaves_b = countLeaves x b
-        countLeaves (TLeaf y) = if x == y then 1 else 0
-        countLeaves (Graft a b) = countLeaves a + countLeaves b
+        spreadOps os [a] = [(a, os)]
+        spreadOps os (a : as) = (a, take (countLeaves x a) os) : (spreadOps (drop (countLeaves x a) os) as)
 
-
-instance Texifiable (TreeOp a) where
+instance (Show a) => Texifiable (TreeOp a) where
     texify = texify . toTree
       where
-        toTree (TLeaf a) = PRTree (show a) []
-        toTree (Graft a b) = PRTree "i_$\\curvearrowright$" [toTree a, toTree b]
-
--- * Forests
-
-data ForestOp a = Concat [TreeOp a] deriving (Eq)
-
-instance (Graded a) => Graded (ForestOp a) where
-    grading (Concat as) = sum $ map grading as
-
-instance (Show a) => Show (ForestOp a) where
-    show (Concat as) = show as
-
-instance (Show a) => Operad (ForestOp a) where
-    type AlgebraBasis (ForestOp a) = [PRTree a]
-    type AlgebraScalars (ForestOp a) = Integer
-
-    evaluate (Concat as) = product $ map evaluate as
-
-    toOperad ts = linear Concat $ product $ map ((linear (:[])) . toOperad) ts
-
-
-
-instance Texifiable (TreeOp a) where
-    texify = texify . toTree
-      where
-        toTree (Concat as) = PRTree "i_$\\curvearrowright$" $ map toTree as
+        toTree (Graft a b) = PRTree "i_$\\curvearrowright$" [PRTree "i_$\\cdot$" $ map toTree a, PRTree (show b) []]
 
 
 {-
