@@ -473,7 +473,6 @@ instance (Eq a, Graded a) => Vector (MS.MultiSet a) where
     type VectorBasis (MS.MultiSet a) = MS.MultiSet a
     vector = vector . (1 *^)
 
-
 {- | A list is often used to represent a product and as a basis of an algebra.
 
 Examples:
@@ -825,7 +824,9 @@ tensorCoproduct
        )
     => [a]
     -> PowerSeries Integer ([a], [a])
-tensorCoproduct = product . map (\b -> vector ([], [b]) + vector ([b], []))
+tensorCoproduct =
+    product
+        . map (\b -> vector ([], [b]) + vector ([b], []))
 
 {- | Takes a function with two arguments and extends it to a bilinear map.
 

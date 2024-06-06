@@ -94,16 +94,17 @@ Example:
 -}
 graftFF
     :: forall a
-    .  ( Eq a
+     . ( Eq a
        , Graded a
        )
     => [PRTree a]
     -> [PRTree a]
     -> PowerSeries Integer [PRTree a]
 graftFF [] [] = vector [] :: PowerSeries Integer [PRTree a]
-graftFF _  [] = vector Zero
+graftFF _ [] = vector Zero
 graftFF [] f2 = vector f2
-graftFF f1 (t:f2) = linear perCoproductTerm $ tensorCoproduct f1
+graftFF f1 (t : f2) =
+    linear perCoproductTerm $ tensorCoproduct f1
   where
     perCoproductTerm (f11, f12) = graftFT f11 t * graftFF f12 f2
 
@@ -117,11 +118,11 @@ Example:
 graftFT
     :: ( Eq a
        , Graded a
-       ) 
+       )
     => [PRTree a]
     -> PRTree a
     -> PowerSeries Integer [PRTree a]
-graftFT f (PRTree r ts) = linear ((:[]) . PRTree r) $ gl f ts
+graftFT f (PRTree r ts) = linear ((: []) . PRTree r) $ gl f ts
 
 {- | Grossman-Larson product of two forests.
 
@@ -144,13 +145,13 @@ gl f1 f2 = linear perCoproductTerm $ tensorCoproduct f1
 -- * Non-planar rooted trees
 
 -- | Non-planar rooted trees are represented as a tree with a root and a multiset of children which are non-planar rooted trees themselves.
-data RTree a = RTree 
+data RTree a = RTree
     { root' :: a
     , children' :: MS.MultiSet (RTree a)
     }
     deriving (Eq)
 
-instance Ord a => Ord (RTree a) where
+instance (Ord a) => Ord (RTree a) where
     compare (RTree r1 c1) (RTree r2 c2) = compare (r1, c1) (r2, c2)
 
 instance (Ord a, Graded a) => Graded (RTree a) where
@@ -183,7 +184,7 @@ Example:
 >>> a == b
 True
 -}
-nonplanarT :: Ord a => PRTree a -> RTree a
+nonplanarT :: (Ord a) => PRTree a -> RTree a
 nonplanarT (PRTree r xs) = RTree r (nonplanarF xs)
 
 {- | Forget the order of trees and children in a planar rooted forest.
@@ -195,7 +196,7 @@ Example:
 >>> a == b
 True
 -}
-nonplanarF :: Ord a => [PRTree a] -> MS.MultiSet (RTree a)
+nonplanarF :: (Ord a) => [PRTree a] -> MS.MultiSet (RTree a)
 nonplanarF = MS.fromList . map nonplanarT
 
 {- | Choose a canonical planar representation of a non-planar rooted tree.
@@ -205,8 +206,7 @@ Example:
 >>> planarT $ RTree 1 (MS.fromList [RTree 2 MS.empty, RTree 3 MS.empty])
 1[2,3]
 -}
-
-planarT :: Ord a => RTree a -> PRTree a
+planarT :: (Ord a) => RTree a -> PRTree a
 planarT (RTree r xs) = PRTree r (planarF xs)
 
 {- | Choose a canonical planar representation of a non-planar rooted forest.
@@ -216,5 +216,5 @@ Example:
 >>> planarF $ MS.fromList [RTree 1 (MS.fromList [RTree 2 MS.empty, RTree 3 MS.empty]), RTree 4 MS.empty]
 [1[2,3],4]
 -}
-planarF :: Ord a => MS.MultiSet (RTree a) -> [PRTree a]
+planarF :: (Ord a) => MS.MultiSet (RTree a) -> [PRTree a]
 planarF = map planarT . MS.toList

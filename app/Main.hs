@@ -95,7 +95,7 @@ pt2 = PRTree 1 [PRTree 1 [], PRTree 1 []]
 
 at1 = ([PAroma $ Cycle [PRTree 1 []]], PRTree 2 [])
 at2 = ([], PRTree 1 [PRTree 2 []])
-at3 = ([PAroma $ Cycle [PRTree 1 [], PRTree 2 []]], PRTree 3 [])
+at3 = ([PAroma $ Cycle [PRTree 1 [], PRTree 1 []]], PRTree 1 [])
 af1 = ([PAroma $ Cycle [PRTree 3 []]], [PRTree 3 [PRTree 4 []]])
 af2 = ([PAroma $ Cycle [PRTree 3 [PRTree 5 []], PRTree 3 []]], [PRTree 3 [PRTree 4 []]])
 
