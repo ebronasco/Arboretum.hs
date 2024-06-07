@@ -12,11 +12,11 @@ We use the operadic approach to substitution of planar rooted trees.
 -}
 module Substitution (
     Marked (..),
-    AForestOp (..),
-    evaluate,
-    toOperad,
-    symComposeOp,
-    composeOp,
+    SyntacticTree (..),
+    eval,
+    syn,
+    symCompose,
+    compose,
     countLeaves,
     substitute,
 ) where
@@ -66,27 +66,27 @@ unmarkAPF (as, ts) = (map unmark as, map unmark ts)
 
 -- * Forests
 
-data AForestOp a
-    = Trace (AForestOp a)
-    | Concat [AForestOp a]
-    | Graft (AForestOp a) (AForestOp a)
+data SyntacticTree a
+    = Concat [SyntacticTree a]
+    | Graft (SyntacticTree a) (SyntacticTree a)
     | Leaf (Marked a)
+    | Trace (SyntacticTree a)
     deriving (Eq)
 
-instance (Graded a) => Graded (AForestOp a) where
+instance (Graded a) => Graded (SyntacticTree a) where
     grading (Leaf a) = grading a
     grading (Graft a b) = grading a + grading b
     grading (Concat as) = sum $ map grading as
     grading (Trace a) = grading a
 
-instance (Show a) => Show (AForestOp a) where
+instance (Show a) => Show (SyntacticTree a) where
     show (Leaf a) = show a
     show (Graft a b) = "(" ++ show a ++ " graft " ++ show b ++ ")"
     show (Concat as) = show as
     show (Trace a) = "Tr " ++ show a
 
 
-instance (Show a, Texifiable a) => Texifiable (AForestOp a) where
+instance (Show a, Texifiable a) => Texifiable (SyntacticTree a) where
     texify = texify . toTree
       where 
         toTree (Leaf a) = PRTree (show a) []
@@ -98,13 +98,13 @@ instance (Show a, Texifiable a) => Texifiable (AForestOp a) where
 
 Example:
 
->>> evaluate $ Graft (Leaf 1) (Leaf 2)
+>>> eval $ Graft (Leaf 1) (Leaf 2)
 (1 *^ 2[1])_2
->>> evaluate $ Graft (Leaf 1) (Graft (Leaf 2) (Leaf 3))
+>>> eval $ Graft (Leaf 1) (Graft (Leaf 2) (Leaf 3))
 (1 *^ 3[2[1]] + 1 *^ 3[1,2])_3
 -}
-evaluate :: (Show a, Texifiable a, Typeable a, Eq a, Graded a) => AForestOp a -> PowerSeries Integer (APForest a)
-evaluate = linear unmarkAPF . evaluate'
+eval :: (Show a, Texifiable a, Typeable a, Eq a, Graded a) => SyntacticTree a -> PowerSeries Integer (APForest a)
+eval = linear unmarkAPF . evaluate'
   where
     evaluate' (Leaf a) = vector $ 1 *^ ([], [PRTree a []])
     evaluate' (Graft a b) = bilinear graftAF (evaluate' a) (evaluate' b)
@@ -123,13 +123,13 @@ evaluate = linear unmarkAPF . evaluate'
 
 Example:
 
->>> toOperad $ PRTree 1 [PRTree 2 [], PRTree 3 []]
+>>> syn $ PRTree 1 [PRTree 2 [], PRTree 3 []]
 (1 *^ (2 graft (3 graft 1)) + -1 *^ ((2 graft 3) graft 1))_3
->>> toOperad $ PRTree 1 [PRTree 2 [PRTree 4 [], PRTree 5 []], PRTree 3 []]
+>>> syn $ PRTree 1 [PRTree 2 [PRTree 4 [], PRTree 5 []], PRTree 3 []]
 (1 *^ ((4 graft (5 graft 2)) graft (3 graft 1)) + -1 *^ (((4 graft 5) graft 2) graft (3 graft 1)) + -1 *^ (((4 graft (5 graft 2)) graft 3) graft 1) + 1 *^ ((((4 graft 5) graft 2) graft 3) graft 1))_5
 -}
-toOperad :: (Eq a, Graded a) => APForest a -> AForestOp a
-toOperad = toOperad' . markAPF
+syn :: (Eq a, Graded a) => APForest a -> SyntacticTree a
+syn = toOperad' . markAPF
   where
     toOperad' ([], []) = Concat []
     toOperad' ([PAroma (Cycle ts)], []) = Trace $ toOperad' $ ([],) $ (: []) $ breakCycle ts
@@ -153,7 +153,7 @@ Example:
 >>> countLeaves 1 $ Graft (Leaf 1) (Graft (Leaf 1) (Leaf 2))
 2
 -}
-countLeaves :: (Eq a) => a -> AForestOp a -> Int
+countLeaves :: (Eq a) => a -> SyntacticTree a -> Int
 countLeaves x (Leaf Mark) = 0
 countLeaves x (Leaf (Marked y)) = if x == y then 1 else 0
 countLeaves x (Graft a b) = countLeaves x a + countLeaves x b
@@ -164,16 +164,16 @@ countLeaves x (Trace a) = countLeaves x a
 
 Example:
 
->>> substituteOp 3 [Leaf 1, Leaf 2] $ Graft (Leaf 3) (Leaf 3)
+>>> symCompose 3 [Leaf 1, Leaf 2] $ Graft (Leaf 3) (Leaf 3)
 (1 *^ (1 graft 2) + 1 *^ (2 graft 1))_2
->>> substituteOp 5 [Graft (Leaf 1) (Leaf 2), Leaf 3, Leaf 4] $ Graft (Leaf 5) (Graft (Leaf 5) (Leaf 5))
+>>> symCompose 5 [Graft (Leaf 1) (Leaf 2), Leaf 3, Leaf 4] $ Graft (Leaf 5) (Graft (Leaf 5) (Leaf 5))
 (1 *^ ((1 graft 2) graft (3 graft 4)) + 1 *^ (3 graft ((1 graft 2) graft 4)) + 1 *^ (4 graft (3 graft (1 graft 2))) + 1 *^ (3 graft (4 graft (1 graft 2))) + 1 *^ (4 graft ((1 graft 2) graft 3)) + 1 *^ ((1 graft 2) graft (4 graft 3)))_4
 -}
-symComposeOp :: (Eq a, Graded a) => a -> [AForestOp a] -> AForestOp a -> PowerSeries Integer (AForestOp a)
-symComposeOp x ops obj =
+symCompose :: (Eq a, Graded a) => a -> [SyntacticTree a] -> SyntacticTree a -> PowerSeries Integer (SyntacticTree a)
+symCompose x ops obj =
     mconcat
         $ map
-            ( \perm_ops -> case composeOp x perm_ops obj of
+            ( \perm_ops -> case compose x perm_ops obj of
                 Just g -> vector (1 *^ g)
                 Nothing -> vector Zero
             )
@@ -183,25 +183,25 @@ symComposeOp x ops obj =
 
 Example:
 
->>> substituteOpBy 3 [Leaf 1, Leaf 2] $ Graft (Leaf 3) (Leaf 3)
+>>> compose 3 [Leaf 1, Leaf 2] $ Graft (Leaf 3) (Leaf 3)
 (1 graft 2)
->>> substituteOpBy 5 [Graft (Leaf 1) (Leaf 2), Leaf 3, Leaf 4] $ Graft (Leaf 5) (Graft (Leaf 5) (Leaf 5))
+>>> compose 5 [Graft (Leaf 1) (Leaf 2), Leaf 3, Leaf 4] $ Graft (Leaf 5) (Graft (Leaf 5) (Leaf 5))
 ((1 graft 2) graft (3 graft 4))
 -}
-composeOp :: (Eq a) => a -> [AForestOp a] -> AForestOp a -> Maybe (AForestOp a)
-composeOp _ [] (Leaf y) = Just $ Leaf y
-composeOp _ [y] (Leaf _) = Just y
-composeOp _ _ (Leaf _) = Nothing
-composeOp _ _ (Concat []) = Just $ Concat []
-composeOp x ops obj
+compose :: (Eq a) => a -> [SyntacticTree a] -> SyntacticTree a -> Maybe (SyntacticTree a)
+compose _ [] (Leaf y) = Just $ Leaf y
+compose _ [y] (Leaf _) = Just y
+compose _ _ (Leaf _) = Nothing
+compose _ _ (Concat []) = Just $ Concat []
+compose x ops obj
     | countLeaves x obj == length ops =
         Just $ case obj of
             Graft a b ->
                 Graft
-                    (fromJust $ composeOp x (take (countLeaves x a) ops) a)
-                    (fromJust $ composeOp x (drop (countLeaves x a) ops) b)
-            Concat as -> Concat $ map (\(a, ops_a) -> fromJust $ composeOp x ops_a a) $ spreadOps ops as
-            Trace a -> Trace $ fromJust $ composeOp x ops a
+                    (fromJust $ compose x (take (countLeaves x a) ops) a)
+                    (fromJust $ compose x (drop (countLeaves x a) ops) b)
+            Concat as -> Concat $ map (\(a, ops_a) -> fromJust $ compose x ops_a a) $ spreadOps ops as
+            Trace a -> Trace $ fromJust $ compose x ops a
     | otherwise = Nothing
   where
     spreadOps os [a] = [(a, os)]
@@ -217,4 +217,4 @@ Example:
 (1 *^ 3[1[2]] + 1 *^ 1[2[3]] + 1 *^ 1[3,2])_3
 -}
 substitute :: (Eq a, Graded a, Show a, Texifiable a, Typeable a) => a -> [APTree a] -> APForest a -> PowerSeries Integer (APForest a)
-substitute x gens obj = linear evaluate $ symComposeOp x (map (toOperad . (\(as, t) -> (as, [t]))) gens) (toOperad obj)
+substitute x gens obj = linear eval $ symCompose x (map (syn . (\(as, t) -> (as, [t]))) gens) (syn obj)
