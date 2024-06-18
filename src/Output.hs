@@ -27,7 +27,7 @@ import GradedList (
     grading,
  )
 import Symbolics (
-    PowerSeries (..),
+    Vector (..),
     ScalarProduct,
     Sum (Zero),
     lengthV,
@@ -194,7 +194,7 @@ instance
     , Texifiable k
     , Texifiable a
     )
-    => Texifiable (PowerSeries k a)
+    => Texifiable (Vector k a)
     where
     texifyID _ = "PowSer"
     texify v =
@@ -256,7 +256,7 @@ display
        , Texifiable k
        , Texifiable a
        )
-    => PowerSeries k a
+    => Vector k a
     -> IO ()
 display v = printPdf $ " $ " ++ texify v ++ " $ "
 
@@ -273,7 +273,7 @@ displayDebug
        )
     => Integer
     -> Integer
-    -> PowerSeries k a
+    -> Vector k a
     -> IO ()
 displayDebug startLevel endLevel v =
     printPdf $

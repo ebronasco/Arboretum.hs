@@ -1,228 +1,352 @@
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 {- |
 Module      : RootedTree
-Description : Planar and non-planar rooted trees and the grafting product.
+Description : Planar and non-planar trees and the grafting product.
 Copyright   : (c) University of Geneva, 2024
 License     : MIT
 Maintainer  : Eugen Bronasco (ebronasco@gmail.com)
 Stability   : experimental
 
-Implementation of the post-Lie algebra of planar rooted trees and
-pre-Lie algebra of non-planar rooted trees.
+Implementation of the post-Lie algebra of planar trees and
+pre-Lie algebra of non-planar trees.
 -}
 module RootedTree (
-    PRTree (..),
-    graftFF,
-    graftFT,
+    PlanarTree (..),
+    Tree (..),
+    nonplanar,
+    planar,
+    graft,
     gl,
-    RTree (..),
-    nonplanarT,
-    nonplanarF,
-    planarT,
-    planarF,
+    substitute,
 ) where
 
-import Data.List (intercalate)
+import Data.List (intercalate, permutations)
+import Data.Maybe (fromJust)
 import qualified Data.MultiSet as MS
 import GradedList
 import Output
 import Symbolics
 
--- * Planar rooted trees
+-- * Tree
 
--- | Planar rooted trees are represented as a tree with a root and a list of children which are planar rooted trees themselves.
-data PRTree a = PRTree
-    { root :: a
-    , children :: [PRTree a]
+class IsTree t where
+    type TreeDecoration t
+
+    root :: t -> TreeDecoration t
+    children :: t -> [t]
+
+    buildTree :: TreeDecoration t -> [t] -> t
+
+-- ** Planar trees
+
+-- | Planar trees are represented as a tree with a root and a list of children which are planar trees themselves.
+data PlanarTree d = PT
+    { planarRoot :: d
+    , planarChildren :: [PlanarTree d]
     }
     deriving (Eq)
 
-{- | Bracket notation for planar rooted trees.
+instance IsTree (PlanarTree d) where
+    type TreeDecoration (PlanarTree d) = d
+
+    root = planarRoot
+    children = planarChildren
+
+    buildTree = PT
+
+{- | Represent planar trees as strings using bracket notation.
 
 Example:
 
->>> PRTree 1 [PRTree 2 [], PRTree 3 []]
+>>> PT 1 [PT 2 [], PT 3 []]
 1[2,3]
 -}
-instance (Show a) => Show (PRTree a) where
-    show (PRTree r xs) =
+instance (Show d) => Show (PlanarTree d) where
+    show (PT r xs) =
         show r
             ++ ( case xs of
                     [] -> ""
                     _ -> show xs
                )
 
-instance (Eq a, Graded a) => Vector (PRTree a) where
-    type VectorScalar (PRTree a) = Integer
-    type VectorBasis (PRTree a) = PRTree a
+-- | Planar trees are vectors with integer coefficients.
+instance (Eq d, Graded d) => IsVector (PlanarTree d) where
+    type VectorScalar (PlanarTree d) = Integer
+    type VectorBasis (PlanarTree d) = PlanarTree d
 
     vector = vector . (1 *^)
 
-
-{- | LaTeX notation for planar rooted trees using @planarforest.py@ TeX package.
+{- | LaTeX notation for planar trees using @planarforest.py@ TeX package.
 
 Example:
 
->>> texify $ PRTree 1 [PRTree 2 [], PRTree 3 []]
+>>> texify $ PT 1 [PT 2 [], PT 3 []]
 "\\forest{i_1[i_2,i_3]}"
 -}
-instance (Show a, Texifiable a) => Texifiable (PRTree a) where
-    texifyID _ = "PRTree"
+instance (Show d, Texifiable d) => Texifiable (PlanarTree d) where
+    texifyID _ = "PlanarTree"
     texify t = "\\forest{" ++ texify_ t ++ "}"
+      where
+        texify_ (PT r xs) =
+            "i_"
+                ++ (filter (/= '"') $ show r)
+                ++ ( case xs of
+                        [] -> ""
+                        _ -> "[" ++ intercalate "," (map texify_ xs) ++ "]"
+                   )
 
-texify_ :: (Show a, Texifiable a) => PRTree a -> String
-texify_ (PRTree r xs) =
-    "i_"
-        ++ (filter (/= '"') $ show r)
-        ++ ( case xs of
-                [] -> ""
-                _ -> "[" ++ intercalate "," (map texify_ xs) ++ "]"
-           )
-
-{- | Grading of a planar rooted tree is the sum of gradings of the nodes.
+{- | Grading of a planar tree is the sum of gradings of the nodes.
 
 Example:
 
->>> grading $ PRTree 1 [PRTree 2 [], PRTree 31 []]
+>>> grading $ PT 1 [PT 2 [], PT 31 []]
 4
 
-Note that the grading of an integer is the number of digits.
+Note that the grading of an integer is the number of digits with @0@ having grading @0@.
 -}
-instance (Graded a) => Graded (PRTree a) where
-    grading (PRTree r xs) = grading r + sum (map grading xs)
+instance (Graded d) => Graded (PlanarTree d) where
+    grading (PT r xs) = grading r + sum (map grading xs)
 
-{- | Grafting of two planar rooted forests using the @tensorCoproduct@ function that splits @f1@ into subforests in all possible ways and @graftFT@ function that grafts forests onto trees.
+-- ** Non-planar trees
 
-Example:
-
->>> graftFF [PRTree 1 [PRTree 2 []]] [PRTree 3 [], PRTree 4 [PRTree 5 []]]
-(1 *^ [3,4[5[1[2]]]] + 1 *^ [3,4[1[2],5]] + 1 *^ [3[1[2]],4[5]])_5
--}
-graftFF
-    :: forall a
-     . ( Eq a
-       , Graded a
-       )
-    => [PRTree a]
-    -> [PRTree a]
-    -> PowerSeries Integer [PRTree a]
-graftFF [] [] = vector [] :: PowerSeries Integer [PRTree a]
-graftFF _ [] = vector Zero
-graftFF [] f2 = vector f2
-graftFF f1 (t : f2) =
-    linear perCoproductTerm $ tensorCoproduct f1
-  where
-    perCoproductTerm (f11, f12) = graftFT f11 t * graftFF f12 f2
-
-{- | Graft a forest onto a tree using the Grossman-Larson product implemented by the @gl@ function.
-
-Example:
-
->>> graftFT [PRTree 1 [PRTree 2 []]] (PRTree 3 [PRTree 4 []])
-(1 *^ [3[4[1[2]]]] + 1 *^ [3[1[2],4]])_4
--}
-graftFT
-    :: ( Eq a
-       , Graded a
-       )
-    => [PRTree a]
-    -> PRTree a
-    -> PowerSeries Integer [PRTree a]
-graftFT f (PRTree r ts) = linear ((: []) . PRTree r) $ gl f ts
-
-{- | Grossman-Larson product of two forests.
-
-Example:
-
->>> gl [PRTree 1 [PRTree 2 []]] [PRTree 3 [], PRTree 4 [PRTree 5 []]]
-(1 *^ [3,4[5[1[2]]]] + 1 *^ [3,4[1[2],5]] + 1 *^ [3[1[2]],4[5]] + 1 *^ [1[2],3,4[5]])_5
--}
-gl
-    :: ( Eq a
-       , Graded a
-       )
-    => [PRTree a]
-    -> [PRTree a]
-    -> PowerSeries Integer [PRTree a]
-gl f1 f2 = linear perCoproductTerm $ tensorCoproduct f1
-  where
-    perCoproductTerm (f11, f12) = vector f11 * graftFF f12 f2
-
--- * Non-planar rooted trees
-
--- | Non-planar rooted trees are represented as a tree with a root and a multiset of children which are non-planar rooted trees themselves.
-data RTree a = RTree
-    { root' :: a
-    , children' :: MS.MultiSet (RTree a)
+-- | Non-planar trees are represented as a tree with a root and a multiset of children which are non-planar trees themselves.
+data Tree d = T
+    { nonplanarRoot :: d
+    , nonplanarChildren :: MS.MultiSet (Tree d)
     }
     deriving (Eq)
 
-instance (Ord a) => Ord (RTree a) where
-    compare (RTree r1 c1) (RTree r2 c2) = compare (r1, c1) (r2, c2)
+instance (Ord d) => IsTree (Tree d) where
+    type TreeDecoration (Tree d) = d
 
-instance (Ord a, Graded a) => Graded (RTree a) where
-    grading = grading . planarT
+    root = nonplanarRoot
+    children = MS.toAscList . nonplanarChildren
 
-instance (Ord a, Show a, Texifiable a) => Texifiable (RTree a) where
-    texifyID _ = "RTree"
-    texify = texify . planarT
+    buildTree r = T r . MS.fromList
+
+instance (Eq d, Ord d, Graded d) => IsVector (Tree d) where
+    type VectorScalar (Tree d) = Integer
+    type VectorBasis (Tree d) = Tree d
+
+    vector = vector . (1 *^)
+
+instance (Ord d) => Ord (Tree d) where
+    compare (T r1 c1) (T r2 c2) = compare (r1, c1) (r2, c2)
+
+instance (Ord d, Graded d) => Graded (Tree d) where
+    grading = grading . planar
+
+instance (Ord d, Show d, Texifiable d) => Texifiable (Tree d) where
+    texifyID _ = "Tree"
+    texify = texify . planar
 
 instance (Eq a, Texifiable a) => Texifiable (MS.MultiSet a) where
     texifyID _ = "MultiSet"
     texify = texify . MS.toList
     texifyDebug i j = texifyDebug i j . MS.toList
 
--- | Brace notation for non-planar rooted trees. Children are enclosed in curly braces.
-instance (Show a) => Show (RTree a) where
-    show (RTree r xs) =
+-- | Represent non-planar trees as strings using brace notation. Children are enclosed in curly braces.
+instance (Show d) => Show (Tree d) where
+    show (T r xs) =
         show r
             ++ ( case MS.toList xs of
                     [] -> ""
                     _ -> "{" ++ (tail . init . show . MS.toList) xs ++ "}"
                )
 
-{- | Forget the order of children in a planar rooted tree.
+-- * Moving between planar and non-planar trees
+
+class Planarable t where
+    type Planar t
+
+    planar :: t -> Planar t
+    nonplanar :: Planar t -> t
+
+
+instance (Ord d) => Planarable (Tree d) where
+    type Planar (Tree d) = PlanarTree d
+
+    {- | Choose a canonical planar representation of a non-planar tree.
+
+    Example:
+
+    >>> planar $ T 1 (MS.fromList [T 2 MS.empty, T 3 MS.empty])
+    1[2,3]
+    -}
+    planar (T r xs) = PT r (planar xs)
+
+    {- | Forget the order of children in a planar tree.
+
+    Example:
+
+    >>> a =  nonplanar $ PT 1 [PT 2 [], PT 3 []]
+    >>> b =  nonplanar $ PT 1 [PT 3 [], PT 2 []]
+    >>> a == b
+    True
+    -}
+    nonplanar (PT r xs) = T r (nonplanar xs)
+
+instance (Ord d) => Planarable (MS.MultiSet (Tree d)) where
+    type Planar (MS.MultiSet (Tree d)) = [PlanarTree d]
+
+    {- | Choose a canonical planar representation of a non-planar forest.
+
+    Example:
+
+    >>> planar $ MS.fromList [T 1 (MS.fromList [T 2 MS.empty, T 3 MS.empty]), T 4 MS.empty]
+    [1[2,3],4]
+    -}
+    planar = map planar . MS.toList
+
+    {- | Forget the order of trees and children in a planar forest.
+
+    Example:
+
+    >>> a = nonplanar $ [PT 1 [PT 2 [], PT 3 []], PT 4 []]
+    >>> b = nonplanar $ [PT 4 [], PT 1 [PT 3 [], PT 2 []]]
+    >>> a == b
+    True
+    -}
+    nonplanar = MS.fromList . map nonplanar
+
+-- * Grafting product
+
+class Graftable t where
+    graft :: t -> t -> Vector Integer t
+
+{- | Grafting of two planar forests using the @deshuffleCoproduct@ function that splits @f1@ into subforests in all possible ways.
 
 Example:
 
->>> a =  nonplanarT $ PRTree 1 [PRTree 2 [], PRTree 3 []]
->>> b =  nonplanarT $ PRTree 1 [PRTree 3 [], PRTree 2 []]
->>> a == b
-True
+>>> graft [PT 1 [PT 2 []]] [PT 3 [], PT 4 [PT 5 []]]
+(1 *^ [3,4[5[1[2]]]] + 1 *^ [3,4[1[2],5]] + 1 *^ [3[1[2]],4[5]])_5
 -}
-nonplanarT :: (Ord a) => PRTree a -> RTree a
-nonplanarT (PRTree r xs) = RTree r (nonplanarF xs)
+instance
+    ( IsTree t
+    , IsVector t
+    , Eq t
+    , Graded t
+    , Eq (TreeDecoration t)
+    , Graded (TreeDecoration t)
+    )
+    => Graftable [t]
+    where
+    graft [] [] = vector []
+    graft _ [] = vector Zero
+    graft [] f2 = vector f2
+    graft f [t] = linear ((: []) . buildTree (root t)) $ gl f $ children t
+    graft f1 (t : f2) =
+        linear perCoproductTerm $ deshuffleCoproduct f1
+      where
+        perCoproductTerm (f11, f12) = graft f11 [t] * graft f12 f2
 
-{- | Forget the order of trees and children in a planar rooted forest.
+instance
+    ( IsTree t
+    , IsVector t
+    , Eq t
+    , Graded t
+    , Ord t
+    , Eq (TreeDecoration t)
+    , Graded (TreeDecoration t)
+    , Ord (TreeDecoration t)
+    )
+    => Graftable (MS.MultiSet t)
+    where
+    graft f1 f2 = linear MS.fromList $ graft (MS.toList f1) (MS.toList f2)
+
+{- | Grossman-Larson product of two forests.
 
 Example:
 
->>> a = nonplanarF $ [PRTree 1 [PRTree 2 [], PRTree 3 []], PRTree 4 []]
->>> b = nonplanarF $ [PRTree 4 [], PRTree 1 [PRTree 3 [], PRTree 2 []]]
->>> a == b
-True
+>>> gl [PT 1 [PT 2 []]] [PT 3 [], PT 4 [PT 5 []]]
+(1 *^ [3,4[5[1[2]]]] + 1 *^ [3,4[1[2],5]] + 1 *^ [3[1[2]],4[5]] + 1 *^ [1[2],3,4[5]])_5
 -}
-nonplanarF :: (Ord a) => [PRTree a] -> MS.MultiSet (RTree a)
-nonplanarF = MS.fromList . map nonplanarT
+gl
+    :: ( IsTree t
+       , IsVector t
+       , Eq t
+       , Graded t
+       , Eq (TreeDecoration t)
+       , Graded (TreeDecoration t)
+       )
+    => [t]
+    -> [t]
+    -> Vector Integer [t]
+gl f1 f2 = linear perCoproductTerm $ deshuffleCoproduct f1
+  where
+    perCoproductTerm (f11, f12) = vector f11 * graft f12 f2
 
-{- | Choose a canonical planar representation of a non-planar rooted tree.
+-- * Substitution
 
-Example:
+data SyntacticTree d
+    = Concat [SyntacticTree d]
+    | Graft (SyntacticTree d) (SyntacticTree d)
+    | Leaf d
+    deriving (Eq)
 
->>> planarT $ RTree 1 (MS.fromList [RTree 2 MS.empty, RTree 3 MS.empty])
-1[2,3]
--}
-planarT :: (Ord a) => RTree a -> PRTree a
-planarT (RTree r xs) = PRTree r (planarF xs)
+instance (Graded d) => Graded (SyntacticTree d) where
+    grading (Leaf a) = grading a
+    grading (Graft a b) = grading a + grading b
+    grading (Concat as) = sum $ map grading as
 
-{- | Choose a canonical planar representation of a non-planar rooted forest.
+instance (Show d) => Show (SyntacticTree d) where
+    show (Leaf a) = show a
+    show (Graft a b) = "(" ++ show a ++ " graft " ++ show b ++ ")"
+    show (Concat as) = show as
 
-Example:
+instance (Show d, Texifiable d) => Texifiable (SyntacticTree d) where
+    texify = texify . toTree
+      where 
+        toTree (Leaf a) = PT (show a) []
+        toTree (Graft a b) = PT "$\\curvearrowright$" [toTree a, toTree b]
+        toTree (Concat as) = PT "$\\cdot$" $ map toTree as
 
->>> planarF $ MS.fromList [RTree 1 (MS.fromList [RTree 2 MS.empty, RTree 3 MS.empty]), RTree 4 MS.empty]
-[1[2,3],4]
--}
-planarF :: (Ord a) => MS.MultiSet (RTree a) -> [PRTree a]
-planarF = map planarT . MS.toList
+eval :: (Eq d, Graded d) => SyntacticTree d -> Vector Integer [PlanarTree d]
+eval (Leaf a) = vector [PT a []]
+eval (Graft a b) = bilinear graft (eval a) (eval b)
+eval (Concat as) = product $ map eval as
+
+syn :: (Eq d, Graded d) => PlanarTree d -> SyntacticTree d
+syn (PT a []) = Leaf a
+syn (PT a bs) = Graft (Concat $ map syn bs) (Leaf a)
+
+countLeaves :: (Eq d) => d -> SyntacticTree d -> Int
+countLeaves x (Leaf y) = if x == y then 1 else 0
+countLeaves x (Graft a b) = countLeaves x a + countLeaves x b
+countLeaves x (Concat as) = sum $ map (countLeaves x) as
+
+symCompose :: (Eq d, Graded d) => d -> [SyntacticTree d] -> SyntacticTree d -> Vector Integer (SyntacticTree d)
+symCompose x ops obj =
+    mconcat
+        $ map
+            ( \perm_ops -> case compose x perm_ops obj of
+                Just g -> vector (1 *^ g)
+                Nothing -> vector Zero
+            )
+        $ permutations ops
+
+compose :: (Eq d) => d -> [SyntacticTree d] -> SyntacticTree d -> Maybe (SyntacticTree d)
+compose _ [] (Leaf y) = Just $ Leaf y
+compose _ [y] (Leaf _) = Just y
+compose _ _ (Leaf _) = Nothing
+compose _ _ (Concat []) = Just $ Concat []
+compose x ops obj
+    | countLeaves x obj == length ops =
+        Just $ case obj of
+            Graft a b ->
+                Graft
+                    (fromJust $ compose x (take (countLeaves x a) ops) a)
+                    (fromJust $ compose x (drop (countLeaves x a) ops) b)
+            Concat as -> Concat $ map (\(a, ops_a) -> fromJust $ compose x ops_a a) $ spreadOps ops as
+    | otherwise = Nothing
+  where
+    spreadOps os [a] = [(a, os)]
+    spreadOps os (a : as) = (a, take (countLeaves x a) os) : (spreadOps (drop (countLeaves x a) os) as)
+
+substitute :: (Eq d, Graded d) => d -> [PlanarTree d] -> [PlanarTree d] -> Vector Integer [PlanarTree d]
+substitute x gens obj = linear eval $ symCompose x (map syn gens) (Concat $ map syn obj)

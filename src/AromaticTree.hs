@@ -84,7 +84,7 @@ instance (Show a) => Show (Cycle a) where
 instance (Graded a) => Graded (Cycle a) where
     grading (Cycle l) = sum $ map grading l
 
-newtype PAroma a = PAroma {unPAroma :: Cycle (PRTree a)}
+newtype PAroma a = PAroma {unPAroma :: Cycle (PlanarTree a)}
 
 instance (Eq a) => Eq (PAroma a) where
     (PAroma a) == (PAroma b) = a == b
@@ -97,7 +97,7 @@ instance (Graded a) => Graded (PAroma a) where
 
 -- * Planar aromatic forests
 
--- Relies on the fact that @texify@ of @PRTree@ is @\\forest{...}@.
+-- Relies on the fact that @texify@ of @PlanarTree@ is @\\forest{...}@.
 instance (Show a, Texifiable a, Eq a) => Texifiable (PAroma a) where
     texify (PAroma (Cycle l)) = "\\forest{(" ++ L.intercalate "," (map bracketNotation l) ++ ")}"
       where
@@ -106,13 +106,13 @@ instance (Show a, Texifiable a, Eq a) => Texifiable (PAroma a) where
 -- | A planar aromatic tree is a pair of a list of aromas and a planar rooted tree.
 type APTree a =
     ( [PAroma a]
-    , PRTree a
+    , PlanarTree a
     )
 
 -- | A planar aromatic forest is a pair of a list of aromas and a list of planar rooted trees.
 type APForest a =
     ( [PAroma a]
-    , [PRTree a]
+    , [PlanarTree a]
     )
 
 -- * Grafting
@@ -121,39 +121,39 @@ type APForest a =
 
 Examples:
 
->>> graftOnAroma [PRTree 1 []] (PAroma $ Cycle [PRTree 1 [], PRTree 1 []])
+>>> graftOnAroma [PT 1 []] (PAroma $ Cycle [PT 1 [], PT 1 []])
 (2 *^ (1,1[1]))_3
->>> graftOnAroma [PRTree 1 []] (PAroma $ Cycle [PRTree 1 [], PRTree 2 []])
+>>> graftOnAroma [PT 1 []] (PAroma $ Cycle [PT 1 [], PT 2 []])
 (1 *^ (1,2[1]) + 1 *^ (1[1],2))_3
->>> graftOnAroma [PRTree 1 [], PRTree 2 []] (PAroma $ Cycle [PRTree 1 [], PRTree 2 []])
+>>> graftOnAroma [PT 1 [], PT 2 []] (PAroma $ Cycle [PT 1 [], PT 2 []])
 (1 *^ (1,2[1,2]) + 1 *^ (1[1],2[2]) + 1 *^ (1[2],2[1]) + 1 *^ (1[1,2],2))_4
 -}
 graftOnAroma
     :: ( Eq a
        , Graded a
        )
-    => [PRTree a]
+    => [PlanarTree a]
     -> PAroma a
-    -> PowerSeries Integer (PAroma a)
-graftOnAroma f = linear ((1 *^) . PAroma . Cycle) . (f `graftFF`) . unCycle . unPAroma
+    -> Vector Integer (PAroma a)
+graftOnAroma f = linear ((1 *^) . PAroma . Cycle) . (f `graft`) . unCycle . unPAroma
 
 {- | Graft a planar rooted forest onto a multi-aroma.
 
 Examples:
 
->>> graftOnMultiAroma [PRTree 1 []] [PAroma $ Cycle [PRTree 1 [], PRTree 1 []], PAroma $ Cycle [PRTree 1 [], PRTree 2 []]]
+>>> graftOnMultiAroma [PT 1 []] [PAroma $ Cycle [PT 1 [], PT 1 []], PAroma $ Cycle [PT 1 [], PT 2 []]]
 (1 *^ [(1,1),(1,2[1])] + 1 *^ [(1,1),(1[1],2)] + 2 *^ [(1,1[1]),(1,2)])_5
 -}
 graftOnMultiAroma
     :: ( Eq a
        , Graded a
        )
-    => [PRTree a]
+    => [PlanarTree a]
     -> [PAroma a]
-    -> PowerSeries Integer [PAroma a]
+    -> Vector Integer [PAroma a]
 graftOnMultiAroma [] ma = vector (1 *^ ma)
 graftOnMultiAroma _ [] = vector Zero
-graftOnMultiAroma f (a : ma) = linear perCoproductTerm $ tensorCoproduct f
+graftOnMultiAroma f (a : ma) = linear perCoproductTerm $ deshuffleCoproduct f
   where
     perCoproductTerm (x, y) = linear (: []) (x `graftOnAroma` a) * (y `graftOnMultiAroma` ma)
 
@@ -161,7 +161,7 @@ graftOnMultiAroma f (a : ma) = linear perCoproductTerm $ tensorCoproduct f
 
 Examples:
 
->>> graftAF ([PAroma $ Cycle [PRTree 1 []]], [PRTree 1 []]) ([PAroma $ Cycle [PRTree 1 []]], [PRTree 1 []])
+>>> graftAF ([PAroma $ Cycle [PT 1 []]], [PT 1 []]) ([PAroma $ Cycle [PT 1 []]], [PT 1 []])
 (1 *^ ([(1),(1)],[1[1]]) + 1 *^ ([(1),(1[1])],[1]))_4
 -}
 graftAF
@@ -170,10 +170,10 @@ graftAF
        )
     => APForest a
     -> APForest a
-    -> PowerSeries Integer (APForest a)
-graftAF (ma1, f1) (ma2, f2) = vector (ma1, []) * linear perCoproductTerm (tensorCoproduct f1)
+    -> Vector Integer (APForest a)
+graftAF (ma1, f1) (ma2, f2) = vector (ma1, []) * linear perCoproductTerm (deshuffleCoproduct f1)
   where
-    perCoproductTerm (x, y) = linear (,[]) (x `graftOnMultiAroma` ma2) * linear ([],) (y `graftFF` f2)
+    perCoproductTerm (x, y) = linear (,[]) (x `graftOnMultiAroma` ma2) * linear ([],) (y `graft` f2)
 
 -- * Divergence
 
@@ -192,13 +192,13 @@ elemComp (x : xs) = (x, xs) : map (second (x :)) (elemComp xs)
 
 Examples:
 
->>> branchPaths (RTree 1 [RTree 2 [], RTree 3 []])
+>>> branchPaths (T 1 [T 2 [], T 3 []])
 [[1[2,3]],[1[3],2],[1[2],3]]
->>> branchPaths (RTree 1 [RTree 2 [RTree 3 []], RTree 4 []])
+>>> branchPaths (T 1 [T 2 [T 3 []], T 4 []])
 [[1[2[3],4]],[1[4],2[3]],[1[4],2,3],[1[2[3]],4]]
 -}
-branchPaths :: PRTree a -> [[PRTree a]]
-branchPaths t@(PRTree r cts) = [t] : recurs (map (second $ PRTree r) $ elemComp cts)
+branchPaths :: PlanarTree a -> [[PlanarTree a]]
+branchPaths t@(PT r cts) = [t] : recurs (map (second $ PT r) $ elemComp cts)
   where
     recurs = concatMap (\(x, y) -> map (y :) (branchPaths x))
 
@@ -206,29 +206,29 @@ branchPaths t@(PRTree r cts) = [t] : recurs (map (second $ PRTree r) $ elemComp 
 
 Examples:
 
->>> divergenceT $ nonplanarT (PRTree 1 [PRTree 2 [], PRTree 3 []])
+>>> divergenceT $ nonplanar (PT 1 [PT 2 [], PT 3 []])
 (1 *^ (1[2,3]) + 1 *^ (1[3],2) + 1 *^ (1[2],3))_3
->>> divergenceT $ nonplanarT (PRTree 1 [PRTree 2 [PRTree 3 []], PRTree 4 []])
+>>> divergenceT $ nonplanar (PT 1 [PT 2 [PT 3 []], PT 4 []])
 (1 *^ (1[2[3],4]) + 1 *^ (1[4],2[3]) + 1 *^ (1[4],2,3) + 1 *^ (1[2[3]],4))_4
 -}
-divergenceT :: (Eq a, Graded a) => PRTree a -> PowerSeries Integer (PAroma a)
+divergenceT :: (Eq a, Graded a) => PlanarTree a -> Vector Integer (PAroma a)
 divergenceT t = vector $ fromListS $ map ((1 *^) . PAroma . Cycle) $ branchPaths t
 
 {- | Compute the divergence of a planar aromatic tree by connecting the root to the vertices.
 
 Examples:
 
->>> divergenceAT ([PAroma $ Cycle [PRTree 1 []]], PRTree 1 [])
+>>> divergenceAT ([PAroma $ Cycle [PT 1 []]], PT 1 [])
 (1 *^ [(1[1])] + 1 *^ [(1),(1)])_2
->>> divergenceAT ([PAroma $ Cycle [PRTree 1 []]], PRTree 1 [PRTree 2 [], PRTree 3 []])
+>>> divergenceAT ([PAroma $ Cycle [PT 1 []]], PT 1 [PT 2 [], PT 3 []])
 (1 *^ [(1[1[2,3]])] + 1 *^ [(1[2,3]),(1)] + 1 *^ [(1[3],2),(1)] + 1 *^ [(1[2],3),(1)])_4
 -}
-divergenceAT :: (Eq a, Graded a) => APTree a -> PowerSeries Integer [PAroma a]
+divergenceAT :: (Eq a, Graded a) => APTree a -> Vector Integer [PAroma a]
 divergenceAT (ma, t) = ([t] `graftOnMultiAroma` ma) + linear (: ma) (divergenceT t)
 
 -- * Non-planar aromatic forests
 
-newtype Aroma a = Aroma {unAroma :: Cycle (RTree a)}
+newtype Aroma a = Aroma {unAroma :: Cycle (Tree a)}
 
 instance (Eq a) => Eq (Aroma a) where
     (Aroma a) == (Aroma b) = a == b
@@ -246,12 +246,12 @@ instance (Graded a, Ord a) => Graded (Aroma a) where
 
 type ATree a =
     ( MS.MultiSet (Aroma a)
-    , RTree a
+    , Tree a
     )
 
 type AForest a =
     ( MS.MultiSet (Aroma a)
-    , MS.MultiSet (RTree a)
+    , MS.MultiSet (Tree a)
     )
 
 nonplanarA
@@ -261,14 +261,14 @@ nonplanarA
        )
     => PAroma a
     -> Aroma a
-nonplanarA = Aroma . Cycle . (map nonplanarT) . unCycle . unPAroma
+nonplanarA = Aroma . Cycle . (map nonplanar) . unCycle . unPAroma
 
 {- | Forget the order of aromas in a multi-aroma.
 
 Examples:
 
->>> ma1 = [Aroma $ Cycle [PRTree 1 []], Aroma $ Cycle [PRTree 2 []]]
->>> ma2 = [Aroma $ Cycle [PRTree 2 []], Aroma $ Cycle [PRTree 1 []]]
+>>> ma1 = [Aroma $ Cycle [PT 1 []], Aroma $ Cycle [PT 2 []]]
+>>> ma2 = [Aroma $ Cycle [PT 2 []], Aroma $ Cycle [PT 1 []]]
 >>> ma1 == ma2
 False
 >>> nonplanarMA ma1 == nonplanarMA ma2
@@ -289,8 +289,8 @@ nonplanarMA = MS.fromList . (map nonplanarA)
 
 Examples:
 
->>> at1 = ([Aroma $ Cycle [PRTree 1 []], Aroma $ Cycle [PRTree 2 []]], PRTree 1 [PRTree 2 [], PRTree 3 []])
->>> at2 = ([Aroma $ Cycle [PRTree 2 []], Aroma $ Cycle [PRTree 1 []]], PRTree 1 [PRTree 3 [], PRTree 2 []])
+>>> at1 = ([Aroma $ Cycle [PT 1 []], Aroma $ Cycle [PT 2 []]], PT 1 [PT 2 [], PT 3 []])
+>>> at2 = ([Aroma $ Cycle [PT 2 []], Aroma $ Cycle [PT 1 []]], PT 1 [PT 3 [], PT 2 []])
 >>> at1 == at2
 False
 >>> nonplanarAT at1 == nonplanarAT at2
@@ -303,15 +303,15 @@ nonplanarAT
        )
     => APTree a
     -> ATree a
-nonplanarAT (ma, t) = (nonplanarMA ma, nonplanarT t)
+nonplanarAT (ma, t) = (nonplanarMA ma, nonplanar t)
 
 
 {- | Forget the order of aromas and all rooted trees involved.
 
 Examples:
 
->>> af1 = ([Aroma $ Cycle [PRTree 1 []], Aroma $ Cycle [PRTree 2 []]], [PRTree 1 [PRTree 2 [], PRTree 3 []]])
->>> af2 = ([Aroma $ Cycle [PRTree 2 []], Aroma $ Cycle [PRTree 1 []]], [PRTree 1 [PRTree 3 [], PRTree 2 []]])
+>>> af1 = ([Aroma $ Cycle [PT 1 []], Aroma $ Cycle [PT 2 []]], [PT 1 [PT 2 [], PT 3 []]])
+>>> af2 = ([Aroma $ Cycle [PT 2 []], Aroma $ Cycle [PT 1 []]], [PT 1 [PT 3 [], PT 2 []]])
 >>> af1 == af2
 False
 >>> nonplanarAF af1 == nonplanarAF af2
@@ -324,7 +324,7 @@ nonplanarAF
        )
     => APForest a
     -> AForest a
-nonplanarAF (ma, f) = (nonplanarMA ma, nonplanarF f)
+nonplanarAF (ma, f) = (nonplanarMA ma, nonplanar f)
 
 planarA
     :: ( Eq a
@@ -333,13 +333,13 @@ planarA
        )
     => Aroma a
     -> PAroma a
-planarA = PAroma . Cycle . (map planarT) . unCycle . unAroma
+planarA = PAroma . Cycle . (map planar) . unCycle . unAroma
 
 {- | Choose a canonical planar representation of a multi-aroma.
 
 Examples:
 
->>> planarMA $ MS.fromList [Aroma $ Cycle [RTree 1 MS.empty], Aroma $ Cycle [RTree 2 MS.empty]]
+>>> planarMA $ MS.fromList [Aroma $ Cycle [T 1 MS.empty], Aroma $ Cycle [T 2 MS.empty]]
 [(1),(2)]
 -}
 planarMA
@@ -356,7 +356,7 @@ planarMA = map planarA . MS.toList
 
 Examples:
 
->>> planarAT (MS.fromList [Aroma $ Cycle [RTree 1 MS.empty], Aroma $ Cycle [RTree 2 MS.empty]], RTree 1 $ MS.fromList [RTree 2 MS.empty, RTree 3 MS.empty])
+>>> planarAT (MS.fromList [Aroma $ Cycle [T 1 MS.empty], Aroma $ Cycle [T 2 MS.empty]], T 1 $ MS.fromList [T 2 MS.empty, T 3 MS.empty])
 ([(1),(2)],1[2,3])
 -}
 planarAT
@@ -366,13 +366,13 @@ planarAT
        )
     => ATree a
     -> APTree a
-planarAT (ma, t) = (planarMA ma, planarT t)
+planarAT (ma, t) = (planarMA ma, planar t)
 
 {- | Choose a canonical planar representation of an aromatic forest.
 
 Examples:
 
->>> planarAF (MS.fromList [Aroma $ Cycle [RTree 1 MS.empty], Aroma $ Cycle [RTree 2 MS.empty]], MS.fromList [RTree 1 $ MS.fromList [RTree 2 MS.empty, RTree 3 MS.empty]])
+>>> planarAF (MS.fromList [Aroma $ Cycle [T 1 MS.empty], Aroma $ Cycle [T 2 MS.empty]], MS.fromList [T 1 $ MS.fromList [T 2 MS.empty, T 3 MS.empty]])
 ([(1),(2)],[1[2,3]])
 -}
 planarAF
@@ -382,4 +382,4 @@ planarAF
        )
     => AForest a
     -> APForest a
-planarAF (ma, f) = (planarMA ma, planarF f)
+planarAF (ma, f) = (planarMA ma, planar f)

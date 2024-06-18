@@ -15,7 +15,7 @@ Stability   : experimental
 Implementation of the general Graph and RootedGraph typeclasses. As
 an example, the @IntegerGraph@ type is defined as an instance of
 @Graph@. The data @Rooted@ is defined as a map from @Graph@ to
-@RootedGraph@. The @graft@ and @graftTo@ functions are also defined
+@RootedGraph@. The @graftGraph@ and @graftGraphTo@ functions are also defined
 here.
 -}
 module Graph (
@@ -38,8 +38,8 @@ module Graph (
     root,
     Rooted,
     rooted,
-    graft,
-    graftTo,
+    graftGraph,
+    graftGraphTo,
     getVertex,
 ) where
 
@@ -61,7 +61,7 @@ import GradedList (
     grading,
  )
 import Symbolics (
-    PowerSeries,
+    Vector,
     fromInfListV,
     (*^),
  )
@@ -254,10 +254,10 @@ instance Graded IntegerGraph where
 Example:
 
 >>> g1 = integerGraph [1, 2, 3] [(2, 1), (3, 2)]
->>> graft (rooted g1 1) (integerGraph [4, 5] [(5, 4)])
+>>> graftGraph (rooted g1 1) (integerGraph [4, 5] [(5, 4)])
 (1 *^ IntegerGraph(V=[1,2,3,4,5], E=[(1,4),(2,1),(3,2),(5,4)]) + 1 *^ IntegerGraph(V=[1,2,3,4,5], E=[(1,5),(2,1),(3,2),(5,4)]))_5
 -}
-graft
+graftGraph
     :: ( Eq a2
        , Graded a2
        , RootedGraph a1
@@ -266,10 +266,10 @@ graft
        )
     => a1
     -> a2
-    -> PowerSeries Integer a2
-graft rg1 g2 =
+    -> Vector Integer a2
+graftGraph rg1 g2 =
     fromInfListV $
-        map ((1 *^) . graftTo rg1 g2) $
+        map ((1 *^) . graftGraphTo rg1 g2) $
             MS.toList $
                 vertices g2
 
@@ -278,10 +278,10 @@ graft rg1 g2 =
 Example:
 
 >>> g1 = integerGraph [1, 2, 3] [(2, 1), (3, 2)]
->>> graftTo (rooted g1 1) (integerGraph [4, 5] [(5, 4)]) 5
+>>> graftGraphTo (rooted g1 1) (integerGraph [4, 5] [(5, 4)]) 5
 IntegerGraph(V=[1,2,3,4,5], E=[(1,5),(2,1),(3,2),(5,4)])
 -}
-graftTo
+graftGraphTo
     :: ( RootedGraph a1
        , Graph a2
        , Edge a1 ~ Edge a2
@@ -290,7 +290,7 @@ graftTo
     -> a2
     -> Vertex a2
     -> a2
-graftTo rg1 g2 v = addGraph rg1 $ addEdge new_edge g2
+graftGraphTo rg1 g2 v = addGraph rg1 $ addEdge new_edge g2
   where
     new_edge = edge () (root rg1) v
 

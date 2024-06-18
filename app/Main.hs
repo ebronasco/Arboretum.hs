@@ -10,7 +10,7 @@ import GradedList
 import Graph
 import Output
 import RootedTree
-import Substitution
+--import Substitution
 import Symbolics
 
 -- Using Graph.hs
@@ -31,9 +31,9 @@ buildGraphs = do
 
 -- Using RootedTree.hs
 
-t1 = PRTree 1 [PRTree 1 []]
+t1 = PT 1 [PT 1 []]
 
-f2 = [PRTree 1 [], PRTree 1 [PRTree 1 [], PRTree 1 []]]
+f2 = [PT 1 [], PT 1 [PT 1 [], PT 1 []]]
 
 {-
    display $ vector t1
@@ -45,14 +45,14 @@ f2 = [PRTree 1 [], PRTree 1 [PRTree 1 [], PRTree 1 []]]
 -- Using AromaticTree.hs
 
 paf1 =
-    ( [PAroma $ Cycle [PRTree 1 [], PRTree 1 []], PAroma $ Cycle [PRTree 1 []], PAroma $ Cycle [PRTree 1 []]]
-    , [PRTree 1 [PRTree 1 [], PRTree 1 []]]
+    ( [PAroma $ Cycle [PT 1 [], PT 1 []], PAroma $ Cycle [PT 1 []], PAroma $ Cycle [PT 1 []]]
+    , [PT 1 [PT 1 [], PT 1 []]]
     )
         :: APForest Integer
 
 paf2 =
-    ( [PAroma $ Cycle [PRTree 1 []]]
-    , [PRTree 1 []]
+    ( [PAroma $ Cycle [PT 1 []]]
+    , [PT 1 []]
     )
         :: APForest Integer
 
@@ -64,8 +64,8 @@ paf2 =
 -}
 
 pat1 =
-    ( [PAroma $ Cycle [PRTree 1 [], PRTree 1 []], PAroma $ Cycle [PRTree 1 []], PAroma $ Cycle [PRTree 1 []]]
-    , PRTree 1 [PRTree 1 [], PRTree 1 []]
+    ( [PAroma $ Cycle [PT 1 [], PT 1 []], PAroma $ Cycle [PT 1 []], PAroma $ Cycle [PT 1 []]]
+    , PT 1 [PT 1 [], PT 1 []]
     )
         :: APTree Integer
 
@@ -77,9 +77,9 @@ pat1 =
 
 -- Using Substitution.hs
 
-pt0 = PRTree 1 [PRTree 1 [PRTree 1 [], PRTree 1 []], PRTree 2 []]
-pt1 = PRTree 1 [PRTree 1 []]
-pt2 = PRTree 1 [PRTree 1 [], PRTree 1 []]
+pt0 = PT 1 [PT 1 [PT 1 [], PT 1 []], PT 2 []]
+pt1 = PT 1 [PT 1 []]
+pt2 = PT 1 [PT 1 [], PT 1 []]
 
 {-
    display $ vector [pt0]
@@ -90,14 +90,14 @@ pt2 = PRTree 1 [PRTree 1 [], PRTree 1 []]
 
    display $ vector [pt2]
    display $ toOperad pt2
-   display $ substitute [pt1, PRTree 1 [], PRTree 1 []] pt2
+   display $ substitute [pt1, PT 1 [], PT 1 []] pt2
 -}
 
-at1 = ([PAroma $ Cycle [PRTree 1 []]], PRTree 2 [])
-at2 = ([], PRTree 1 [PRTree 2 []])
-at3 = ([PAroma $ Cycle [PRTree 1 [], PRTree 1 []]], PRTree 1 [])
-af1 = ([PAroma $ Cycle [PRTree 3 []]], [PRTree 3 [PRTree 4 []]])
-af2 = ([PAroma $ Cycle [PRTree 3 [PRTree 5 []], PRTree 3 []]], [PRTree 3 [PRTree 4 []]])
+at1 = ([PAroma $ Cycle [PT 1 []]], PT 2 [])
+at2 = ([], PT 1 [PT 2 []])
+at3 = ([PAroma $ Cycle [PT 1 [], PT 1 []]], PT 1 [])
+af1 = ([PAroma $ Cycle [PT 3 []]], [PT 3 [PT 4 []]])
+af2 = ([PAroma $ Cycle [PT 3 [PT 5 []], PT 3 []]], [PT 3 [PT 4 []]])
 
 {-
     display $ substitute 3 [at2, at2] af1
