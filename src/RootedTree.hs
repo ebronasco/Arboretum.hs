@@ -6,7 +6,7 @@
 
 {- |
 Module      : RootedTree
-Description : Planar and non-planar trees and the grafting product.
+Description : Planar and non-planar trees, forests, and their grafting and substitution.
 Copyright   : (c) University of Geneva, 2024
 License     : MIT
 Maintainer  : Eugen Bronasco (ebronasco@gmail.com)
@@ -16,13 +16,21 @@ Implementation of the post-Lie algebra of planar trees and
 pre-Lie algebra of non-planar trees.
 -}
 module RootedTree (
+    IsTree (..),
     PlanarTree (..),
     Tree (..),
+    Planarable,
+    Planar,
     nonplanar,
     planar,
+    Graftable,
     graft,
     gl,
+    SyntacticTree (..),
+    Substitutable,
+    substitution,
     substitute,
+    syntacticToPlanar,
 ) where
 
 import Data.List (intercalate, permutations)
@@ -167,51 +175,50 @@ class Planarable t where
     planar :: t -> Planar t
     nonplanar :: Planar t -> t
 
-
 instance (Ord d) => Planarable (Tree d) where
     type Planar (Tree d) = PlanarTree d
 
-    {- | Choose a canonical planar representation of a non-planar tree.
-
-    Example:
-
-    >>> planar $ T 1 (MS.fromList [T 2 MS.empty, T 3 MS.empty])
-    1[2,3]
-    -}
+    -- \| Choose a canonical planar representation of a non-planar tree.
+    --
+    --    Example:
+    --
+    --    >>> planar $ T 1 (MS.fromList [T 2 MS.empty, T 3 MS.empty])
+    --    1[2,3]
+    --
     planar (T r xs) = PT r (planar xs)
 
-    {- | Forget the order of children in a planar tree.
-
-    Example:
-
-    >>> a =  nonplanar $ PT 1 [PT 2 [], PT 3 []]
-    >>> b =  nonplanar $ PT 1 [PT 3 [], PT 2 []]
-    >>> a == b
-    True
-    -}
+    -- \| Forget the order of children in a planar tree.
+    --
+    --    Example:
+    --
+    --    >>> a =  nonplanar $ PT 1 [PT 2 [], PT 3 []]
+    --    >>> b =  nonplanar $ PT 1 [PT 3 [], PT 2 []]
+    --    >>> a == b
+    --    True
+    --
     nonplanar (PT r xs) = T r (nonplanar xs)
 
 instance (Ord d) => Planarable (MS.MultiSet (Tree d)) where
     type Planar (MS.MultiSet (Tree d)) = [PlanarTree d]
 
-    {- | Choose a canonical planar representation of a non-planar forest.
-
-    Example:
-
-    >>> planar $ MS.fromList [T 1 (MS.fromList [T 2 MS.empty, T 3 MS.empty]), T 4 MS.empty]
-    [1[2,3],4]
-    -}
+    -- \| Choose a canonical planar representation of a non-planar forest.
+    --
+    --    Example:
+    --
+    --    >>> planar $ MS.fromList [T 1 (MS.fromList [T 2 MS.empty, T 3 MS.empty]), T 4 MS.empty]
+    --    [1[2,3],4]
+    --
     planar = map planar . MS.toList
 
-    {- | Forget the order of trees and children in a planar forest.
-
-    Example:
-
-    >>> a = nonplanar $ [PT 1 [PT 2 [], PT 3 []], PT 4 []]
-    >>> b = nonplanar $ [PT 4 [], PT 1 [PT 3 [], PT 2 []]]
-    >>> a == b
-    True
-    -}
+    -- \| Forget the order of trees and children in a planar forest.
+    --
+    --    Example:
+    --
+    --    >>> a = nonplanar $ [PT 1 [PT 2 [], PT 3 []], PT 4 []]
+    --    >>> b = nonplanar $ [PT 4 [], PT 1 [PT 3 [], PT 2 []]]
+    --    >>> a == b
+    --    True
+    --
     nonplanar = MS.fromList . map nonplanar
 
 -- * Grafting product
@@ -283,6 +290,13 @@ gl f1 f2 = linear perCoproductTerm $ deshuffleCoproduct f1
 
 -- * Substitution
 
+class IsSyntacticTree t where
+    type EvaluatesTo t
+
+    eval :: t -> Vector Integer (EvaluatesTo t)
+    syn :: EvaluatesTo t -> t
+    compose :: t -> [t] -> t -> Maybe t
+
 data SyntacticTree d
     = Concat [SyntacticTree d]
     | Graft (SyntacticTree d) (SyntacticTree d)
@@ -300,27 +314,61 @@ instance (Show d) => Show (SyntacticTree d) where
     show (Concat as) = show as
 
 instance (Show d, Texifiable d) => Texifiable (SyntacticTree d) where
-    texify = texify . toTree
-      where 
-        toTree (Leaf a) = PT (show a) []
-        toTree (Graft a b) = PT "$\\curvearrowright$" [toTree a, toTree b]
-        toTree (Concat as) = PT "$\\cdot$" $ map toTree as
+    texify = texify . syntacticToPlanar
 
-eval :: (Eq d, Graded d) => SyntacticTree d -> Vector Integer [PlanarTree d]
-eval (Leaf a) = vector [PT a []]
-eval (Graft a b) = bilinear graft (eval a) (eval b)
-eval (Concat as) = product $ map eval as
+syntacticToPlanar :: Show d => SyntacticTree d -> PlanarTree String
+syntacticToPlanar (Leaf a) = PT (show a) []
+syntacticToPlanar (Graft a b) = PT "$\\curvearrowright$" [syntacticToPlanar a, syntacticToPlanar b]
+syntacticToPlanar (Concat as) = PT "$\\cdot$" $ map syntacticToPlanar as
 
-syn :: (Eq d, Graded d) => PlanarTree d -> SyntacticTree d
-syn (PT a []) = Leaf a
-syn (PT a bs) = Graft (Concat $ map syn bs) (Leaf a)
+instance (Eq d, Graded d) => IsVector (SyntacticTree d) where
+    type VectorScalar (SyntacticTree d) = Integer
+    type VectorBasis (SyntacticTree d) = SyntacticTree d
 
-countLeaves :: (Eq d) => d -> SyntacticTree d -> Int
-countLeaves x (Leaf y) = if x == y then 1 else 0
-countLeaves x (Graft a b) = countLeaves x a + countLeaves x b
-countLeaves x (Concat as) = sum $ map (countLeaves x) as
+    vector = vector . (1 *^)
 
-symCompose :: (Eq d, Graded d) => d -> [SyntacticTree d] -> SyntacticTree d -> Vector Integer (SyntacticTree d)
+instance (Eq d, Graded d) => IsSyntacticTree (SyntacticTree d) where
+    type EvaluatesTo (SyntacticTree d) = [PlanarTree d]
+
+    eval (Leaf a) = vector [PT a []]
+    eval (Graft a b) = bilinear graft (eval a) (eval b)
+    eval (Concat as) = product $ map eval as
+
+    syn [PT a []] = Leaf a
+    syn [PT a bs] = Graft (syn bs) (Leaf a)
+    syn ts = Concat $ map (syn . (:[])) ts
+
+    compose _ [] (Leaf y) = Just $ Leaf y
+    compose _ [y] (Leaf _) = Just y
+    compose _ _ (Leaf _) = Nothing
+    compose _ _ (Concat []) = Just $ Concat []
+    compose x ops obj
+        | countSubtrees x obj == length ops =
+            Just $ case obj of
+                Graft a b ->
+                    Graft
+                        (fromJust $ compose x (take (countSubtrees x a) ops) a)
+                        (fromJust $ compose x (drop (countSubtrees x a) ops) b)
+                Concat as -> Concat $ map (\(a, ops_a) -> fromJust $ compose x ops_a a) $ spreadOps ops as
+        | otherwise = Nothing
+      where
+        spreadOps os [a] = [(a, os)]
+        spreadOps os (a : as) = (a, take (countSubtrees x a) os) : (spreadOps (drop (countSubtrees x a) os) as)
+
+        countSubtrees x y = if x == y then 1 else case y of
+            Graft a b -> countSubtrees x a + countSubtrees x b
+            Concat as -> sum $ map (countSubtrees x) as
+            _ -> 0
+
+symCompose
+    :: ( IsSyntacticTree st
+       , Eq st
+       , Graded st
+       )
+    => st
+    -> [st]
+    -> st
+    -> Vector Integer st
 symCompose x ops obj =
     mconcat
         $ map
@@ -330,23 +378,25 @@ symCompose x ops obj =
             )
         $ permutations ops
 
-compose :: (Eq d) => d -> [SyntacticTree d] -> SyntacticTree d -> Maybe (SyntacticTree d)
-compose _ [] (Leaf y) = Just $ Leaf y
-compose _ [y] (Leaf _) = Just y
-compose _ _ (Leaf _) = Nothing
-compose _ _ (Concat []) = Just $ Concat []
-compose x ops obj
-    | countLeaves x obj == length ops =
-        Just $ case obj of
-            Graft a b ->
-                Graft
-                    (fromJust $ compose x (take (countLeaves x a) ops) a)
-                    (fromJust $ compose x (drop (countLeaves x a) ops) b)
-            Concat as -> Concat $ map (\(a, ops_a) -> fromJust $ compose x ops_a a) $ spreadOps ops as
-    | otherwise = Nothing
-  where
-    spreadOps os [a] = [(a, os)]
-    spreadOps os (a : as) = (a, take (countLeaves x a) os) : (spreadOps (drop (countLeaves x a) os) as)
+substitution
+    :: ( IsSyntacticTree st
+       , Eq st
+       , Graded st
+       , Eq (EvaluatesTo st)
+       , Graded (EvaluatesTo st)
+       )
+    => st
+    -> [EvaluatesTo st]
+    -> EvaluatesTo st
+    -> Vector Integer (EvaluatesTo st)
+substitution x gens obj = linear eval $ symCompose x (map syn gens) $ syn obj
 
-substitute :: (Eq d, Graded d) => d -> [PlanarTree d] -> [PlanarTree d] -> Vector Integer [PlanarTree d]
-substitute x gens obj = linear eval $ symCompose x (map syn gens) (Concat $ map syn obj)
+class Substitutable t where
+    type Generator t
+
+    substitute :: Generator t -> t -> t -> Vector Integer t
+
+instance (Eq d, Graded d) => Substitutable [PlanarTree d] where 
+    type Generator [PlanarTree d] = d
+
+    substitute x gens obj = substitution (Leaf x) (map (: []) gens) obj

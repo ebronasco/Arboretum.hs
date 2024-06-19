@@ -45,16 +45,16 @@ f2 = [PT 1 [], PT 1 [PT 1 [], PT 1 []]]
 -- Using AromaticTree.hs
 
 paf1 =
-    ( [PAroma $ Cycle [PT 1 [], PT 1 []], PAroma $ Cycle [PT 1 []], PAroma $ Cycle [PT 1 []]]
+    ( [planarAroma [PT 1 [], PT 1 []], planarAroma [PT 1 []], planarAroma [PT 1 []]]
     , [PT 1 [PT 1 [], PT 1 []]]
     )
-        :: APForest Integer
+        :: AromaticPlanarForest Integer
 
 paf2 =
-    ( [PAroma $ Cycle [PT 1 []]]
+    ( [planarAroma [PT 1 []]]
     , [PT 1 []]
     )
-        :: APForest Integer
+        :: AromaticPlanarForest Integer
 
 {-
    display $ vector paf1
@@ -64,10 +64,10 @@ paf2 =
 -}
 
 pat1 =
-    ( [PAroma $ Cycle [PT 1 [], PT 1 []], PAroma $ Cycle [PT 1 []], PAroma $ Cycle [PT 1 []]]
+    ( [planarAroma [PT 1 [], PT 1 []], planarAroma [PT 1 []], planarAroma [PT 1 []]]
     , PT 1 [PT 1 [], PT 1 []]
     )
-        :: APTree Integer
+        :: AromaticPlanarTree Integer
 
 {-
    display $ vector pat1
@@ -93,11 +93,11 @@ pt2 = PT 1 [PT 1 [], PT 1 []]
    display $ substitute [pt1, PT 1 [], PT 1 []] pt2
 -}
 
-at1 = ([PAroma $ Cycle [PT 1 []]], PT 2 [])
+at1 = ([planarAroma [PT 1 []]], PT 2 [])
 at2 = ([], PT 1 [PT 2 []])
-at3 = ([PAroma $ Cycle [PT 1 [], PT 1 []]], PT 1 [])
-af1 = ([PAroma $ Cycle [PT 3 []]], [PT 3 [PT 4 []]])
-af2 = ([PAroma $ Cycle [PT 3 [PT 5 []], PT 3 []]], [PT 3 [PT 4 []]])
+at3 = ([planarAroma [PT 1 [], PT 1 []]], PT 1 [])
+af1 = ([planarAroma [PT 3 []]], [PT 3 [PT 4 []]])
+af2 = ([planarAroma [PT 3 [PT 5 []], PT 3 []]], [PT 3 [PT 4 []]])
 
 {-
     display $ substitute 3 [at2, at2] af1
