@@ -297,35 +297,40 @@ class IsSyntacticTree t where
     syn :: EvaluatesTo t -> t
     compose :: t -> [t] -> t -> Maybe t
 
-data Operation = Op {name :: String, argN :: Int, tex :: String} deriving (Eq)
+data SyntacticTree d
+    = Concat [SyntacticTree d]
+    | Graft (SyntacticTree d) (SyntacticTree d)
+    | Leaf d
+    deriving (Eq)
 
-data SyntacticTree a = Node {operation :: Operation, arguments :: [SyntacticTree a]} | Leaf a deriving (Eq)
-
-instance (Graded a) => Graded (SyntacticTree a) where
+instance (Graded d) => Graded (SyntacticTree d) where
     grading (Leaf a) = grading a
-    grading (Node _ as) = sum $ map grading as
+    grading (Graft a b) = grading a + grading b
+    grading (Concat as) = sum $ map grading as
 
-instance (Show a) => Show (SyntacticTree a) where
+instance (Show d) => Show (SyntacticTree d) where
     show (Leaf a) = show a
-    show (Node op as) = (name op) ++ "(" ++ intercalate "," (map show as) ++ ")"
+    show (Graft a b) = "(" ++ show a ++ " graft " ++ show b ++ ")"
+    show (Concat as) = show as
 
-instance (Show a, Texifiable a) => Texifiable (SyntacticTree a) where
+instance (Show d, Texifiable d) => Texifiable (SyntacticTree d) where
     texify = texify . syntacticToPlanar
 
-syntacticToPlanar :: Show a => SyntacticTree a -> PlanarTree String
+syntacticToPlanar :: Show d => SyntacticTree d -> PlanarTree String
 syntacticToPlanar (Leaf a) = PT (show a) []
-syntacticToPlanar (Node op as) = PT (tex op) $ map syntacticToPlanar as
+syntacticToPlanar (Graft a b) = PT "$\\curvearrowright$" [syntacticToPlanar a, syntacticToPlanar b]
+syntacticToPlanar (Concat as) = PT "$\\cdot$" $ map syntacticToPlanar as
 
-instance (Eq a, Graded a) => IsVector (SyntacticTree a) where
-    type VectorScalar (SyntacticTree a) = Integer
-    type VectorBasis (SyntacticTree a) = SyntacticTree a
+instance (Eq d, Graded d) => IsVector (SyntacticTree d) where
+    type VectorScalar (SyntacticTree d) = Integer
+    type VectorBasis (SyntacticTree d) = SyntacticTree d
 
     vector = vector . (1 *^)
 
-instance (Eq a, Graded a) => IsSyntacticTree (SyntacticTree a) where
-    type EvaluatesTo (SyntacticTree a) = a
+instance (Eq d, Graded d) => IsSyntacticTree (SyntacticTree d) where
+    type EvaluatesTo (SyntacticTree d) = [PlanarTree d]
 
-    eval (Leaf a) = vector a
+    eval (Leaf a) = vector [PT a []]
     eval (Graft a b) = bilinear graft (eval a) (eval b)
     eval (Concat as) = product $ map eval as
 
