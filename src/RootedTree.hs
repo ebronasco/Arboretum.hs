@@ -27,12 +27,13 @@ module RootedTree (
     graft,
     gl,
     Operation (..),
-    graftOp,
-    concatOp,
     SyntacticTree (..),
     syntacticToPlanar,
     compose,
     symmetricCompose,
+    eval,
+    graftOp,
+    concatOp,
 ) where
 
 import Data.List (intercalate, permutations)
@@ -238,6 +239,8 @@ Example:
 instance
     ( IsTree t
     , IsVector t
+    , Num (VectorScalar t)
+    , Eq (VectorScalar t)
     , Eq t
     , Graded t
     , Eq (TreeDecoration t)
@@ -257,6 +260,8 @@ instance
 instance
     ( IsTree t
     , IsVector t
+    , Num (VectorScalar t)
+    , Eq (VectorScalar t)
     , Eq t
     , Graded t
     , Ord t
@@ -278,6 +283,8 @@ Example:
 gl
     :: ( IsTree t
        , IsVector t
+       , Num (VectorScalar t)
+       , Eq (VectorScalar t)
        , Eq t
        , Graded t
        , Eq (TreeDecoration t)
@@ -285,7 +292,7 @@ gl
        )
     => [t]
     -> [t]
-    -> Vector Integer [t]
+    -> Vector (VectorScalar t) [t]
 gl f1 f2 = linear perCoproductTerm $ deshuffleCoproduct f1
   where
     perCoproductTerm (f11, f12) = vector f11 * graft f12 f2
@@ -296,7 +303,7 @@ data Operation a = Op
     { name :: String
     , tex :: String
     , arity :: Int
-    , func :: [a] -> Vector (VectorScalar a) a
+    , func :: [a] -> Vector (VectorScalar a) (VectorBasis a)
     }
 
 instance (Eq a) => Eq (Operation a) where
@@ -387,9 +394,9 @@ symmetricCompose x ops obj =
 class (IsVector a) => HasSyntacticTree a where
     syn :: a -> Vector (VectorScalar a) (SyntacticTree a)
 
-eval :: SyntacticTree a -> Vector (VectorScalar a) (VectorBasis a)
+eval :: (IsVector a, VectorBasis a ~ a, Num (VectorScalar a), Eq (VectorScalar a), Eq a, Graded a) => SyntacticTree a -> Vector (VectorScalar a) a
 eval (Leaf a) = vector a
-eval (Node op as) = linear (func op) $ product $ map eval as
+eval (Node op as) = linear (func op) $ product $ map (linear (:[]) . eval) as
 
 graftOp :: (IsVector a, Graftable a) => Operation a
 graftOp = Op "graft" "$\\curvearrowright$" 2 $
@@ -400,5 +407,3 @@ graftOp = Op "graft" "$\\curvearrowright$" 2 $
 concatOp :: (IsVector a, Monoid a) => Operation a
 concatOp = Op "concat" "$\\cdot$" (-1) $
     \ops -> vector $ mconcat ops
-
-

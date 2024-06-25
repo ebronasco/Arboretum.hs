@@ -1,7 +1,9 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 {- |
 Module      : Symbolics
@@ -34,6 +36,7 @@ module Symbolics (
     linearG,
     renormalize,
     scaleV,
+    rescale,
     functional,
     lengthV,
     takeWhileV,
@@ -469,8 +472,16 @@ Examples:
 >>> vector $ MS.fromList "xy"
 (1 *^ "xy")_2
 -}
-instance (Eq a, Graded a) => IsVector (MS.MultiSet a) where
-    type VectorScalar (MS.MultiSet a) = Integer
+instance
+    ( Eq a
+    , Graded a
+    , IsVector a
+    , Num (VectorScalar a)
+    , Eq (VectorScalar a)
+    )
+    => IsVector (MS.MultiSet a)
+    where
+    type VectorScalar (MS.MultiSet a) = VectorScalar a
     type VectorBasis (MS.MultiSet a) = MS.MultiSet a
     vector = vector . (1 *^)
 
@@ -481,8 +492,16 @@ Examples:
 >>> vector "xy"
 (1 *^ "xy")_2
 -}
-instance (Eq a, Graded a) => IsVector [a] where
-    type VectorScalar [a] = Integer
+instance
+    ( Eq a
+    , Graded a
+    , IsVector a
+    , Num (VectorScalar a)
+    , Eq (VectorScalar a)
+    )
+    => IsVector [a]
+    where
+    type VectorScalar [a] = VectorScalar a
     type VectorBasis [a] = [a]
     vector = vector . (1 *^)
 
@@ -696,6 +715,16 @@ scaleV
     -> Vector k a
 scaleV s = renormalize (\s0 _ -> s * s0)
 
+{- | Change the scalar of a vector.
+
+Examples:
+
+>>> rescale (\s -> s + 1) $ vector $ (1 *^ 'x') +: (2 *^ 'y') +: (3 *^ 'z') +: (4 *^ 'w') +: Zero
+(2 *^ 'x' + 3 *^ 'y' + 4 *^ 'z' + 5 *^ 'w')_1
+-}
+rescale :: (Num k1, Eq k1, Num k2, Eq k2, Eq a, Graded a) => (k1 -> k2) -> Vector k1 a -> Vector k2 a
+rescale f = renormalize (\s _ -> f s)
+
 {- | Extends a function @f@ that maps basis elements to scalars to a linear functional. The resulting function accepts only finite vectors.
 
 Examples:
@@ -804,8 +833,20 @@ takeV n = fromInfListV . take n . terms
 
 -----------------------------------------------------------------------------
 
-instance (Eq a, Graded a, Eq b, Graded b) => IsVector (a, b) where
-    type VectorScalar (a, b) = Integer
+instance
+    ( Eq a
+    , Graded a
+    , IsVector a
+    , Num (VectorScalar a)
+    , Eq (VectorScalar a)
+    , Eq b
+    , Graded b
+    , IsVector b
+    , (VectorScalar a) ~ (VectorScalar b)
+    )
+    => IsVector (a, b)
+    where
+    type VectorScalar (a, b) = VectorScalar a
     type VectorBasis (a, b) = (a, b)
     vector = vector . (1 *^)
 
@@ -822,9 +863,12 @@ Examples:
 deshuffleCoproduct
     :: ( Eq a
        , Graded a
+       , IsVector a
+       , Num (VectorScalar a)
+       , Eq (VectorScalar a)
        )
     => [a]
-    -> Vector Integer ([a], [a])
+    -> Vector (VectorScalar a) ([a], [a])
 deshuffleCoproduct =
     product
         . map (\b -> vector ([], [b]) + vector ([b], []))
