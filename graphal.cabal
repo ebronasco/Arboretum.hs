@@ -30,6 +30,7 @@ library
       Output
       RootedTree
       Symbolics
+      SyntacticTree
   other-modules:
       Paths_graphal
   autogen-modules:

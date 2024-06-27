@@ -10,7 +10,7 @@ import GradedList
 import Graph
 import Output
 import RootedTree
---import Substitution
+import SyntacticTree
 import Symbolics
 
 -- Using Graph.hs
