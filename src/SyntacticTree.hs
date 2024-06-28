@@ -21,8 +21,9 @@ module SyntacticTree (
     symmetricCompose,
     HasSyntacticTree (..),
     eval,
-    substitution,
-    Substitutable (..),
+    substitute,
+    graftOp,
+    concatOp,
 ) where
 
 import Data.List (intercalate, permutations)
@@ -141,7 +142,7 @@ eval
 eval (Leaf a) = vector a
 eval (Node op as) = linear (func op) $ product $ map (linear (: []) . eval) as
 
-substitution
+substitute
     :: ( HasSyntacticTree a
        , IsVector a
        , Eq (VectorScalar a)
@@ -154,12 +155,7 @@ substitution
     -> [a]
     -> a
     -> Vector (VectorScalar a) a
-substitution x gens obj = linear eval $ symmetricCompose (syn x) (map syn gens) $ syn obj
-
-class IsVector t => Substitutable t where
-    type Generator t
-
-    substitute :: Generator t -> [t] -> t -> Vector (VectorScalar t) t
+substitute x gens obj = linear eval $ symmetricCompose (syn x) (map syn gens) $ syn obj
 
 graftOp :: (IsVector a, Graftable a) => Operation a
 graftOp = Op "graft" "$\\curvearrowright$" 2 $
@@ -207,37 +203,3 @@ instance
             [] -> Leaf $ MS.singleton t
             _ -> Node graftOp [syn (MS.fromList $ children t), Leaf $ MS.singleton $ buildTree (root t) []]
         ts -> Node concatOp $ map (syn . MS.singleton) ts
-
-instance
-    ( IsVector t
-    , IsTree t
-    , Num (VectorScalar t)
-    , Eq (VectorScalar t)
-    , Eq t
-    , Graded t
-    , Eq (TreeDecoration t)
-    , Graded (TreeDecoration t)
-    )
-    => Substitutable [t]
-    where
-    type Generator [t] = TreeDecoration t
-
-    substitute x gens obj = substitution ([buildTree x []]) gens obj
-
-instance
-    ( IsVector t
-    , IsTree t
-    , Num (VectorScalar t)
-    , Eq (VectorScalar t)
-    , Eq t
-    , Graded t
-    , Ord t
-    , Eq (TreeDecoration t)
-    , Graded (TreeDecoration t)
-    , Ord (TreeDecoration t)
-    )
-    => Substitutable (MS.MultiSet t)
-    where
-    type Generator (MS.MultiSet t) = TreeDecoration t
-
-    substitute x gens obj = substitution (MS.singleton $ buildTree x []) gens obj

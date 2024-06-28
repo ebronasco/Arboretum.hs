@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -25,6 +26,8 @@ module AromaticTree (
     Aroma (A),
     aroma,
     unAroma,
+    mark,
+    unmark,
 ) where
 
 import Data.Bifunctor (second)
@@ -35,6 +38,7 @@ import GradedList
 import Output
 import RootedTree
 import Symbolics
+import SyntacticTree
 
 {- | Orbit of a list under cyclic permutation.
 
@@ -95,6 +99,12 @@ instance (Show d) => Show (PlanarAroma d) where
 
 instance (Graded d) => Graded (PlanarAroma d) where
     grading (PA l) = grading l
+
+instance (Eq d, Graded d) => IsVector (PlanarAroma d) where
+    type VectorScalar (PlanarAroma d) = Integer
+    type VectorBasis (PlanarAroma d) = PlanarAroma d
+
+    vector = vector . (1 *^)
 
 -- * Planar aromatic forests
 
@@ -212,17 +222,23 @@ aroma = A . Cycle
 unAroma :: Aroma d -> [Tree d]
 unAroma = unCycle . unA
 
-instance (Eq a) => Eq (Aroma a) where
+instance (Eq d) => Eq (Aroma d) where
     (A a) == (A b) = a == b
 
-instance (Ord a) => Ord (Aroma a) where
+instance (Ord d) => Ord (Aroma d) where
     compare (A a) (A b) = compare a b
 
-instance (Show a) => Show (Aroma a) where
+instance (Show d) => Show (Aroma d) where
     show (A l) = show l
 
-instance (Graded a, Ord a) => Graded (Aroma a) where
+instance (Graded d, Ord d) => Graded (Aroma d) where
     grading (A l) = grading l
+
+instance (Eq d, Graded d, Ord d) => IsVector (Aroma d) where
+    type VectorScalar (Aroma d) = Integer
+    type VectorBasis (Aroma d) = Aroma d
+
+    vector = vector . (1 *^)
 
 type AromaticTree d =
     ( MS.MultiSet (Aroma d)
@@ -346,23 +362,28 @@ instance (Markable a, Markable b) => Markable (a, b) where
     mark (a, b) = (mark a, mark b)
     unmark (a, b) = (unmark a, unmark b)
 
--- ** Syntactic Tree
+instance (Eq d, Graded d, Ord d) => HasSyntacticTree (AromaticPlanarForest (Marked d)) where
+    syn ([], []) = Node concatOp []
+    syn ([PA (Cycle ts)], []) = Node traceOp [syn $ ([],) $ (: []) $ breakCycle ts]
+      where
+        breakCycle [] = PT Mark []
+        breakCycle (t : ts) = addBranch (breakCycle ts) t
+        addBranch b (PT a bs) = PT a (b : bs)
+    syn ([], [PT a []]) = Leaf ([], [PT a []])
+    syn ([], [PT a bs]) = Node graftOp [syn ([], bs), Leaf ([], [PT a []])]
+    syn (as, ts) =
+        Node concatOp $
+            (map (syn . (,[]) . (: [])) as)
+                ++ (map (syn . ([],) . (: [])) ts)
 
-data AromaticSyntacticTree d
-    = Extends (SyntacticTree (Marked d))
-    | Trace (AromaticSyntacticTree d)
-    deriving (Eq)
-
-instance (Graded d) => Graded (AromaticSyntacticTree d) where
-    grading (Extends a) = grading a
-    grading (Trace a) = grading a
-
-instance (Show d) => Show (AromaticSyntacticTree d) where
-    show (Extends as) = show as
-    show (Trace a) = "Tr " ++ show a
-
-instance (Show d, Texifiable d) => Texifiable (AromaticSyntacticTree d) where
-    texify = texify . toTree
-      where 
-        toTree (Extends a) = syntacticToPlanar a
-        toTree (Trace a) = PT "Tr" [toTree a]
+traceOp :: (Eq d, Graded d, Ord d) => Operation (AromaticPlanarForest (Marked d))
+traceOp = Op "trace" "$Tr$" 1 $
+    \[f] -> connectRootToMarked f
+      where
+        connectRootToMarked (as, t : ts) = case (searchMarkTree (as, t)) of
+            Nothing -> searchMarkAroma (as, t)
+            Just x -> vector $ 1 *^ x
+        searchMarkTree (as, t) = case (filter ((== PT Mark []) . last) $ branchPaths t) of
+            [] -> Nothing
+            l -> Just $ (,[]) $ (: as) $ planarAroma $ init $ head l
+        searchMarkAroma (as, t) = substitute ([], [PT Mark []]) [([], [t])] (as, [])

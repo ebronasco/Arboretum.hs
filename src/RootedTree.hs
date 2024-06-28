@@ -45,6 +45,9 @@ class IsTree t where
 
     buildTree :: TreeDecoration t -> [t] -> t
 
+class HasBracketNotation t where
+    bracketNotation :: t -> String
+
 -- ** Planar trees
 
 -- | Planar trees are represented as a tree with a root and a list of children which are planar trees themselves.
@@ -61,6 +64,14 @@ instance IsTree (PlanarTree d) where
     children = planarChildren
 
     buildTree = PT
+
+instance Show d => HasBracketNotation (PlanarTree d) where
+    bracketNotation (PT r xs) =
+        show r
+            ++ ( case xs of
+                    [] -> ""
+                    _ -> "[" ++ intercalate "," (map bracketNotation xs) ++ "]"
+               )
 
 {- | Represent planar trees as strings using bracket notation.
 
