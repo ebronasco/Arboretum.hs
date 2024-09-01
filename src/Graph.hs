@@ -62,7 +62,7 @@ import GradedList (
  )
 import Symbolics (
     Vector,
-    fromInfListV,
+    vectorFromNonDecList,
     (*^),
  )
 
@@ -268,7 +268,7 @@ graftGraph
     -> a2
     -> Vector Integer a2
 graftGraph rg1 g2 =
-    fromInfListV $
+    vectorFromNonDecList $
         map ((1 *^) . graftGraphTo rg1 g2) $
             MS.toList $
                 vertices g2

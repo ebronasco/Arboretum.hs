@@ -28,12 +28,13 @@ module Symbolics (
     --    VectorSpace,
     IsVector (..),
     vector,
-    fromListV,
-    fromInfListV,
+    vectorFromList,
+    vectorFromNonDecList,
     terms,
     basisElements,
     linear,
-    linearG,
+    linearGraded,
+    linearNonDec,
     renormalize,
     scaleV,
     rescale,
@@ -43,14 +44,16 @@ module Symbolics (
     filterV,
     takeV,
     morphism,
+    morphismGraded,
+    morphismNonDec,
     Sum (Zero),
     fromListS,
     toListS,
     pattern (:+),
     (+:),
-    Vector (..),
-    fromListPS,
-    toListPS,
+    Vector (Empty),
+    fromListV,
+    toListV,
     deshuffleCoproduct,
     bilinear,
 ) where
@@ -317,17 +320,35 @@ instance
 
 --------------- Vector ----------------
 
-infixr 6 :&
+pattern (:&) :: Sum k a -> Vector k a -> Vector k a
+pattern t :& s <- Vector t s
+
+{-# COMPLETE (:&), Empty #-}
+
 
 -- | A power series can have infinite number of terms.
-data Vector k a = (Sum k a) :& (Vector k a) | Empty
+data Vector k a = Vector (Sum k a) (Vector k a) | Empty
 
-fromListPS :: [Sum k a] -> Vector k a
-fromListPS = foldr (:&) Empty
+fromListV :: (Num k, Eq k, Eq a, Graded a) => [Sum k a] -> Vector k a
+fromListV = foldr (&:) Empty . checkGrading
+  where 
+    checkGrading [] = []
+    checkGrading (x:[]) = [x]
+    checkGrading (x:y:xs) 
+      | x == Zero = x : checkGrading (y:xs)
+      | y == Zero = x : y : checkGrading xs
+      | grading x == ((grading y) - 1) = x : checkGrading (y : xs)
+      | otherwise = error "Grading mismatch between terms in a vector"
 
-toListPS :: Vector k a -> [Sum k a]
-toListPS Empty = []
-toListPS (h :& ps) = h : toListPS ps
+
+toListV :: Vector k a -> [Sum k a]
+toListV Empty = []
+toListV (h :& ps) = h : toListV ps
+
+infixr 6 &:
+
+(&:) :: Sum k a -> Vector k a -> Vector k a
+(&:) s t = Vector s t
 
 instance
     ( Num k
@@ -371,7 +392,7 @@ Properties:
 instance (Num k, Eq k, Eq a, Graded a) => Semigroup (Vector k a) where
     Empty <> ps = ps
     ps <> Empty = ps
-    (h1 :& ps1) <> (h2 :& ps2) = (h1 <> h2) :& (ps1 <> ps2)
+    (h1 :& ps1) <> (h2 :& ps2) = (h1 <> h2) &: (ps1 <> ps2)
 
 {- | Vector is a monoid with addition as the operation and the empty vector as the identity.
 
@@ -406,7 +427,7 @@ Properties:
 -}
 instance (Num k, Eq k, Eq a, Graded a) => Group (Vector k a) where
     invert Empty = Empty
-    invert (h :& ps) = invert h :& invert ps
+    invert (h :& ps) = invert h &: invert ps
 
 {- | To ensure that the product of two power series is also a power series, the product is distributed over the basis elements of the two power series.
 
@@ -428,11 +449,11 @@ instance
 
     negate = invert
 
-    a * b = fromListPS $ map (sum . map product) $ distributeGradedLists ab_list
+    a * b = fromListV $ map (sum . map product) $ distributeGradedLists ab_list
       where
-        ab_list = [toListPS a, toListPS b]
+        ab_list = [toListV a, toListV b]
 
-    fromInteger n = fromInteger n :& Empty
+    fromInteger n = fromInteger n &: Empty
 
     abs = error "abs not implemented for GradedAlgebra"
 
@@ -447,7 +468,7 @@ Examples:
 [1 *^ 'x',1 *^ 'y']
 -}
 terms :: Vector k a -> [ScalarProduct k a]
-terms = concatMap toListS . toListPS
+terms = concatMap toListS . toListV
 
 {- | A list of basis elements of a power series.
 
@@ -530,7 +551,7 @@ instance (Num k, Eq k, Eq a, Graded a) => IsVector (Sum k a) where
     type VectorScalar (Sum k a) = k
     type VectorBasis (Sum k a) = a
     vector Zero = Empty
-    vector s@(Sum g _ _) = fromListPS $ replicate (fromInteger g) Zero ++ [s]
+    vector s@(Sum g _ _) = fromListV $ replicate (fromInteger g) Zero ++ [s]
 
 -- | @Vector@ has a trivial @IsVector@ instance.
 instance IsVector (Vector k a) where
@@ -542,10 +563,10 @@ instance IsVector (Vector k a) where
 
 Examples:
 
->>> fromListV [1 *^ "x", 1 *^ "y", 3 *^ "xy", 1 *^ "x", 1 *^ "y"]
+>>> vectorFromList [1 *^ "x", 1 *^ "y", 3 *^ "xy", 1 *^ "x", 1 *^ "y"]
 (2 *^ "x" + 2 *^ "y")_1 + (3 *^ "xy")_2
 -}
-fromListV
+vectorFromList
     :: ( Num k
        , Eq k
        , Eq a
@@ -553,20 +574,20 @@ fromListV
        )
     => [ScalarProduct k a]
     -> Vector k a
-fromListV = fromInfListV . L.sortBy compareGrading
+vectorFromList = vectorFromNonDecList . L.sortBy compareGrading
   where
     compareGrading x y = compare (grading x) (grading y)
 
-{- |  Construct a vector from a list of terms. The grading of terms in the list must be non-descreasing with finite number of terms having the same grading. The list itself may be infinite.
+{- |  Construct a vector from a list of terms. The grading of terms in the list must be non-descreasing. The list itself may be infinite.
 
 Examples:
 
->>> fromInfListV [1 *^ 'x', 1 *^ 'y', 1 *^ 'x', 1 *^ 'y']
+>>> vectorFromNonDecList [1 *^ 'x', 1 *^ 'y', 1 *^ 'x', 1 *^ 'y']
 (2 *^ 'x' + 2 *^ 'y')_1
->>> takeV 10 $ fromInfListV [1 *^ i | i <- [1..]]
+>>> takeV 10 $ vectorFromNonDecList [1 *^ i | i <- [1..]]
 (1 *^ 1 + 1 *^ 2 + 1 *^ 3 + 1 *^ 4 + 1 *^ 5 + 1 *^ 6 + 1 *^ 7 + 1 *^ 8 + 1 *^ 9)_1 + (1 *^ 10)_2
 -}
-fromInfListV
+vectorFromNonDecList
     :: ( Num k
        , Eq k
        , Eq a
@@ -574,11 +595,11 @@ fromInfListV
        )
     => [ScalarProduct k a]
     -> Vector k a
-fromInfListV = fromListPS . map fromListS . groupByGrading . nDecList
+vectorFromNonDecList = fromListV . map fromListS . groupByGrading . nDecList
 
 {- | Takes a function from the basis to a vector space and extends it to a linear map. The resulting function accepts only finite vectors.
 
-!!! The function @f@ must preserve the grading.
+!!! the function @linear f@ can receive only finite vectors.
 
 Examples:
 
@@ -600,24 +621,15 @@ linear
     => (a -> v)
     -> Vector k a
     -> Vector k b
-linear f = mconcat . map (mconcat . map applyf . toListS) . toListPS
+linear f = mconcat . map (mconcat . map applyf . toListS) . toListV
   where
     applyf t = scaleV (scalar t) $ vector $ f $ basisElement t
 
-{- | The same as @linear@, but the function @f@ must be monotonically increasing with respect to the grading, that is,
+{- | Takes a function from the basis to a vector space and extends it to a linear map.
 
-@(grading b1) <= (grading b2)@ implies @(min $ grading $ f b1) <= (min $ grading $ f b2)@,
-
-where @min@ is the minimum of the grading of the terms in the image of @f@.
-
-The resulting function accepts infinite vectors.
-
-Examples:
-
->>> takeV 9 $ linearG (\b -> fromInfListV [1 *^ i | i <- [b..]]) $ fromInfListV [1 *^ i | i <- [1..]]
-(1 *^ 1 + 2 *^ 2 + 3 *^ 3 + 4 *^ 4 + 5 *^ 5 + 6 *^ 6 + 7 *^ 7 + 8 *^ 8 + 9 *^ 9)_1
+!!! @f@ must respect the grading.
 -}
-linearG
+linearGraded
     :: ( Num k
        , Eq k
        , Eq a
@@ -630,7 +642,36 @@ linearG
     => (a -> v)
     -> Vector k a
     -> Vector k b
-linearG f = fromListPS . addLevels . map (toListPS . mconcat . map applyf . toListS) . toListPS
+linearGraded f = fromListV . map (fromListS . concat . map applyf . toListS) . toListV
+  where
+    applyf t = terms $ scaleV (scalar t) $ vector $ f $ basisElement t
+
+
+{- | Takes a function from the basis to a vector space and extends it to a linear map.
+
+!!! the function @f@ must be non-decreasing with respect to the grading, that is,
+@(grading b1) <= (grading b2)@ implies @(min $ grading $ f b1) <= (min $ grading $ f b2)@,
+where @min@ is the minimum of the grading of the terms in the image of @f@.
+
+Examples:
+
+>>> takeV 9 $ linearNonDec (\b -> vectorFromNonDecList [1 *^ i | i <- [b..]]) $ vectorFromNonDecList [1 *^ i | i <- [1..]]
+(1 *^ 1 + 2 *^ 2 + 3 *^ 3 + 4 *^ 4 + 5 *^ 5 + 6 *^ 6 + 7 *^ 7 + 8 *^ 8 + 9 *^ 9)_1
+-}
+linearNonDec
+    :: ( Num k
+       , Eq k
+       , Eq a
+       , Eq b
+       , Graded b
+       , IsVector v
+       , VectorScalar v ~ k
+       , VectorBasis v ~ b
+       )
+    => (a -> v)
+    -> Vector k a
+    -> Vector k b
+linearNonDec f = fromListV . addLevels . map (toListV . mconcat . map applyf . toListS) . toListV
   where
     applyf t = scaleV (scalar t) $ vector $ f $ basisElement t
     addLevels = map mconcat . transposeUntilZero 0
@@ -652,7 +693,10 @@ linearG f = fromListPS . addLevels . map (toListPS . mconcat . map applyf . toLi
         splitList (h : t) = (h, t)
         splitList [] = (Zero, [])
 
+
 {- | Take a function @f@ that maps basis elements to basis elements and extends it to a morphism of the tensor algebra.
+
+!!! The function @morphism f@ accepts only finite vectors.
 
 Examples:
 
@@ -675,7 +719,63 @@ morphism
     => (a -> v)
     -> Vector k (f a)
     -> Vector k b
-morphism f = linearG $ product . fmap (vector . f)
+morphism f = linear $ product . fmap (vector . f)
+
+
+{- | Take a function @f@ that maps basis elements to basis elements and extends it to a morphism of the tensor algebra.
+
+!!! The function @f@ must preserve the grading.
+
+Examples:
+
+>>> morphismGraded (\b -> [b + 1]) $ vector $ (1 *^ [1, 2, 3, 4]) +: (1 *^ [5, 6, 7, 8]) +: Zero
+(1 *^ [2,3,4,5] + 1 *^ [6,7,8,9])_4
+-}
+morphismGraded
+    :: ( Num k
+       , Eq k
+       , Functor f
+       , Foldable f
+       , Eq (f a)
+       , Eq b
+       , Graded b
+       , Monoid b
+       , IsVector v
+       , VectorScalar v ~ k
+       , VectorBasis v ~ b
+       )
+    => (a -> v)
+    -> Vector k (f a)
+    -> Vector k b
+morphismGraded f = linearGraded $ product . fmap (vector . f)
+
+
+{- | Take a function @f@ that maps basis elements to basis elements and extends it to a morphism of the tensor algebra.
+
+!!! The function @f@ must be non-decreasing (see @linearNonDec@).
+
+Examples:
+
+>>> morphismNonDec (\b -> [b + 1]) $ vector $ (1 *^ [1, 2, 3, 4]) +: (1 *^ [5, 6, 7, 8]) +: Zero
+(1 *^ [2,3,4,5] + 1 *^ [6,7,8,9])_4
+-}
+morphismNonDec
+    :: ( Num k
+       , Eq k
+       , Functor f
+       , Foldable f
+       , Eq (f a)
+       , Eq b
+       , Graded b
+       , Monoid b
+       , IsVector v
+       , VectorScalar v ~ k
+       , VectorBasis v ~ b
+       )
+    => (a -> v)
+    -> Vector k (f a)
+    -> Vector k b
+morphismNonDec f = linearNonDec $ product . fmap (vector . f)
 
 {- | Change the coefficients in a vector using a function @f@ that takes the scalar and the basis element of a term and returns a new scalar.
 
@@ -693,7 +793,7 @@ renormalize
     => (k1 -> a -> k2)
     -> Vector k1 a
     -> Vector k2 a
-renormalize f = fromInfListV . map renormalizeTerm . terms
+renormalize f = vectorFromNonDecList . map renormalizeTerm . terms
   where
     renormalizeTerm t = f (scalar t) (basisElement t) *^ basisElement t
 
@@ -754,7 +854,7 @@ Properties:
 > lengthV v == length (terms v :: [ScalarProduct Integer Char])
 -}
 lengthV :: Vector k a -> Int
-lengthV = sum . map lengthS . toListPS
+lengthV = sum . map lengthS . toListV
 
 {- | Take terms from a vector until the first term that does not satisfy the condition given by @f@.
 
@@ -762,7 +862,7 @@ Examples:
 
 >>> takeWhileV (\(i :*^ j) -> j < 3) $ vector $ (1 *^ 1) +: (1 *^ 2) +: (1 *^ 3) +: (1 *^ 4) +: Zero
 (1 *^ 1 + 1 *^ 2)_1
->>> takeWhileV (\(i :*^ j) -> j < 5) $ fromInfListV [1 *^ i | i <- [1..]]
+>>> takeWhileV (\(i :*^ j) -> j < 5) $ vectorFromNonDecList [1 *^ i | i <- [1..]]
 (1 *^ 1 + 1 *^ 2 + 1 *^ 3 + 1 *^ 4)_1
 
 Properties:
@@ -779,13 +879,13 @@ takeWhileV
     => (ScalarProduct k a -> Bool)
     -> Vector k a
     -> Vector k a
-takeWhileV f = fromInfListV . takeWhile f . terms
+takeWhileV f = vectorFromNonDecList . takeWhile f . terms
 
 {- | Filter terms from a vector that satisfy the condition given by @f@.
 
 Examples:
 
->>> takeV 10 $ filterV (\(_ :*^ j) -> j `mod` 3 == 0) $ fromInfListV [1 *^ i | i <- [1..]]
+>>> takeV 10 $ filterV (\(_ :*^ j) -> j `mod` 3 == 0) $ vectorFromNonDecList [1 *^ i | i <- [1..]]
 (1 *^ 3 + 1 *^ 6 + 1 *^ 9)_1 + (1 *^ 12 + 1 *^ 15 + 1 *^ 18 + 1 *^ 21 + 1 *^ 24 + 1 *^ 27 + 1 *^ 30)_2
 
 Properties:
@@ -802,13 +902,13 @@ filterV
     => (ScalarProduct k a -> Bool)
     -> Vector k a
     -> Vector k a
-filterV f = fromListPS . map (fromListS . filter f . toListS) . toListPS
+filterV f = fromListV . map (fromListS . filter f . toListS) . toListV
 
 {- | Take the first @n@ terms from a vector.
 
 Examples:
 
->>> takeV 10 $ fromInfListV [1 *^ i | i <- [1..]]
+>>> takeV 10 $ vectorFromNonDecList [1 *^ i | i <- [1..]]
 (1 *^ 1 + 1 *^ 2 + 1 *^ 3 + 1 *^ 4 + 1 *^ 5 + 1 *^ 6 + 1 *^ 7 + 1 *^ 8 + 1 *^ 9)_1 + (1 *^ 10)_2
 
 Properties:
@@ -825,7 +925,7 @@ takeV
     => Int
     -> Vector k a
     -> Vector k a
-takeV n = fromInfListV . take n . terms
+takeV n = vectorFromNonDecList . take n . terms
 
 -----------------------------------------------------------------------------
 

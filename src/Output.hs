@@ -31,7 +31,7 @@ import Symbolics (
     ScalarProduct,
     Sum (Zero),
     lengthV,
-    toListPS,
+    toListV,
     toListS,
     pattern (:*^),
  )
@@ -201,12 +201,12 @@ instance
         intercalate " + " $
             map texify $
                 filter (/= Zero) $
-                    toListPS v
+                    toListV v
     texifyDebug i j v =
         intercalate " + " $
             map (texifyD i j) $
                 filter (/= Zero) $
-                    toListPS v
+                    toListV v
     texifyParentheses x =
         if lengthV x > 1
             then ("(", ")")
