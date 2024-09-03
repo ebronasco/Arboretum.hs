@@ -88,6 +88,20 @@ Example:
 instance (Graded a) => Graded (MS.MultiSet a) where
   grading = grading . MS.toList
 
+{- | 
+  The tuple of two elements is used to represent the tensor product
+  in @Symbolics.hs@. The grading of a tuple is the sum of the gradings
+  of its elements.
+
+Example:
+
+>>> grading (1, 2)
+2
+>>> grading ((1, 2), (3, 4))
+4
+-}
+instance (Graded a, Graded b) => Graded (a, b) where
+    grading (a, b) = grading a + grading b
 
 -- | A list in which the gradings of the elements is non-decreasing.
 newtype NonDecreasingList a = NDecList {unNDecList :: [a]} deriving (Eq)
