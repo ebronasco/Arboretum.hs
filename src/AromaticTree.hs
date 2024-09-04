@@ -228,7 +228,7 @@ instance (Eq d) => Eq (Aroma d) where
 instance (Ord d) => Ord (Aroma d) where
     compare (A a) (A b) = compare a b
 
-instance (Show d) => Show (Aroma d) where
+instance (Show d, Ord d) => Show (Aroma d) where
     show (A l) = show l
 
 instance (Graded d, Ord d) => Graded (Aroma d) where

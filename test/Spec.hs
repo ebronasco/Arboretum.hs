@@ -6,4 +6,5 @@ main =
         [ "-isrc"
         , "src/Symbolics.hs"
         , "src/GradedList.hs"
+        , "src/RootedTree.hs"
         ]

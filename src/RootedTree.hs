@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 {- |
@@ -17,6 +18,7 @@ pre-Lie algebra of non-planar trees.
 -}
 module RootedTree (
     IsTree (..),
+    HasBracketNotation (..),
     PlanarTree (..),
     Tree (..),
     Planarable,
@@ -28,14 +30,20 @@ module RootedTree (
     gl,
 ) where
 
-import Data.List (intercalate, permutations)
-import Data.Maybe (fromJust)
+import Control.Monad.State
+import Data.List (intercalate)
 import qualified Data.MultiSet as MS
 import GradedList
 import Output
 import Symbolics
 
--- * Tree
+{- $setup
+  Integer Tree From Brackets
+>>> itfb str = fromBrackets read str :: Tree Integer
+
+  Non-Planar Integer Tree From Brackets
+>>> npitfb str = fromBrackets read str :: Tree Integer
+-}
 
 class IsTree t where
     type TreeDecoration t
@@ -46,11 +54,85 @@ class IsTree t where
     buildTree :: TreeDecoration t -> [t] -> t
 
 class HasBracketNotation t where
-    bracketNotation :: t -> String
+    -- | Convert a tree to a string using bracket notation.
+    -- The first argument is a function that converts the decoration
+    -- to a string.
+    toBrackets :: (TreeDecoration t -> String) -> t -> String
 
--- ** Planar trees
+    fromBrackets :: (String -> TreeDecoration t) -> String -> t
 
--- | Planar trees are represented as a tree with a root and a list of children which are planar trees themselves.
+{- |
+  Every tree can be written in bracket notation.
+
+Example:
+
+>>> f r = "(" ++ (show r) ++ ")"
+>>> toBrackets f $ itfb "1[2,3]"
+"(1)[(2),(3)]"
+-}
+instance (IsTree t, TreeDecoration t ~ d, Show d) => HasBracketNotation t where
+    toBrackets f t =
+        f (root t)
+            ++ ( case children t of
+                    [] -> ""
+                    _ -> "[" ++ intercalate "," (map (toBrackets f) (children t)) ++ "]"
+               )
+
+    fromBrackets decFromStr = evalState parseTree
+      where
+        parseTree :: State String t
+        parseTree = do
+            dec <- parseDecoration
+
+            str <- get
+
+            case str of
+                [] -> return $ buildTree dec []
+                ('[' : str') -> do
+                    put str'
+                    chldrn <- parseForest
+                    return $ buildTree dec chldrn
+                (',' : str') -> do
+                    put str'
+                    return $ buildTree dec []
+                (']' : str') -> do
+                    put str'
+                    return $ buildTree dec []
+                _ -> error "fromBrackets: invalid input"
+
+        parseDecoration :: State String (TreeDecoration t)
+        parseDecoration = do
+            str <- get
+            let (dec', str') = span (\x -> x `notElem` ",[]") str
+            put str'
+            return $ decFromStr dec'
+
+        parseForest :: State String [t]
+        parseForest = do
+            str <- get
+            case str of
+                [] -> return []
+                (']' : str') -> do
+                    put str'
+                    return []
+                (',' : str') -> do
+                    put str'
+                    chldrn <- parseForest
+                    return chldrn
+                _ -> do 
+                    chld <- parseTree
+                    chldrn <- parseForest
+                    return $ chld : chldrn
+               
+---------------------------------------------------------------------
+
+-- * Planar trees
+
+---------------------------------------------------------------------
+
+{- | Planar trees are represented as a tree with a root and a list of
+children which are planar trees themselves.
+-}
 data PlanarTree d = PT
     { planarRoot :: d
     , planarChildren :: [PlanarTree d]
@@ -65,28 +147,22 @@ instance IsTree (PlanarTree d) where
 
     buildTree = PT
 
-instance Show d => HasBracketNotation (PlanarTree d) where
-    bracketNotation (PT r xs) =
-        show r
-            ++ ( case xs of
-                    [] -> ""
-                    _ -> "[" ++ intercalate "," (map bracketNotation xs) ++ "]"
-               )
-
-{- | Represent planar trees as strings using bracket notation.
+{- |
+  LaTeX notation for planar trees using @planarforest.py@ TeX package.
 
 Example:
 
->>> PT 1 [PT 2 [], PT 3 []]
-1[2,3]
+>>> texify $ itfb "1[2,3]"
+"\\forest{i_1[i_2,i_3]}"
 -}
+instance (Show d) => Texifiable (PlanarTree d) where
+    texifyID _ = "PlanarTree"
+    texify t = "\\forest{" ++ toBrackets wrap t ++ "}"
+      where
+        wrap r = "i_" ++ filter (/= '"') (show r)
+
 instance (Show d) => Show (PlanarTree d) where
-    show (PT r xs) =
-        show r
-            ++ ( case xs of
-                    [] -> ""
-                    _ -> show xs
-               )
+    show = toBrackets show
 
 -- | Planar trees are vectors with integer coefficients.
 instance (Eq d, Graded d) => IsVector (PlanarTree d) where
@@ -95,40 +171,28 @@ instance (Eq d, Graded d) => IsVector (PlanarTree d) where
 
     vector = vector . (1 *^)
 
-{- | LaTeX notation for planar trees using @planarforest.py@ TeX package.
+{- |
+  Grading of a planar tree is the sum of gradings of the nodes.
 
 Example:
 
->>> texify $ PT 1 [PT 2 [], PT 3 []]
-"\\forest{i_1[i_2,i_3]}"
--}
-instance (Show d, Texifiable d) => Texifiable (PlanarTree d) where
-    texifyID _ = "PlanarTree"
-    texify t = "\\forest{" ++ texify_ t ++ "}"
-      where
-        texify_ (PT r xs) =
-            "i_"
-                ++ (filter (/= '"') $ show r)
-                ++ ( case xs of
-                        [] -> ""
-                        _ -> "[" ++ intercalate "," (map texify_ xs) ++ "]"
-                   )
-
-{- | Grading of a planar tree is the sum of gradings of the nodes.
-
-Example:
-
->>> grading $ PT 1 [PT 2 [], PT 31 []]
+>>> grading $ itfb "1[2,34]"
 4
 
-Note that the grading of an integer is the number of digits with @0@ having grading @0@.
+Note: the grading of an integer is the number of digits with @0@ having grading @0@.
 -}
 instance (Graded d) => Graded (PlanarTree d) where
     grading (PT r xs) = grading r + sum (map grading xs)
 
--- ** Non-planar trees
+---------------------------------------------------------------------
 
--- | Non-planar trees are represented as a tree with a root and a multiset of children which are non-planar trees themselves.
+-- * Non-planar trees
+
+---------------------------------------------------------------------
+
+{- | Non-planar trees are represented as a tree with a root and a
+multiset of children which are non-planar trees themselves.
+-}
 data Tree d = T
     { nonplanarRoot :: d
     , nonplanarChildren :: MS.MultiSet (Tree d)
@@ -143,37 +207,56 @@ instance (Ord d) => IsTree (Tree d) where
 
     buildTree r = T r . MS.fromList
 
+{- |
+  LaTeX notation for trees using @planarforest.py@ TeX package.
+
+Example:
+
+>>> texify $ itfb "1[2,3]"
+"\\forest{i_1[i_2,i_3]}"
+-}
+instance (Show d, Ord d) => Texifiable (Tree d) where
+    texifyID _ = "Tree"
+    texify = texify . planar
+
+instance (Show d, Ord d) => Show (Tree d) where
+    show = toBrackets show
+
 instance (Eq d, Ord d, Graded d) => IsVector (Tree d) where
     type VectorScalar (Tree d) = Integer
     type VectorBasis (Tree d) = Tree d
 
     vector = vector . (1 *^)
 
+{- |
+  Order on decorations induces an order on trees where we first
+  compare the root decorations and then the children according to
+  their order.
+
+Example:
+
+>>> compare (npitfb "1") (npitfb "2")
+LT
+>>> compare (npitfb "1") (npitfb "1[2,3]")
+LT
+>>> compare (npitfb "1[2]") (npitfb "1[3]")
+LT
+>>> compare (npitfb "1[2]") (npitfb "1[2]")
+EQ
+>>> compare (npitfb "1[2,4]") (npitfb "1[2,3]")
+GT
+-}
 instance (Ord d) => Ord (Tree d) where
     compare (T r1 c1) (T r2 c2) = compare (r1, c1) (r2, c2)
 
 instance (Ord d, Graded d) => Graded (Tree d) where
     grading = grading . planar
 
-instance (Ord d, Show d, Texifiable d) => Texifiable (Tree d) where
-    texifyID _ = "Tree"
-    texify = texify . planar
-
-instance (Eq a, Texifiable a) => Texifiable (MS.MultiSet a) where
-    texifyID _ = "MultiSet"
-    texify = texify . MS.toList
-    texifyDebug i j = texifyDebug i j . MS.toList
-
--- | Represent non-planar trees as strings using brace notation. Children are enclosed in curly braces.
-instance (Show d) => Show (Tree d) where
-    show (T r xs) =
-        show r
-            ++ ( case MS.toList xs of
-                    [] -> ""
-                    _ -> "{" ++ (tail . init . show . MS.toList) xs ++ "}"
-               )
+---------------------------------------------------------------------
 
 -- * Moving between planar and non-planar trees
+
+---------------------------------------------------------------------
 
 class Planarable t where
     type Planar t
@@ -184,11 +267,12 @@ class Planarable t where
 instance (Ord d) => Planarable (Tree d) where
     type Planar (Tree d) = PlanarTree d
 
-    -- \| Choose a canonical planar representation of a non-planar tree.
+    -- \| Choose a canonical planar representation of a non-planar
+    -- tree.
     --
     --    Example:
     --
-    --    >>> planar $ T 1 (MS.fromList [T 2 MS.empty, T 3 MS.empty])
+    --    >>> planar $ npitfb "1[2,3]"
     --    1[2,3]
     --
     planar (T r xs) = PT r (planar xs)
@@ -197,8 +281,8 @@ instance (Ord d) => Planarable (Tree d) where
     --
     --    Example:
     --
-    --    >>> a =  nonplanar $ PT 1 [PT 2 [], PT 3 []]
-    --    >>> b =  nonplanar $ PT 1 [PT 3 [], PT 2 []]
+    --    >>> a =  nonplanar $ itfb "1[2,3]"
+    --    >>> b =  nonplanar $ itfb "1[3,2]"
     --    >>> a == b
     --    True
     --
@@ -207,11 +291,12 @@ instance (Ord d) => Planarable (Tree d) where
 instance (Ord d) => Planarable (MS.MultiSet (Tree d)) where
     type Planar (MS.MultiSet (Tree d)) = [PlanarTree d]
 
-    -- \| Choose a canonical planar representation of a non-planar forest.
+    -- \| Choose a canonical planar representation of a non-planar
+    -- forest.
     --
     --    Example:
     --
-    --    >>> planar $ MS.fromList [T 1 (MS.fromList [T 2 MS.empty, T 3 MS.empty]), T 4 MS.empty]
+    --    >>> planar $ MS.fromList [npitfb "1[2,3]", npitfb "4"]
     --    [1[2,3],4]
     --
     planar = map planar . MS.toList
@@ -220,23 +305,31 @@ instance (Ord d) => Planarable (MS.MultiSet (Tree d)) where
     --
     --    Example:
     --
-    --    >>> a = nonplanar $ [PT 1 [PT 2 [], PT 3 []], PT 4 []]
-    --    >>> b = nonplanar $ [PT 4 [], PT 1 [PT 3 [], PT 2 []]]
+    --    >>> a = nonplanar $ [itfb "1[2,3]", itfb "4"]
+    --    >>> b = nonplanar $ [itfb "4", itfb "1[3,2]"]
     --    >>> a == b
     --    True
     --
     nonplanar = MS.fromList . map nonplanar
 
+---------------------------------------------------------------------
+
 -- * Grafting product
+
+---------------------------------------------------------------------
 
 class (IsVector a) => Graftable a where
     graft :: a -> a -> Vector (VectorScalar a) (VectorBasis a)
 
-{- | Grafting of two planar forests using the @deshuffleCoproduct@ function that splits @f1@ into subforests in all possible ways.
+{- |
+  Grafting of two planar forests using the @deshuffleCoproduct@
+  function that splits @f1@ into subforests in all possible ways.
 
 Example:
 
->>> graft [PT 1 [PT 2 []]] [PT 3 [], PT 4 [PT 5 []]]
+>>> f1 = [itfb "1[2]"]
+>>> f2 = [itfb "3", itfb "4[5]"]
+>>> graft f1 f2
 (1 *^ [3,4[5[1[2]]]] + 1 *^ [3,4[1[2],5]] + 1 *^ [3[1[2]],4[5]])_5
 -}
 instance
@@ -276,11 +369,14 @@ instance
     where
     graft f1 f2 = linear MS.fromList $ graft (MS.toList f1) (MS.toList f2)
 
-{- | Grossman-Larson product of two forests.
+{- |
+  Grossman-Larson product of two forests.
 
 Example:
 
->>> gl [PT 1 [PT 2 []]] [PT 3 [], PT 4 [PT 5 []]]
+>>> f1 = [itfb "1[2]"]
+>>> f2 = [itfb "3", itfb "4[5]"]
+>>> gl f1 f2
 (1 *^ [3,4[5[1[2]]]] + 1 *^ [3,4[1[2],5]] + 1 *^ [3[1[2]],4[5]] + 1 *^ [1[2],3,4[5]])_5
 -}
 gl
