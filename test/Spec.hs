@@ -7,4 +7,6 @@ main =
         , "src/Symbolics.hs"
         , "src/GradedList.hs"
         , "src/RootedTree.hs"
+        , "src/SyntacticTree.hs"
+        , "src/AromaticTree.hs"
         ]

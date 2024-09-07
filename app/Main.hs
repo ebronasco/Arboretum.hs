@@ -43,7 +43,7 @@ f2 = [PT 1 [], PT 1 [PT 1 [], PT 1 []]]
 -}
 
 -- Using AromaticTree.hs
-
+{-
 paf1 =
     ( [planarAroma [PT 1 [], PT 1 []], planarAroma [PT 1 []], planarAroma [PT 1 []]]
     , [PT 1 [PT 1 [], PT 1 []]]
@@ -55,20 +55,20 @@ paf2 =
     , [PT 1 []]
     )
         :: AromaticPlanarForest Integer
-
+-}
 {-
    display $ vector paf1
    display $ vector paf2
    display $ paf2 `graftAF` paf1
    display $ linear nonplanarAF $ paf2 `graftAF` paf1
 -}
-
+{-
 pat1 =
     ( [planarAroma [PT 1 [], PT 1 []], planarAroma [PT 1 []], planarAroma [PT 1 []]]
     , PT 1 [PT 1 [], PT 1 []]
     )
         :: AromaticPlanarTree Integer
-
+-}
 {-
    display $ vector pat1
    display $ divergenceAT pat1
@@ -92,13 +92,13 @@ pt2 = PT 1 [PT 1 [], PT 1 []]
    display $ toOperad pt2
    display $ substitute [pt1, PT 1 [], PT 1 []] pt2
 -}
-
+{-
 at1 = ([planarAroma [PT 1 []]], PT 2 [])
 at2 = ([], PT 1 [PT 2 []])
 at3 = ([planarAroma [PT 1 [], PT 1 []]], PT 1 [])
 af1 = ([planarAroma [PT 3 []]], [PT 3 [PT 4 []]])
 af2 = ([planarAroma [PT 3 [PT 5 []], PT 3 []]], [PT 3 [PT 4 []]])
-
+-}
 {-
     display $ substitute 3 [at2, at2] af1
     display $ substitute 3 [at1, at1] af1

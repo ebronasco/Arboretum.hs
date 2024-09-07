@@ -17,8 +17,10 @@ Implementation of the post-Lie algebra of planar trees and
 pre-Lie algebra of non-planar trees.
 -}
 module RootedTree (
+    IsDecorated (..),
     IsTree (..),
     HasBracketNotation (..),
+    parseForest,
     PlanarTree (..),
     Tree (..),
     Planarable,
@@ -45,32 +47,39 @@ import Symbolics
 >>> npitfb str = fromBrackets read str :: Tree Integer
 -}
 
-class IsTree t where
-    type TreeDecoration t
+class IsDecorated a where
+    type Decoration a
 
-    root :: t -> TreeDecoration t
+class (IsDecorated t) => IsTree t where
+
+    root :: t -> Decoration t
+
     children :: t -> [t]
 
-    buildTree :: TreeDecoration t -> [t] -> t
+    buildTree :: Decoration t -> [t] -> t
 
-class HasBracketNotation t where
+class (IsDecorated t) => HasBracketNotation t where
     -- | Convert a tree to a string using bracket notation.
     -- The first argument is a function that converts the decoration
     -- to a string.
-    toBrackets :: (TreeDecoration t -> String) -> t -> String
+    toBrackets :: (Decoration t -> String) -> t -> String
 
-    fromBrackets :: (String -> TreeDecoration t) -> String -> t
+    -- | Convert a string to a tree using bracket notation.
+    fromBrackets :: (String -> Decoration t) -> String -> t
 
 {- |
-  Every tree can be written in bracket notation.
+  Every tree can be written and constructed from a string using
+  the bracket notation.
 
 Example:
 
 >>> f r = "(" ++ (show r) ++ ")"
 >>> toBrackets f $ itfb "1[2,3]"
 "(1)[(2),(3)]"
+>>> fromBrackets read "(1)[(2),3[04,05],(6)]" :: Tree Integer
+1[2,3[4,5],6]
 -}
-instance (IsTree t, TreeDecoration t ~ d, Show d) => HasBracketNotation t where
+instance (IsDecorated t, IsTree t) => HasBracketNotation t where
     toBrackets f t =
         f (root t)
             ++ ( case children t of
@@ -78,51 +87,68 @@ instance (IsTree t, TreeDecoration t ~ d, Show d) => HasBracketNotation t where
                     _ -> "[" ++ intercalate "," (map (toBrackets f) (children t)) ++ "]"
                )
 
-    fromBrackets decFromStr = evalState parseTree
-      where
-        parseTree :: State String t
-        parseTree = do
-            dec <- parseDecoration
+    fromBrackets decFromStr = evalState (parseTree decFromStr)
 
-            str <- get
+{- 
+  The functions @parseTree@, @parseDecoration@, and @parseForest@ are
+  used to parse a string into a tree or forest using the bracket
+  notation. They are placed outside the instance definition to allow
+  other instances to use them.
 
-            case str of
-                [] -> return $ buildTree dec []
-                ('[' : str') -> do
-                    put str'
-                    chldrn <- parseForest
-                    return $ buildTree dec chldrn
-                (',' : str') -> do
-                    put str'
-                    return $ buildTree dec []
-                (']' : str') -> do
-                    put str'
-                    return $ buildTree dec []
-                _ -> error "fromBrackets: invalid input"
+Examples:
 
-        parseDecoration :: State String (TreeDecoration t)
-        parseDecoration = do
-            str <- get
-            let (dec', str') = span (\x -> x `notElem` ",[]") str
+>>> evalState (parseTree read) "1[2]"
+1[2]
+>>> evalState (parseForest read) "1[2],3[4,5[6]],7"
+[1[2],3[4,5[6]],7]
+>>> evalState (parseDecoration read) "1234["
+1234
+-}
+parseTree :: (IsTree t) => (String -> Decoration t) -> State String t
+parseTree decFromStr = do
+    dec <- parseDecoration decFromStr
+
+    str <- get
+
+    case str of
+        [] -> return $ buildTree dec []
+        ('[' : str') -> do
+            put str'
+            chldrn <- parseForest decFromStr
+            return $ buildTree dec chldrn
+        (',' : str') -> do
+            put str'
+            return $ buildTree dec []
+        (']' : str') -> do
+            put str'
+            return $ buildTree dec []
+        _ -> error "fromBrackets: invalid input"
+
+parseDecoration :: (String -> d) -> State String d
+parseDecoration decFromStr = do
+    str <- get
+    let (dec', str') = span (\x -> x `notElem` ",[]") str
+    case dec' of
+        [] -> error "fromBrackets: empty decoration"
+        _ -> do
             put str'
             return $ decFromStr dec'
 
-        parseForest :: State String [t]
-        parseForest = do
-            str <- get
-            case str of
-                [] -> return []
-                (']' : str') -> do
-                    put str'
-                    return []
-                (',' : str') -> do
-                    put str'
-                    chldrn <- parseForest
-                    return chldrn
-                _ -> do 
-                    chld <- parseTree
-                    chldrn <- parseForest
-                    return $ chld : chldrn
+parseForest :: (IsTree t) => (String -> Decoration t) -> State String [t]
+parseForest decFromStr = do
+    str <- get
+    case str of
+        [] -> return []
+        (']' : str') -> do
+            put str'
+            return []
+        (',' : str') -> do
+            put str'
+            return []
+        _ -> do 
+            chld <- parseTree decFromStr
+            chldrn <- parseForest decFromStr
+            return $ chld : chldrn
                
 ---------------------------------------------------------------------
 
@@ -139,9 +165,10 @@ data PlanarTree d = PT
     }
     deriving (Eq)
 
-instance IsTree (PlanarTree d) where
-    type TreeDecoration (PlanarTree d) = d
+instance IsDecorated (PlanarTree d) where
+    type Decoration (PlanarTree d) = d
 
+instance IsTree (PlanarTree d) where
     root = planarRoot
     children = planarChildren
 
@@ -199,9 +226,10 @@ data Tree d = T
     }
     deriving (Eq)
 
-instance (Ord d) => IsTree (Tree d) where
-    type TreeDecoration (Tree d) = d
+instance IsDecorated (Tree d) where
+    type Decoration (Tree d) = d
 
+instance (Ord d) => IsTree (Tree d) where
     root = nonplanarRoot
     children = MS.toAscList . nonplanarChildren
 
@@ -339,8 +367,8 @@ instance
     , Eq (VectorScalar t)
     , Eq t
     , Graded t
-    , Eq (TreeDecoration t)
-    , Graded (TreeDecoration t)
+    , Eq (Decoration t)
+    , Graded (Decoration t)
     )
     => Graftable [t]
     where
@@ -361,9 +389,9 @@ instance
     , Eq t
     , Graded t
     , Ord t
-    , Eq (TreeDecoration t)
-    , Graded (TreeDecoration t)
-    , Ord (TreeDecoration t)
+    , Eq (Decoration t)
+    , Graded (Decoration t)
+    , Ord (Decoration t)
     )
     => Graftable (MS.MultiSet t)
     where
@@ -386,8 +414,8 @@ gl
        , Eq (VectorScalar t)
        , Eq t
        , Graded t
-       , Eq (TreeDecoration t)
-       , Graded (TreeDecoration t)
+       , Eq (Decoration t)
+       , Graded (Decoration t)
        )
     => [t]
     -> [t]

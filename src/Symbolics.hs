@@ -128,8 +128,9 @@ pattern k :*^ a <- ScalarProduct k a
 
 {-# COMPLETE (:*^) #-}
 
--- | A scalar product is defined to be a pair of a scalar (@Num@) and
--- a basis element.
+{- | A scalar product is defined to be a pair of a scalar (@Num@) and
+a basis element.
+-}
 data ScalarProduct k a = ScalarProduct
     { scalar :: k
     , basisElement :: a
@@ -172,8 +173,9 @@ pattern t :+ s <- Sum _ t s
 
 {-# COMPLETE (:+), Zero #-}
 
--- | A sum is assumed to have a finite number of terms and a grading
--- associated to it.
+{- | A sum is assumed to have a finite number of terms and a grading
+associated to it.
+-}
 data Sum k a = Sum Integer (ScalarProduct k a) (Sum k a) | Zero
 
 {- |
@@ -445,8 +447,9 @@ infixr 5 &:
 (&:) :: Sum k a -> Vector k a -> Vector k a
 (&:) = Vector
 
--- | Two vectors are equal if each pair of sums with equal grading
--- are equal.
+{- | Two vectors are equal if each pair of sums with equal grading
+are equal.
+-}
 instance
     ( Num k
     , Eq k
@@ -1204,12 +1207,13 @@ deshuffleCoproduct
        , IsVector a
        , Num (VectorScalar a)
        , Eq (VectorScalar a)
+       , IsVector v
+       , VectorScalar v ~ VectorScalar a
+       , VectorBasis v ~ [a]
        )
-    => [a]
+    => v
     -> Vector (VectorScalar a) ([a], [a])
-deshuffleCoproduct =
-    product
-        . map (\b -> vector ([], [b]) + vector ([b], []))
+deshuffleCoproduct = morphism (\b -> 1*^(mempty, [b]) +: 1*^([b], mempty) +: Zero) . vector
 
 {- |
   Takes a function with two arguments and extends it to a bilinear

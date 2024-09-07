@@ -5,7 +5,7 @@
 
 {- |
 Module      : AromaticTree
-Description : Implementation of planar/non-planar aromatic trees, forests, their grafting, divergence, and substitution.
+Description : Implementation of non-planar aromatic trees, forests, their grafting, divergence, and substitution.
 Copyright   : (c) University of Geneva, 2024
 License     : MIT
 Maintainer  : Eugen Bronasco (ebronasco@gmail.com)
@@ -13,23 +13,14 @@ Stability   : experimental
 -}
 module AromaticTree (
     Cycle (Cycle),
-    PlanarAroma (PA),
-    planarAroma,
-    unPlanarAroma,
-    elemComp,
-    branchPaths,
     divergence,
-    AromaticPlanarTree,
     AromaticTree,
-    AromaticPlanarForest,
     AromaticForest,
-    Aroma (A),
+    Aroma,
     aroma,
-    unAroma,
-    mark,
-    unmark,
 ) where
 
+import Control.Monad.State (evalState)
 import Data.Bifunctor (second)
 import qualified Data.List as L
 import Data.Maybe (fromJust)
@@ -40,7 +31,19 @@ import RootedTree
 import Symbolics
 import SyntacticTree
 
-{- | Orbit of a list under cyclic permutation.
+{- $setup
+  Non-Planar Integer Tree From Brackets
+>>> npitfb str = fromBrackets read str :: Tree Integer
+-}
+
+----------------------------------------------------------------------
+
+-- * Cycles
+
+----------------------------------------------------------------------
+
+{- |
+  Orbit of a list under cyclic permutation.
 
 Examples:
 
@@ -58,7 +61,8 @@ circulate l =
 -- | A cycle is a list of elements up to cyclic permutation.
 newtype Cycle a = Cycle {unCycle :: [a]}
 
-{- | Check if two cycles are equal up to cyclic permutation.
+{- |
+  Check if two cycles are equal up to cyclic permutation.
 
 Examples:
 
@@ -68,9 +72,19 @@ True
 False
 -}
 instance (Eq a) => Eq (Cycle a) where
-    (Cycle a) == (Cycle b) = a `L.elem` circulate b
+    (Cycle a) == (Cycle b) = a `elem` circulate b
 
--- | Compare two cycles by comparing the maximums of their cyclic permutation orbits.
+{- |
+  Compare two cycles by comparing the maximums of their cyclic
+  permutation orbits.
+
+Examples:
+
+>>> compare (Cycle [1, 2, 3]) (Cycle [3, 1, 2])
+EQ
+>>> compare (Cycle [1, 3, 2]) (Cycle [3, 1, 2])
+GT
+-}
 instance (Ord a) => Ord (Cycle a) where
     compare (Cycle a) (Cycle b) = compare (maximum $ circulate a) (maximum $ circulate b)
 
@@ -83,48 +97,75 @@ instance (Show a) => Show (Cycle a) where
 instance (Graded a) => Graded (Cycle a) where
     grading (Cycle l) = sum $ map grading l
 
-newtype PlanarAroma d = PA {unPA :: Cycle (PlanarTree d)}
-
-planarAroma :: [PlanarTree d] -> PlanarAroma d
-planarAroma = PA . Cycle
-
-unPlanarAroma :: PlanarAroma d -> [PlanarTree d]
-unPlanarAroma = unCycle . unPA
-
-instance (Eq d) => Eq (PlanarAroma d) where
-    (PA a) == (PA b) = a == b
-
-instance (Show d) => Show (PlanarAroma d) where
-    show (PA l) = show l
-
-instance (Graded d) => Graded (PlanarAroma d) where
-    grading (PA l) = grading l
-
-instance (Eq d, Graded d) => IsVector (PlanarAroma d) where
-    type VectorScalar (PlanarAroma d) = Integer
-    type VectorBasis (PlanarAroma d) = PlanarAroma d
+instance (IsVector a) => IsVector (Cycle a) where
+    type VectorScalar (Cycle a) = VectorScalar a
+    type VectorBasis (Cycle a) = Cycle a
 
     vector = vector . (1 *^)
 
--- * Planar aromatic forests
+----------------------------------------------------------------------
 
--- Relies on the fact that @texify@ of @PlanarTree@ is @\\forest{...}@.
-instance (Show d, Texifiable d, Eq d) => Texifiable (PlanarAroma d) where
-    texify (PA (Cycle l)) = "\\forest{(" ++ L.intercalate "," (map bracketNotation l) ++ ")}"
-      where
-        bracketNotation = init . fromJust . L.stripPrefix "\\forest{" . texify
+-- * Divergence
 
--- | A planar aromatic tree is a pair of a list of aromas and a planar rooted tree.
-type AromaticPlanarTree d =
-    ( [PlanarAroma d]
-    , PlanarTree d
+----------------------------------------------------------------------
+
+{- | Compute the list of all pairs of an element and the rest of the list.
+
+Examples:
+
+>>> elemComp [1, 2, 3]
+[(1,[2,3]),(2,[1,3]),(3,[1,2])]
+-}
+elemComp :: [a] -> [(a, [a])]
+elemComp [] = []
+elemComp (x : xs) = (x, xs) : map (second (x :)) (elemComp xs)
+
+{- | Build forests along the paths from the root to the vertices.
+
+Examples:
+
+>>> branchPaths $ npitfb "1[2,3]"
+[[1[2,3]],[1[3],2],[1[2],3]]
+>>> branchPaths $ npitfb "1[2[3],4]"
+[[1[2[3],4]],[1[4],2[3]],[1[4],2,3],[1[2[3]],4]]
+-}
+branchPaths :: (IsTree t) => t -> [[t]]
+branchPaths t = [t] : recurs (map (second $ buildTree (root t)) $ elemComp $ children t)
+  where
+    recurs = concatMap (\(x, y) -> map (y :) (branchPaths x))
+
+
+type PlanarAromatic t =
+    ( [Cycle t]
+    , [t]
     )
 
--- | A planar aromatic forest is a pair of a list of aromas and a list of planar rooted trees.
-type AromaticPlanarForest d =
-    ( [PlanarAroma d]
-    , [PlanarTree d]
-    )
+
+{- | Compute the divergence of a planar aromatic tree by connecting the root to the vertices.
+
+Examples:
+
+>>> divergence $ ([], npitfb "1[2,3]")
+(1 *^ (1[2,3]) + 1 *^ (1[3],2) + 1 *^ (1[2],3))_3
+>>> divergence $ ([], npitfb "1[2[3],4]")
+(1 *^ (1[2[3],4]) + 1 *^ (1[4],2[3]) + 1 *^ (1[4],2,3) + 1 *^ (1[2[3]],4))_4
+>>> divergence ([PA $ Cycle [PT 1 []]], PT 1 [])
+(1 *^ [(1[1])] + 1 *^ [(1),(1)])_2
+>>> divergence ([PA $ Cycle [PT 1 []]], npitfb "1[2,3]")
+(1 *^ [(1[1[2,3]])] + 1 *^ [(1[2,3]),(1)] + 1 *^ [(1[3],2),(1)] + 1 *^ [(1[2],3),(1)])_4
+-}
+divergence 
+    :: ( IsDecorated t
+       , Eq (Decoration t)
+       , Graded (Decoration t)
+       , IsTree t
+       , Vector t
+       )
+    => PlanarAromatic t
+    -> Vector (VectorScalar t) [Cycle t]
+divergence (ma, t : ts) = ([t] `graft` (ma, ts)) + linear ((,ts) . (: ma)) (divergenceT t)
+  where 
+    divergenceT t = sum $ map (vector . Cycle) $ branchPaths t
 
 -- * Grafting
 
@@ -142,15 +183,18 @@ Examples:
 (1 *^ [(1,1),(1,2[1])] + 1 *^ [(1,1),(1[1],2)] + 2 *^ [(1,1[1]),(1,2)])_5
 -}
 graftOnMultiAroma
-    :: ( Eq d
-       , Graded d
+    :: ( IsDecorated t
+       , Eq (Decoration t)
+       , Graded (Decoration t)
+       , IsTree t
+       , Vector t
        )
-    => [PlanarTree d]
-    -> [PlanarAroma d]
-    -> Vector Integer [PlanarAroma d]
+    => [t]
+    -> [Cycle t]
+    -> Vector (VectorScalar t) [Cycle t]
 graftOnMultiAroma [] ma = vector (1 *^ ma)
 graftOnMultiAroma _ [] = vector Zero
-graftOnMultiAroma f [a] = linear ((1 *^) . (:[]) . planarAroma) $ (f `graft`) $ unPlanarAroma a
+graftOnMultiAroma f [a] = linear ((1 *^) . (:[]) . Cycle) $ (f `graft`) $ unCycle a
 graftOnMultiAroma f (a : ma) = linear perCoproductTerm $ deshuffleCoproduct f
   where
     perCoproductTerm (x, y) = (x `graftOnMultiAroma` [a]) * (y `graftOnMultiAroma` ma)
@@ -162,124 +206,24 @@ Examples:
 >>> graft ([PA $ Cycle [PT 1 []]], [PT 1 []]) ([PA $ Cycle [PT 1 []]], [PT 1 []])
 (1 *^ ([(1),(1)],[1[1]]) + 1 *^ ([(1),(1[1])],[1]))_4
 -}
-instance (Eq d, Graded d) => Graftable (AromaticPlanarForest d) where
+instance
+    ( IsDecorated t
+    , Eq (Decoration t)
+    , Graded (Decoration t)
+    , IsTree t
+    , Vector t
+    )
+    => Graftable (PlanarAromatic t) where
     graft (ma1, f1) (ma2, f2) = vector (ma1, []) * linear perCoproductTerm (deshuffleCoproduct f1)
       where
         perCoproductTerm (x, y) = linear (,[]) (x `graftOnMultiAroma` ma2) * linear ([],) (y `graft` f2)
 
--- * Divergence
 
-{- | Compute the list of all pairs of an element and the rest of the list.
 
-Examples:
-
->>> elemComp [1, 2, 3]
-[(1,[2,3]),(2,[1,3]),(3,[1,2])]
--}
-elemComp :: [a] -> [(a, [a])]
-elemComp [] = []
-elemComp (x : xs) = (x, xs) : map (second (x :)) (elemComp xs)
-
-{- | Build forests along the paths from the root to the vertices.
-
-Examples:
-
->>> branchPaths (T 1 [T 2 [], T 3 []])
-[[1[2,3]],[1[3],2],[1[2],3]]
->>> branchPaths (T 1 [T 2 [T 3 []], T 4 []])
-[[1[2[3],4]],[1[4],2[3]],[1[4],2,3],[1[2[3]],4]]
--}
-branchPaths :: (IsTree t) => t -> [[t]]
-branchPaths t = [t] : recurs (map (second $ buildTree (root t)) $ elemComp $ children t)
-  where
-    recurs = concatMap (\(x, y) -> map (y :) (branchPaths x))
-
-{- | Compute the divergence of a planar aromatic tree by connecting the root to the vertices.
-
-Examples:
-
->>> divergence $ nonplanar ([], PT 1 [PT 2 [], PT 3 []])
-(1 *^ (1[2,3]) + 1 *^ (1[3],2) + 1 *^ (1[2],3))_3
->>> divergence $ nonplanar ([], PT 1 [PT 2 [PT 3 []], PT 4 []])
-(1 *^ (1[2[3],4]) + 1 *^ (1[4],2[3]) + 1 *^ (1[4],2,3) + 1 *^ (1[2[3]],4))_4
->>> divergence ([PA $ Cycle [PT 1 []]], PT 1 [])
-(1 *^ [(1[1])] + 1 *^ [(1),(1)])_2
->>> divergence ([PA $ Cycle [PT 1 []]], PT 1 [PT 2 [], PT 3 []])
-(1 *^ [(1[1[2,3]])] + 1 *^ [(1[2,3]),(1)] + 1 *^ [(1[3],2),(1)] + 1 *^ [(1[2],3),(1)])_4
--}
-divergence :: (Eq d, Graded d) => AromaticPlanarTree d -> Vector Integer [PlanarAroma d]
-divergence (ma, t) = ([t] `graftOnMultiAroma` ma) + linear (: ma) (divergenceT t)
-  where 
-    divergenceT t = vector $ fromListS $ map ((1 *^) . planarAroma) $ branchPaths t
-
--- * Non-planar aromatic forests
-
-newtype Aroma d = A {unA :: Cycle (Tree d)}
-
-aroma :: [Tree d] -> Aroma d
-aroma = A . Cycle
-
-unAroma :: Aroma d -> [Tree d]
-unAroma = unCycle . unA
-
-instance (Eq d) => Eq (Aroma d) where
-    (A a) == (A b) = a == b
-
-instance (Ord d) => Ord (Aroma d) where
-    compare (A a) (A b) = compare a b
-
-instance (Show d, Ord d) => Show (Aroma d) where
-    show (A l) = show l
-
-instance (Graded d, Ord d) => Graded (Aroma d) where
-    grading (A l) = grading l
-
-instance (Eq d, Graded d, Ord d) => IsVector (Aroma d) where
-    type VectorScalar (Aroma d) = Integer
-    type VectorBasis (Aroma d) = Aroma d
-
-    vector = vector . (1 *^)
-
-type AromaticTree d =
-    ( MS.MultiSet (Aroma d)
-    , Tree d
+type Aromatic t =
+    ( MS.MultiSet (Cycle t)
+    , MS.MultiSet t
     )
-
-type AromaticForest d =
-    ( MS.MultiSet (Aroma d)
-    , MS.MultiSet (Tree d)
-    )
-
-instance (Ord d) => Planarable (Aroma d) where
-    type Planar (Aroma d) = PlanarAroma d
-
-    nonplanar = aroma . (map nonplanar) . unPlanarAroma
-    planar = planarAroma . (map planar) . unAroma
-
-instance (Ord d) => Planarable (MS.MultiSet (Aroma d)) where
-    type Planar (MS.MultiSet (Aroma d)) = [PlanarAroma d]
-
-    {- | forget the order of aromas in a multi-aroma.
-
-    examples:
-
-    >>> ma1 = [aroma [PT 1 []], aroma [PT 2 []]]
-    >>> ma2 = [aroma [PT 2 []], aroma [PT 1 []]]
-    >>> ma1 == ma2
-    False
-    >>> nonplanar ma1 == nonplanar ma2
-    True
-    -}
-    nonplanar = MS.fromList . (map nonplanar)
-
-    {- | Choose a canonical planar representation of a multi-aroma.
-
-    Examples:
-
-    >>> planar $ MS.fromList [aroma [T 1 MS.empty], aroma [T 2 MS.empty]]
-    [(1),(2)]
-    -}
-    planar = map planar . MS.toList
 
 instance (Planarable a, Planarable b) => Planarable (a, b) where
     type Planar (a, b) = (Planar a, Planar b)
@@ -314,6 +258,15 @@ instance (Planarable a, Planarable b) => Planarable (a, b) where
     -}
     planar (x, y) = (planar x, planar y)
 
+instance (IsTree t) => IsDecorated (Cycle t) where
+    type Decoration (Cycle t) = Decoration t
+
+instance (IsTree t) => HasBracketNotation (Cycle t) where
+    toBrackets f a = "(" ++ init (tail $ show $ map (toBrackets f) $ unCycle a) ++ ")"
+
+    fromBrackets f = Cycle . (evalState $ parseForest f) . init . tail
+
+
 -- * Substitution
 
 -- ** Mark
@@ -338,8 +291,8 @@ class Markable a where
     mark :: a -> Marked' a
     unmark :: Marked' a -> a
 
-instance Markable (PlanarTree d) where
-    type Marked' (PlanarTree d) = PlanarTree (Marked d)
+instance (IsTree t) => Markable t where
+    type Marked' t = PlanarTree (Marked d)
 
     mark (PT a bs) = PT (Marked a) (mark bs)
     unmark (PT (Marked a) bs) = PT a (unmark bs)
