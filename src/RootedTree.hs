@@ -50,6 +50,9 @@ import Symbolics
 class IsDecorated a where
     type Decoration a
 
+instance (IsDecorated t) => IsDecorated [t] where
+    type Decoration [t] = Decoration t
+
 class (IsDecorated t) => IsTree t where
 
     root :: t -> Decoration t
@@ -67,27 +70,9 @@ class (IsDecorated t) => HasBracketNotation t where
     -- | Convert a string to a tree using bracket notation.
     fromBrackets :: (String -> Decoration t) -> String -> t
 
-{- |
-  Every tree can be written and constructed from a string using
-  the bracket notation.
-
-Example:
-
->>> f r = "(" ++ (show r) ++ ")"
->>> toBrackets f $ itfb "1[2,3]"
-"(1)[(2),(3)]"
->>> fromBrackets read "(1)[(2),3[04,05],(6)]" :: Tree Integer
-1[2,3[4,5],6]
--}
-instance (IsDecorated t, IsTree t) => HasBracketNotation t where
-    toBrackets f t =
-        f (root t)
-            ++ ( case children t of
-                    [] -> ""
-                    _ -> "[" ++ intercalate "," (map (toBrackets f) (children t)) ++ "]"
-               )
-
-    fromBrackets decFromStr = evalState (parseTree decFromStr)
+instance (IsTree t, HasBracketNotation t) => HasBracketNotation [t] where
+    toBrackets f = intercalate "," . map (toBrackets f)
+    fromBrackets decFromStr = evalState (parseForest decFromStr)
 
 {- 
   The functions @parseTree@, @parseDecoration@, and @parseForest@ are
@@ -149,7 +134,7 @@ parseForest decFromStr = do
             chld <- parseTree decFromStr
             chldrn <- parseForest decFromStr
             return $ chld : chldrn
-               
+
 ---------------------------------------------------------------------
 
 -- * Planar trees
@@ -173,6 +158,30 @@ instance IsTree (PlanarTree d) where
     children = planarChildren
 
     buildTree = PT
+
+{- |
+  Every tree can be written and constructed from a string using
+  the bracket notation.
+
+Example:
+
+>>> f r = "(" ++ (show r) ++ ")"
+>>> toBrackets f $ itfb "1[2,3]"
+"(1)[(2),(3)]"
+>>> fromBrackets read "(1)[(2),3[04,05],(6)]" :: Tree Integer
+1[2,3[4,5],6]
+-}
+instance HasBracketNotation (PlanarTree d) where
+    toBrackets f t =
+        f (root t)
+            ++ ( case children t of
+                    [] -> ""
+                    _ -> "[" ++ intercalate "," (map (toBrackets f) (children t)) ++ "]"
+               )
+
+    fromBrackets decFromStr = evalState (parseTree decFromStr)
+
+
 
 {- |
   LaTeX notation for planar trees using @planarforest.py@ TeX package.
@@ -234,6 +243,28 @@ instance (Ord d) => IsTree (Tree d) where
     children = MS.toAscList . nonplanarChildren
 
     buildTree r = T r . MS.fromList
+
+{- |
+  Every tree can be written and constructed from a string using
+  the bracket notation.
+
+Example:
+
+>>> f r = "(" ++ (show r) ++ ")"
+>>> toBrackets f $ itfb "1[2,3]"
+"(1)[(2),(3)]"
+>>> fromBrackets read "(1)[(2),3[04,05],(6)]" :: Tree Integer
+1[2,3[4,5],6]
+-}
+instance (Ord d) => HasBracketNotation (Tree d) where
+    toBrackets f t =
+        f (root t)
+            ++ ( case children t of
+                    [] -> ""
+                    _ -> "[" ++ intercalate "," (map (toBrackets f) (children t)) ++ "]"
+               )
+
+    fromBrackets decFromStr = evalState (parseTree decFromStr)
 
 {- |
   LaTeX notation for trees using @planarforest.py@ TeX package.
