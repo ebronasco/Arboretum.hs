@@ -9,4 +9,5 @@ main =
         , "src/RootedTree.hs"
         , "src/SyntacticTree.hs"
         , "src/AromaticTree.hs"
+        , "src/Graph.hs"
         ]

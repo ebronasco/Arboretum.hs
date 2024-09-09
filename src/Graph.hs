@@ -65,8 +65,11 @@ import Symbolics (
     vectorFromNonDecList,
     (*^),
  )
+----------------------------------------------------------------------
 
 -- * Graphs
+
+----------------------------------------------------------------------
 
 {- |
   To define a graph, we need to define a graph edge first. A graph
@@ -131,7 +134,8 @@ class
     -- | Add an edge to a graph.
     addEdge :: Edge g -> g -> g
 
-{- | Check if a vertex is in a graph.
+{- |
+  Check if a vertex is in a graph.
 
 Example:
 
@@ -143,7 +147,8 @@ False
 vertexOf :: (Eq a, Graph g, Vertex g ~ a) => a -> g -> Bool
 vertexOf v g = v `elem` vertices g
 
-{- | Naive implementation of a graph given by a multiset of vertices
+{- |
+  Naive implementation of a graph given by a multiset of vertices
 and a multiset of edges.
 -}
 data IntegerGraph
@@ -151,7 +156,8 @@ data IntegerGraph
         (MS.MultiSet Integer)
         (MS.MultiSet (Integer, Integer))
 
-{- | A constructor of the @IntegerGraph@ type.
+{- |
+  A constructor of the @IntegerGraph@ type.
 
 Example:
 
@@ -161,7 +167,8 @@ IntegerGraph(V=[1,2,3], E=[(1,2),(2,3)])
 integerGraph :: [Integer] -> [(Integer, Integer)] -> IntegerGraph
 integerGraph vs es = IG (MS.fromList vs) (MS.fromList es)
 
-{- | The @IntegerGraph@ type is an instance of the @Graph@ typeclass.
+{- |
+  The @IntegerGraph@ type is an instance of the @Graph@ typeclass.
 
 Example:
 
@@ -197,9 +204,14 @@ instance Show IntegerGraph where
         vs = show $ MS.toList $ vertices g
         es = show $ MS.toList $ edges g
 
+----------------------------------------------------------------------
+
 -- * Rooted graphs
 
-{- | A typeclass for rooted graphs which have a distinguished vertex
+----------------------------------------------------------------------
+
+{- |
+  A typeclass for rooted graphs which have a distinguished vertex
 called the root.
 -}
 class (Graph g) => RootedGraph g where
@@ -239,7 +251,11 @@ rooted g r =
         then R r g
         else error "Root vertex not in graph"
 
+----------------------------------------------------------------------
+
 -- * Grafting
+
+----------------------------------------------------------------------
 
 -- | Two integer graphs are equal if their vertices and edges are equal.
 instance Eq IntegerGraph where
@@ -249,7 +265,8 @@ instance Eq IntegerGraph where
 instance Graded IntegerGraph where
     grading = toInteger . length . vertices
 
-{- | Grafing of two graphs.
+{- |
+  Grafing of two graphs.
 
 Example:
 
@@ -273,7 +290,8 @@ graftGraph rg1 g2 =
             MS.toList $
                 vertices g2
 
-{- | Grafing of a rooted graph to a graph at a given vertex.
+{- |
+  Grafing of a rooted graph to a graph at a given vertex.
 
 Example:
 

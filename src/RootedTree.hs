@@ -53,6 +53,18 @@ class IsDecorated a where
 instance (IsDecorated t) => IsDecorated [t] where
     type Decoration [t] = Decoration t
 
+instance (IsDecorated t) => IsDecorated (MS.MultiSet t) where
+    type Decoration (MS.MultiSet t) = Decoration t
+
+instance
+    ( IsDecorated t1
+    , IsDecorated t2
+    , Decoration t1 ~ Decoration t2
+    )
+    => IsDecorated (t1, t2)
+    where
+    type Decoration (t1, t2) = Decoration t1
+
 class (IsDecorated t) => IsTree t where
 
     root :: t -> Decoration t
@@ -73,6 +85,10 @@ class (IsDecorated t) => HasBracketNotation t where
 instance (IsTree t, HasBracketNotation t) => HasBracketNotation [t] where
     toBrackets f = intercalate "," . map (toBrackets f)
     fromBrackets decFromStr = evalState (parseForest decFromStr)
+
+instance (Ord t, IsTree t, HasBracketNotation t) => HasBracketNotation (MS.MultiSet t) where
+    toBrackets f = intercalate "," . map (toBrackets f) . MS.toList
+    fromBrackets decFromStr = MS.fromList . evalState (parseForest decFromStr)
 
 {- 
   The functions @parseTree@, @parseDecoration@, and @parseForest@ are
@@ -347,8 +363,8 @@ instance (Ord d) => Planarable (Tree d) where
     --
     nonplanar (PT r xs) = T r (nonplanar xs)
 
-instance (Ord d) => Planarable (MS.MultiSet (Tree d)) where
-    type Planar (MS.MultiSet (Tree d)) = [PlanarTree d]
+instance (Ord t, Planarable t) => Planarable (MS.MultiSet t) where
+    type Planar (MS.MultiSet t) = [Planar t]
 
     -- \| Choose a canonical planar representation of a non-planar
     -- forest.
