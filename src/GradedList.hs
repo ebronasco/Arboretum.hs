@@ -22,8 +22,9 @@ module GradedList (
 
 import qualified Data.MultiSet as MS
 
--- | The @Graded@ typeclass is used to define the grading of an
--- element. 
+{- | The @Graded@ typeclass is used to define the grading of an
+element.
+-}
 class Graded t where
     grading :: t -> Integer
 
@@ -45,7 +46,7 @@ instance Graded Integer where
       where
         abs_n = abs n
 
-{- | 
+{- |
   @Char@ can be useful to denote variables like @'x', 'y', 'z'@ when
   using @Symbolics.hs@. The grading of a character is 1.
 
@@ -86,9 +87,9 @@ Example:
 4
 -}
 instance (Graded a) => Graded (MS.MultiSet a) where
-  grading = grading . MS.toList
+    grading = grading . MS.toList
 
-{- | 
+{- |
   The tuple of two elements is used to represent the tensor product
   in @Symbolics.hs@. The grading of a tuple is the sum of the gradings
   of its elements.
@@ -150,14 +151,13 @@ Example:
 [[1,2],[10,10,12,20],[201,200]]
 -}
 groupByGradingFrom
-    :: Graded a
+    :: (Graded a)
     => Integer
     -> NonDecreasingList a
     -> [HomoList a]
 groupByGradingFrom _ (NDecList []) = []
 groupByGradingFrom k (NDecList l) = case span ((== k) . grading) l of
     (pre, post) -> pre : groupByGradingFrom (k + 1) (NDecList post)
-        
 
 {- |
   Same as @groupByGradingFrom@ but uses the grading of the elements
@@ -204,7 +204,7 @@ getElementsFromLevel _ Empty_ = []
 getElementsFromLevel 0 (T_ el _) = [el]
 getElementsFromLevel i (T_ _ subtrees) = concatMap (getElementsFromLevel (i - 1)) subtrees
 
-_flattenTree :: Eq a => Tree_ a -> [[[a]]]
+_flattenTree :: (Eq a) => Tree_ a -> [[[a]]]
 _flattenTree Empty_ = []
 _flattenTree tree_ = takeWhile (/= []) $ map (`getElementsFromLevel` tree_) [0 ..]
 
@@ -220,7 +220,7 @@ Example:
 >>> distributeLists [[1, 2], [11, 12], [21, 22]]
 [[1,11,21],[2,11,21],[1,12,21],[1,11,22],[2,12,21],[2,11,22],[1,12,22],[2,12,22]]
 -}
-distributeLists :: Eq a => [[a]] -> [[a]]
+distributeLists :: (Eq a) => [[a]] -> [[a]]
 distributeLists = concat . _flattenTree . _buildTree 1
 
 {- |
@@ -237,5 +237,5 @@ Example:
 >>> distributeGradedLists [[1, 2, 3], [11, 12], [21, 22]]
 [[[1,11,21]],[[2,11,21],[1,12,21],[1,11,22]],[[3,11,21],[2,12,21],[2,11,22],[1,12,22]],[[3,12,21],[3,11,22],[2,12,22]],[[3,12,22]]]
 -}
-distributeGradedLists :: Eq a => [[a]] -> [[[a]]]
+distributeGradedLists :: (Eq a) => [[a]] -> [[[a]]]
 distributeGradedLists = _flattenTree . _buildTree 1

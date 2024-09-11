@@ -27,12 +27,12 @@ import GradedList (
     grading,
  )
 import Symbolics (
-    Vector (..),
     ScalarProduct,
     Sum (Zero),
+    Vector (..),
     lengthV,
-    toListV,
     toListS,
+    toListV,
     pattern (:*^),
  )
 import System.Directory (copyFile)

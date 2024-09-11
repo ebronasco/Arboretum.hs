@@ -41,10 +41,16 @@ import Symbolics
 
 {- $setup
   Integer Tree From Brackets
->>> itfb str = fromBrackets read str :: Tree Integer
+>>> itfb str = fromBrackets read str :: PlanarTree Integer
+
+  Integer Forest From Brackets
+>>> iffb str = fromBrackets read str :: [PlanarTree Integer]
 
   Non-Planar Integer Tree From Brackets
 >>> npitfb str = fromBrackets read str :: Tree Integer
+
+  Non-Planar Integer Forest From Brackets
+>>> npiffb str = fromBrackets read str :: MS.MultiSet (Tree Integer)
 -}
 
 class IsDecorated a where
@@ -66,7 +72,6 @@ instance
     type Decoration (t1, t2) = Decoration t1
 
 class (IsDecorated t) => IsTree t where
-
     root :: t -> Decoration t
 
     children :: t -> [t]
@@ -90,7 +95,7 @@ instance (Ord t, IsTree t, HasBracketNotation t) => HasBracketNotation (MS.Multi
     toBrackets f = intercalate "," . map (toBrackets f) . MS.toList
     fromBrackets decFromStr = MS.fromList . evalState (parseForest decFromStr)
 
-{- 
+{-
   The functions @parseTree@, @parseDecoration@, and @parseForest@ are
   used to parse a string into a tree or forest using the bracket
   notation. They are placed outside the instance definition to allow
@@ -128,7 +133,7 @@ parseTree decFromStr = do
 parseDecoration :: (String -> d) -> State String d
 parseDecoration decFromStr = do
     str <- get
-    let (dec', str') = span (\x -> x `notElem` ",[]") str
+    let (dec', str') = span (`notElem` ",[]") str
     case dec' of
         [] -> error "fromBrackets: empty decoration"
         _ -> do
@@ -146,7 +151,7 @@ parseForest decFromStr = do
         (',' : str') -> do
             put str'
             return []
-        _ -> do 
+        _ -> do
             chld <- parseTree decFromStr
             chldrn <- parseForest decFromStr
             return $ chld : chldrn
@@ -196,8 +201,6 @@ instance HasBracketNotation (PlanarTree d) where
                )
 
     fromBrackets decFromStr = evalState (parseTree decFromStr)
-
-
 
 {- |
   LaTeX notation for planar trees using @planarforest.py@ TeX package.
@@ -339,53 +342,72 @@ class Planarable t where
     planar :: t -> Planar t
     nonplanar :: Planar t -> t
 
+{- |
+  Choose a canonical planar representation of a non-planar tree to get
+  a planar tree or forget the order of children in a planar tree to
+  get a non-planar tree.
+
+Example:
+
+>>> planar $ npitfb "1[2,3]"
+1[2,3]
+>>> a =  nonplanar $ itfb "1[2,3]" :: Tree Integer
+>>> b =  nonplanar $ itfb "1[3,2]"
+>>> a == b
+True
+-}
 instance (Ord d) => Planarable (Tree d) where
     type Planar (Tree d) = PlanarTree d
 
-    -- \| Choose a canonical planar representation of a non-planar
-    -- tree.
-    --
-    --    Example:
-    --
-    --    >>> planar $ npitfb "1[2,3]"
-    --    1[2,3]
-    --
     planar (T r xs) = PT r (planar xs)
 
-    -- \| Forget the order of children in a planar tree.
-    --
-    --    Example:
-    --
-    --    >>> a =  nonplanar $ itfb "1[2,3]"
-    --    >>> b =  nonplanar $ itfb "1[3,2]"
-    --    >>> a == b
-    --    True
-    --
     nonplanar (PT r xs) = T r (nonplanar xs)
 
+{- |
+  Choose a canonical planar representation of a non-planar forest to
+  get a planar forest or forget the order of trees and children in a
+  forest to get a non-planar forest.
+
+Examples:
+
+>>> planar $ npiffb "1[2,3],4"
+[1[2,3],4]
+>>> a = nonplanar $ iffb "1[2,3],4" :: MS.MultiSet (Tree Integer)
+>>> b = nonplanar $ iffb "4,1[3,2]"
+>>> a == b
+True
+-}
 instance (Ord t, Planarable t) => Planarable (MS.MultiSet t) where
     type Planar (MS.MultiSet t) = [Planar t]
 
-    -- \| Choose a canonical planar representation of a non-planar
-    -- forest.
-    --
-    --    Example:
-    --
-    --    >>> planar $ MS.fromList [npitfb "1[2,3]", npitfb "4"]
-    --    [1[2,3],4]
-    --
     planar = map planar . MS.toList
 
-    -- \| Forget the order of trees and children in a planar forest.
-    --
-    --    Example:
-    --
-    --    >>> a = nonplanar $ [itfb "1[2,3]", itfb "4"]
-    --    >>> b = nonplanar $ [itfb "4", itfb "1[3,2]"]
-    --    >>> a == b
-    --    True
-    --
     nonplanar = MS.fromList . map nonplanar
+
+{- |
+  Apply @planar@ and @nonplanar@ to both components of a pair.
+
+Examples:
+
+>>> f1 = (iffb "1[2,3]",iffb "4,5")
+>>> f2 = (iffb "1[3,2]",iffb "5,4")
+>>> f1 == f2
+False
+>>> nonplanar f1 == (nonplanar f2 :: (MS.MultiSet (Tree Integer), MS.MultiSet (Tree Integer)))
+True
+>>> af1 = (npiffb "1[2,3]",npiffb "4,5")
+>>> planar af1
+([1[2,3]],[4,5])
+>>> af2 = (npiffb "1[3,2]",npiffb "5,4")
+>>> planar af2
+([1[2,3]],[4,5])
+-}
+instance (Planarable a, Planarable b) => Planarable (a, b) where
+    type Planar (a, b) = (Planar a, Planar b)
+
+    nonplanar (x, y) = (nonplanar x, nonplanar y)
+
+    planar (x, y) = (planar x, planar y)
 
 ---------------------------------------------------------------------
 
@@ -402,8 +424,8 @@ class (IsVector a) => Graftable a where
 
 Example:
 
->>> f1 = [itfb "1[2]"]
->>> f2 = [itfb "3", itfb "4[5]"]
+>>> f1 = iffb "1[2]"
+>>> f2 = iffb "3,4[5]"
 >>> graft f1 f2
 (1 *^ [3,4[5[1[2]]]] + 1 *^ [3,4[1[2],5]] + 1 *^ [3[1[2]],4[5]])_5
 -}
@@ -449,8 +471,8 @@ instance
 
 Example:
 
->>> f1 = [itfb "1[2]"]
->>> f2 = [itfb "3", itfb "4[5]"]
+>>> f1 = iffb "1[2]"
+>>> f2 = iffb "3,4[5]"
 >>> gl f1 f2
 (1 *^ [3,4[5[1[2]]]] + 1 *^ [3,4[1[2],5]] + 1 *^ [3[1[2]],4[5]] + 1 *^ [1[2],3,4[5]])_5
 -}

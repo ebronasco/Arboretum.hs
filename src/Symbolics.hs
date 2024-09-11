@@ -1213,7 +1213,7 @@ deshuffleCoproduct
        )
     => v
     -> Vector (VectorScalar a) ([a], [a])
-deshuffleCoproduct = morphism (\b -> 1*^(mempty, [b]) +: 1*^([b], mempty) +: Zero) . vector
+deshuffleCoproduct = morphism (\b -> 1 *^ (mempty, [b]) +: 1 *^ ([b], mempty) +: Zero) . vector
 
 {- |
   Takes a function with two arguments and extends it to a bilinear

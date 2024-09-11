@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 {- |
@@ -22,7 +23,6 @@ module AromaticTree (
 import Control.Monad.State (evalState, get, put)
 import Data.Bifunctor (bimap, second)
 import qualified Data.List as L
-import Data.Maybe (fromJust)
 import qualified Data.MultiSet as MS
 import GradedList
 import Output
@@ -142,7 +142,7 @@ Examples:
 instance (IsTree t, HasBracketNotation t) => HasBracketNotation (Cycle t) where
     toBrackets f a = "(" ++ L.intercalate "," (map (toBrackets f) $ unCycle a) ++ ")"
 
-    fromBrackets f = Cycle . (fromBrackets f) . escapeParentheses
+    fromBrackets f = Cycle . fromBrackets f . escapeParentheses
       where
         escapeParentheses [] = []
         escapeParentheses str =
@@ -176,7 +176,7 @@ Examples:
 instance (IsTree t, HasBracketNotation t) => HasBracketNotation (PlanarAromatic t) where
     toBrackets f (ma, ts) =
         L.intercalate "," $
-            (map (toBrackets f) ma) ++ (map (toBrackets f) ts)
+            map (toBrackets f) ma ++ map (toBrackets f) ts
 
     fromBrackets f =
         bimap
@@ -191,13 +191,13 @@ instance (IsTree t, HasBracketNotation t) => HasBracketNotation (PlanarAromatic 
             let (aroma_str, rest') = break (== ')') rest
 
             let forest_str' =
-                    if (not $ null forest_str) && last forest_str == ','
+                    if not (null forest_str) && last forest_str == ','
                         then init forest_str
                         else forest_str
             let aroma_str' = aroma_str ++ if null rest' then "" else ")"
             let rest'' = if null rest' then "" else tail rest'
             let rest''' =
-                    if (not $ null rest'') && head rest'' == ','
+                    if not (null rest'') && head rest'' == ','
                         then tail rest''
                         else rest''
 
@@ -207,8 +207,8 @@ instance (IsTree t, HasBracketNotation t) => HasBracketNotation (PlanarAromatic 
                 [] -> return ([], [])
                 _ -> splitAromasAndTrees
 
-            let as' = if null aroma_str' then as else (aroma_str' : as)
-            let fs' = if null forest_str' then fs else (forest_str' : fs)
+            let as' = if null aroma_str' then as else aroma_str' : as
+            let fs' = if null forest_str' then fs else forest_str' : fs
 
             return (as', fs')
 
@@ -275,9 +275,10 @@ divergence
        )
     => PlanarAromatic t
     -> Vector (VectorScalar t) (PlanarAromatic t)
+divergence (_, []) = vector Zero
 divergence (ma, t : ts) = (([], [t]) `graft` (ma, ts)) + linear ((,ts) . (: ma)) (divergenceT t)
   where
-    divergenceT t = mconcat $ map (vector . Cycle) $ branchPaths t
+    divergenceT t' = mconcat $ map (vector . Cycle) $ branchPaths t'
 
 ----------------------------------------------------------------------
 
@@ -367,31 +368,6 @@ instance (Planarable t) => Planarable (Cycle t) where
     nonplanar = Cycle . map nonplanar . unCycle
 
 {- |
-  Apply @planar@ and @nonplanar@ to both components of a pair.
-
-Examples:
-
->>> at1 = paiffb "(1),(2),1[2,3]"
->>> at2 = paiffb "(2),(1),1[3,2]"
->>> at1 == at2
-False
->>> nonplanar at1 == (nonplanar at2 :: Aromatic (Tree Integer))
-True
->>> af1 = aiffb "(1),(2),1[2,3]"
->>> planar af1
-([(1),(2)],[1[2,3]])
->>> af2 = aiffb "(2),(1),1[3,2]"
->>> planar af2
-([(1),(2)],[1[2,3]])
--}
-instance (Planarable a, Planarable b) => Planarable (a, b) where
-    type Planar (a, b) = (Planar a, Planar b)
-
-    nonplanar (x, y) = (nonplanar x, nonplanar y)
-
-    planar (x, y) = (planar x, planar y)
-
-{- |
   Represent an aromatic forest in bracket notation or parse an aromatic
   forest from bracket notation.
 
@@ -425,7 +401,7 @@ instance
 
 -- ** Mark
 
-data Marked a = Marked {unMarked :: a} | Mark deriving (Eq)
+data Marked a = Marked a | Mark deriving (Eq)
 
 instance (Show a) => Show (Marked a) where
     show (Marked a) = "m" ++ show a
@@ -471,21 +447,24 @@ instance (Markable a, Markable b) => Markable (a, b) where
 
 instance (Markable a) => Markable (Cycle a) where
     type Marked' (Cycle a) = Cycle (Marked' a)
-    
-    mark = Cycle .  mark . unCycle
-    unmark = Cycle .  unmark . unCycle
+
+    mark = Cycle . mark . unCycle
+    unmark = Cycle . unmark . unCycle
 
 instance Markable (PlanarTree d) where
     type Marked' (PlanarTree d) = PlanarTree (Marked d)
 
-    mark (PT r c)= PT (Marked r) (mark c)
+    mark (PT r c) = PT (Marked r) (mark c)
     unmark (PT (Marked r) c) = PT r (unmark c)
+    unmark (PT Mark _) = error "Cannot unmark a marked vertex"
 
 instance (Ord d) => Markable (Tree d) where
     type Marked' (Tree d) = Tree (Marked d)
 
-    mark (T r c)= T (Marked r) (mark c)
+    mark (T r c) = T (Marked r) (mark c)
     unmark (T (Marked r) c) = T r (unmark c)
+    unmark (T Mark _) = error "Cannot unmark a marked vertex"
+
 {- |
   Build a syntactic tree for planar aromatic forest.
 
@@ -513,15 +492,15 @@ instance
     syn ([Cycle ts], []) = Node traceOp [syn $ ([],) $ (: []) $ breakCycle ts]
       where
         breakCycle [] = buildTree Mark []
-        breakCycle (t : ts) = addBranch (breakCycle ts) t
-        addBranch b t = buildTree (root t) (b : (children t))
+        breakCycle (t : ts') = addBranch (breakCycle ts') t
+        addBranch b t = buildTree (root t) (b : children t)
     syn ([], [t]) = case children t of
         [] -> Leaf ([], [t])
         bs -> Node graftOp [syn ([], bs), Leaf ([], [buildTree (root t) []])]
     syn (as, ts) =
         Node concatOp $
-            (map (syn . (,[]) . (: [])) as)
-                ++ (map (syn . ([],) . (: [])) ts)
+            map (syn . (,[]) . (: [])) as
+                ++ map (syn . ([],) . (: [])) ts
 
 {- |
   Operation used in the syntactic tree to represent the trace
@@ -533,10 +512,7 @@ Examples:
 >>> func traceOp $ [([], [PT (Marked 1) [PT Mark [], PT (Marked 2) []]])]
 (1 *^ ([(m1[m2])],[]))_2
 >>> func traceOp $ [([Cycle [PT (Marked 3) [PT (Marked 4) [PT Mark []]]]], [PT (Marked 1) [PT (Marked 2) []]])]
-
-!!! @searchMarkAroma doesn't correctly. It's not a problem for the
-syntactic trees obtained fron @syn@, but it is a problem for the
-general case.
+(1 *^ ([(m3[m4[m1[m2]]])],[]))_4
 -}
 traceOp
     :: ( IsTree t
@@ -551,12 +527,22 @@ traceOp
        )
     => Operation (PlanarAromatic t)
 traceOp = Op "trace" "$Tr$" 1 $
-    \[f] -> connectRootToMarked f
+    \l -> case l of
+        [f] -> connectRootToMarked f
+        _ -> error "Trace operation takes one argument"
   where
-    connectRootToMarked (as, t : ts) = case (searchMarkTree (as, t)) of
+    connectRootToMarked (_, []) = error "Cannot trace a forest without roots"
+    connectRootToMarked (as, [t]) = case searchMarkTree (as, t) of
         Nothing -> searchMarkAroma (as, t)
         Just x -> vector x
-    searchMarkTree (as, t) = case (filter ((== buildTree Mark []) . last) $ branchPaths t) of
+    connectRootToMarked (_, _) = error "Cannot trace a forest with multiple roots"
+    searchMarkTree (as, t) = case filter ((== buildTree Mark []) . last) $ branchPaths t of
         [] -> Nothing
         l -> Just $ (,[]) $ (: as) $ Cycle $ init $ head l
-    searchMarkAroma (as, t) = substitute ([], [buildTree Mark []]) [([], [t])] (as, [])
+    searchMarkAroma (as, t) = vector $ (,[]) $ map searchMarkAroma' as
+      where
+        searchMarkAroma' (Cycle ts) = Cycle $ map searchMarkAroma'' ts
+        searchMarkAroma'' t2 =
+            if t2 == buildTree Mark []
+                then t
+                else buildTree (root t2) $ map searchMarkAroma'' $ children t2
