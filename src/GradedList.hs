@@ -30,21 +30,17 @@ class Graded t where
 
 {- |
   @Integer@ is used to generate basis elements for testing
-  @Symbolics.hs@. The grading of an integer is the number of digits
-  in its absolute value.
+  @Symbolics.hs@.
 
 Example:
 
 >>> grading 123
-3
+1
 >>> grading (-123)
-3
+1
 -}
 instance Graded Integer where
-    grading 0 = 0
-    grading n = 1 + grading (abs_n `div` 10)
-      where
-        abs_n = abs n
+    grading _ = 1
 
 {- |
   @Char@ can be useful to denote variables like @'x', 'y', 'z'@ when
@@ -119,10 +115,10 @@ instance Foldable NonDecreasingList where
 
 Example:
 
->>> nDecList [1, 10, 10, 100]
-NonDecreasingList [1,10,10,100]
->>> nDecList [1, 10, 100, 10]
-NonDecreasingList [1,10*** Exception: The list given to @gradedList@ is not graded.
+>>> nDecList ["x", "xy", "xy", "xyz"]
+NonDecreasingList ["x","xy","xy","xyz"]
+>>> nDecList ["x", "xy", "xyz", "xy"]
+NonDecreasingList ["x","xy"*** Exception: The list given to @gradedList@ is not graded.
 ...
 -}
 nDecList :: (Graded a) => [a] -> NonDecreasingList a
@@ -147,8 +143,8 @@ type HomoList a = [a]
 
 Example:
 
->>> groupByGradingFrom 1 $ nDecList [1, 2, 10, 10, 12, 20, 201, 200]
-[[1,2],[10,10,12,20],[201,200]]
+>>> groupByGradingFrom 1 $ nDecList ["x", "y", "xy", "xy", "yz", "zx", "xyz", "zxy"]
+[["x","y"],["xy","xy","yz","zx"],["xyz","zxy"]]
 -}
 groupByGradingFrom
     :: (Graded a)
@@ -165,8 +161,8 @@ groupByGradingFrom k (NDecList l) = case span ((== k) . grading) l of
 
 Example:
 
->>> groupByGrading $ nDecList [3, 1, 2, 10, 10, 12, 20, 201, 200]
-[[],[3,1,2],[10,10,12,20],[201,200]]
+>>> groupByGrading $ nDecList ["x", "y", "xy", "xy", "yz", "zx", "xyz", "zxy"]
+[[],["x","y"],["xy","xy","yz","zx"],["xyz","zxy"]]
 -}
 groupByGrading :: (Graded a) => NonDecreasingList a -> [HomoList a]
 groupByGrading = groupByGradingFrom 0

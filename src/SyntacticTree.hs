@@ -263,8 +263,7 @@ graftOp = Op "graft" "$\\curvearrowright$" 2 $
 
 -- | Concatenation operation.
 concatOp :: (IsVector a, Monoid a) => Operation a
-concatOp = Op "concat" "$\\cdot$" (-1) $
-    \ops -> vector $ mconcat ops
+concatOp = Op "concat" "$\\cdot$" (-1) (vector . mconcat)
 
 {- |
   Construct a syntactic tree of a list of trees.

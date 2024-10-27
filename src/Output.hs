@@ -112,6 +112,9 @@ instance Texifiable Char where
 instance Texifiable Integer where
     texify = show
 
+instance Texifiable Int where
+    texify = show
+
 -- | Lists represent products.
 instance
     ( Texifiable a
@@ -241,6 +244,7 @@ printPdf str = do
                 proc "pdflatex" ["tmp.tex"]
 
     copyFile "texput/tmp.pdf" "output.pdf"
+    copyFile "texput/tmp.tex" "output.tex"
 
     runProcess_ $
         shell "zathura --synctex-forward :: output.pdf > /dev/null &"

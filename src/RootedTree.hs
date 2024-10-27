@@ -232,7 +232,7 @@ instance (Eq d, Graded d) => IsVector (PlanarTree d) where
 Example:
 
 >>> grading $ itfb "1[2,34]"
-4
+3
 
 Note: the grading of an integer is the number of digits with @0@ having grading @0@.
 -}

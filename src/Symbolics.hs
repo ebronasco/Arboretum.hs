@@ -21,7 +21,7 @@ module Symbolics (
     ScalarProduct,
     pattern (:*^),
     (*^),
-    scale,
+    scaleSP,
 
     -- * Graded vector space
 
@@ -35,7 +35,7 @@ module Symbolics (
     linearGraded,
     linearNonDec,
     renormalize,
-    scaleV,
+    scale,
     rescale,
     functional,
     lengthV,
@@ -115,6 +115,12 @@ instance IsVector Char where
     type VectorBasis Char = Char
     vector = vector . (1 *^)
 :}
+
+>>> :{
+intToDigits :: Integer -> [Integer]
+intToDigits 0 = []
+intToDigits n = intToDigits (n `div` 10) ++ [n `mod` 10]
+:}
 -}
 
 -----------------------------------------------------------------------------
@@ -124,14 +130,14 @@ instance IsVector Char where
 -----------------------------------------------------------------------------
 
 pattern (:*^) :: k -> a -> ScalarProduct k a
-pattern k :*^ a <- ScalarProduct k a
+pattern k :*^ b <- SP k b
 
 {-# COMPLETE (:*^) #-}
 
 {- | A scalar product is defined to be a pair of a scalar (@Num@) and
 a basis element.
 -}
-data ScalarProduct k a = ScalarProduct
+data ScalarProduct k a = SP
     { scalar :: k
     , basisElement :: a
     }
@@ -154,10 +160,10 @@ instance (Num k, Monoid a) => Monoid (ScalarProduct k a) where
 infix 7 *^
 
 (*^) :: (Num k) => k -> a -> ScalarProduct k a
-(*^) = ScalarProduct
+(*^) = SP
 
-scale :: (Num k) => k -> ScalarProduct k a -> ScalarProduct k a
-scale s1 (s2 :*^ a) = (s1 * s2) *^ a
+scaleSP :: (Num k) => k -> ScalarProduct k a -> ScalarProduct k a
+scaleSP s1 (s2 :*^ a) = (s1 * s2) *^ a
 
 instance (Graded a) => Graded (ScalarProduct k a) where
     grading = grading . basisElement
@@ -169,14 +175,14 @@ instance (Graded a) => Graded (ScalarProduct k a) where
 ----------------------------------------------------------------------
 
 pattern (:+) :: ScalarProduct k a -> Sum k a -> Sum k a
-pattern t :+ s <- Sum _ t s
+pattern t :+ s <- S _ t s
 
 {-# COMPLETE (:+), Zero #-}
 
 {- | A sum is assumed to have a finite number of terms and a grading
 associated to it.
 -}
-data Sum k a = Sum Integer (ScalarProduct k a) (Sum k a) | Zero
+data Sum k a = S Integer (ScalarProduct k a) (Sum k a) | Zero
 
 {- |
   Construct a sum from a list of terms with the same grading.
@@ -219,7 +225,7 @@ lengthS = length . toListS
 
 instance Graded (Sum k a) where
     grading Zero = 0
-    grading (Sum g _ _) = g
+    grading (S g _ _) = g
 
 instance (Show k, Show a) => Show (Sum k a) where
     show (t :+ Zero) = show t
@@ -253,11 +259,11 @@ prop> \t l -> (lengthS $ t +: l) - 1 <= lengthS (l :: Sum Integer Char)
     -> Sum k a
     -> Sum k a
 (+:) (0 :*^ _) s = s
-(+:) t Zero = Sum (grading t) t Zero
-(+:) t s@(Sum g _ _)
+(+:) t Zero = S (grading t) t Zero
+(+:) t s@(S g _ _)
     | grading t /= g = error "Grading mismatch between a term and a sum"
     | otherwise = case maybeAddTerm t s of
-        Nothing -> Sum g t s
+        Nothing -> S g t s
         Just s' -> s'
   where
     maybeAddTerm _ Zero = Nothing
@@ -265,11 +271,11 @@ prop> \t l -> (lengthS $ t +: l) - 1 <= lengthS (l :: Sum Integer Char)
         if t1_basis == basisElement t2
             then
                 if scalar_sum /= 0
-                    then Just $ Sum g (scalar_sum *^ t1_basis) s2
+                    then Just $ S g (scalar_sum *^ t1_basis) s2
                     else Just s2
             else case maybeAddTerm t1 s2 of
                 Nothing -> Nothing
-                Just s2' -> Just $ Sum g t2 s2'
+                Just s2' -> Just $ S g t2 s2'
       where
         t1_basis = basisElement t1
         scalar_sum = scalar t1 + scalar t2
@@ -391,12 +397,12 @@ instance
 ----------------------------------------------------------------------
 
 pattern (:&) :: Sum k a -> Vector k a -> Vector k a
-pattern t :& s <- Vector t s
+pattern t :& s <- V t s
 
 {-# COMPLETE (:&), Empty #-}
 
 -- | A power series can have infinite number of terms.
-data Vector k a = Vector (Sum k a) (Vector k a) | Empty
+data Vector k a = V (Sum k a) (Vector k a) | Empty
 
 {- |
   Construct a vector from a list of sums where position @i@ of the
@@ -445,7 +451,7 @@ toListV (h :& ps) = h : toListV ps
 infixr 5 &:
 
 (&:) :: Sum k a -> Vector k a -> Vector k a
-(&:) = Vector
+(&:) = V
 
 {- | Two vectors are equal if each pair of sums with equal grading
 are equal.
@@ -697,7 +703,7 @@ instance (Num k, Eq k, Eq a, Graded a) => IsVector (Sum k a) where
     type VectorScalar (Sum k a) = k
     type VectorBasis (Sum k a) = a
     vector Zero = Empty
-    vector s@(Sum g _ _) = fromListV $ replicate (fromInteger g) Zero ++ [s]
+    vector s@(S g _ _) = fromListV $ replicate (fromInteger g) Zero ++ [s]
 
 -- | @Vector@ has a trivial @IsVector@ instance.
 instance IsVector (Vector k a) where
@@ -737,8 +743,8 @@ Examples:
 
 >>> vectorFromNonDecList [1 *^ 'x', 1 *^ 'y', 1 *^ 'x', 1 *^ 'y']
 (2 *^ 'x' + 2 *^ 'y')_1
->>> takeV 10 $ vectorFromNonDecList [1 *^ i | i <- [1..]]
-(1 *^ 1 + 1 *^ 2 + 1 *^ 3 + 1 *^ 4 + 1 *^ 5 + 1 *^ 6 + 1 *^ 7 + 1 *^ 8 + 1 *^ 9)_1 + (1 *^ 10)_2
+>>> takeV 10 $ vectorFromNonDecList [1 *^ intToDigits i | i <- [1..]]
+(1 *^ [1] + 1 *^ [2] + 1 *^ [3] + 1 *^ [4] + 1 *^ [5] + 1 *^ [6] + 1 *^ [7] + 1 *^ [8] + 1 *^ [9])_1 + (1 *^ [1,0])_2
 -}
 vectorFromNonDecList
     :: ( Num k
@@ -782,7 +788,7 @@ linear
     -> Vector k b
 linear f = mconcat . map (mconcat . map applyf . toListS) . toListV
   where
-    applyf t = scaleV (scalar t) $ vector $ f $ basisElement t
+    applyf t = scale (scalar t) $ vector $ f $ basisElement t
 
 {- |
   Takes a function from the basis to a vector space and extends it to
@@ -799,8 +805,8 @@ Examples:
 >>> v2 = vectorFromNonDecList [i*^(replicate i 1) | i <- [1..]]
 >>> takeV 10 $ linearGraded f v2
 (1 *^ [2])_1 + (2 *^ [2,1])_2 + (3 *^ [2,1,1])_3 + (4 *^ [2,1,1,1])_4 + (5 *^ [2,1,1,1,1])_5 + (6 *^ [2,1,1,1,1,1])_6 + (7 *^ [2,1,1,1,1,1,1])_7 + (8 *^ [2,1,1,1,1,1,1,1])_8 + (9 *^ [2,1,1,1,1,1,1,1,1])_9 + (10 *^ [2,1,1,1,1,1,1,1,1,1])_10
->>> v3 = vectorFromNonDecList [1*^i | i <- [0..]]
->>> g x = 1 *^ (x + 1)
+>>> v3 = vectorFromNonDecList [1 *^ intToDigits i | i <- [0..]]
+>>> g x = 1 *^ (1:x)
 >>> linearGraded g v3
 *** Exception: Grading mismatch in a list of terms
 ...
@@ -820,7 +826,7 @@ linearGraded
     -> Vector k b
 linearGraded f = fromListV . map (fromListS . concatMap applyf . toListS) . toListV
   where
-    applyf t = terms $ scaleV (scalar t) $ vector $ f $ basisElement t
+    applyf t = terms $ scale (scalar t) $ vector $ f $ basisElement t
 
 {- |
   Takes a function from the basis to a vector space and extends it to
@@ -839,10 +845,10 @@ Examples:
 >>> v2 = vectorFromNonDecList [i*^(replicate i 1) | i <- [1..]]
 >>> takeV 10 $ linearNonDec f v2
 (1 *^ [2,1])_2 + (2 *^ [2,1,1])_3 + (3 *^ [2,1,1,1])_4 + (4 *^ [2,1,1,1,1])_5 + (5 *^ [2,1,1,1,1,1])_6 + (6 *^ [2,1,1,1,1,1,1])_7 + (7 *^ [2,1,1,1,1,1,1,1])_8 + (8 *^ [2,1,1,1,1,1,1,1,1])_9 + (9 *^ [2,1,1,1,1,1,1,1,1,1])_10 + (10 *^ [2,1,1,1,1,1,1,1,1,1,1])_11
->>> v3 = vectorFromNonDecList [1*^i | i <- [0..]]
->>> g x = 1 *^ (x + 1)
+>>> v3 = vectorFromNonDecList [1 *^ intToDigits i | i <- [1..]]
+>>> g (x:xs) = if x < 9 then 1 *^ (x + 1:xs) else 1 *^ (1:x:xs)
 >>> takeV 10 $ linearNonDec g v3
-(1 *^ 1 + 1 *^ 2 + 1 *^ 3 + 1 *^ 4 + 1 *^ 5 + 1 *^ 6 + 1 *^ 7 + 1 *^ 8 + 1 *^ 9)_1 + (1 *^ 10)_2
+(1 *^ [2] + 1 *^ [3] + 1 *^ [4] + 1 *^ [5] + 1 *^ [6] + 1 *^ [7] + 1 *^ [8] + 1 *^ [9])_1 + (1 *^ [1,9] + 1 *^ [2,0])_2
 -}
 linearNonDec
     :: ( Num k
@@ -859,7 +865,7 @@ linearNonDec
     -> Vector k b
 linearNonDec f = fromListV . addLevels . map (toListV . mconcat . map applyf . toListS) . toListV
   where
-    applyf t = scaleV (scalar t) $ vector $ f $ basisElement t
+    applyf t = scale (scalar t) $ vector $ f $ basisElement t
     addLevels = map mconcat . transposeUntilZero 0
     transposeUntilZero :: (Num k, Eq k, Eq b, Graded b) => Integer -> [[Sum k b]] -> [[Sum k b]]
     transposeUntilZero _ [] = []
@@ -887,10 +893,10 @@ linearNonDec f = fromListV . addLevels . map (toListV . mconcat . map applyf . t
 
 Examples:
 
->>> f1 x = 1 *^ [x+1]
+>>> f1 x = if x < 9 then 1 *^ [x+1] else 1 *^ [x, 1]
 >>> v1 = vectorFromList [1 *^ [6, 7], 1 *^ [8, 9]]
 >>> morphism f1 v1
-(1 *^ [7,8])_2 + (1 *^ [9,10])_3
+(1 *^ [7,8])_2 + (1 *^ [9,9,1])_3
 >>> f2 x = vectorFromList [1 *^ [x], 1 *^ [x+1]]
 >>> v2 = vectorFromList [1 *^ [1, 2], 1 *^ [3, 4]]
 >>> morphism f2 v2
@@ -922,15 +928,15 @@ morphism f = linear $ product . fmap (vector . f)
 
 Examples:
 
->>> f1 x = 1 *^ [x+1]
+>>> f1 x = 1 *^ [1,x]
 >>> v1 = vectorFromList [1 *^ [6,7], 1 *^ [8, 9]]
 >>> morphismGraded f1 v1
-*** Exception: Grading mismatch between a term and a sum
+*** Exception: Grading mismatch in a list of terms
 ...
->>> f2 x = if x > 0 && x < 9 then 1*^ [x + 1] else 1 *^ [x]
+>>> f2 x = 1 *^ [x + 1]
 >>> v2 = vectorFromList [1 *^ [6, 7], 1 *^ [8, 9]]
 >>> morphismGraded f2 v2
-(1 *^ [7,8] + 1 *^ [9,9])_2
+(1 *^ [7,8] + 1 *^ [9,10])_2
 >>> v3 = vectorFromNonDecList [i *^ (replicate i 1) | i <- [1..]]
 >>> takeV 10 $ morphismGraded f2 v3
 (1 *^ [2])_1 + (2 *^ [2,2])_2 + (3 *^ [2,2,2])_3 + (4 *^ [2,2,2,2])_4 + (5 *^ [2,2,2,2,2])_5 + (6 *^ [2,2,2,2,2,2])_6 + (7 *^ [2,2,2,2,2,2,2])_7 + (8 *^ [2,2,2,2,2,2,2,2])_8 + (9 *^ [2,2,2,2,2,2,2,2,2])_9 + (10 *^ [2,2,2,2,2,2,2,2,2,2])_10
@@ -964,7 +970,7 @@ Examples:
 >>> f1 x = 1 *^ [x+1]
 >>> v1 = vectorFromList [1 *^ [6,7], 1 *^ [8, 9]]
 >>> morphismNonDec f1 v1
-(1 *^ [7,8])_2 + (1 *^ [9,10])_3
+(1 *^ [7,8] + 1 *^ [9,10])_2
 >>> f2 x = if x > 0 && x < 9 then 1*^ [x + 1] else 1 *^ [x]
 >>> v2 = vectorFromList [1 *^ [6, 7], 1 *^ [8, 9]]
 >>> morphismNonDec f2 v2
@@ -1021,10 +1027,10 @@ renormalize f = vectorFromNonDecList . map renormalizeTerm . terms
 Examples:
 
 >>> v = vector $ (1 *^ 'x') +: (2 *^ 'y') +: (3 *^ 'z') +: (4 *^ 'w') +: Zero
->>> scaleV 2 v
+>>> scale 2 v
 (2 *^ 'x' + 4 *^ 'y' + 6 *^ 'z' + 8 *^ 'w')_1
 -}
-scaleV
+scale
     :: ( Num k
        , Eq k
        , Eq a
@@ -1033,7 +1039,7 @@ scaleV
     => k
     -> Vector k a
     -> Vector k a
-scaleV s = renormalize (\s0 _ -> s * s0)
+scale s = renormalize (\s0 _ -> s * s0)
 
 {- |
   Change the scalar of a vector.
@@ -1097,10 +1103,10 @@ Examples:
 >>> v1 = vector $ (1 *^ 1) +: (1 *^ 2) +: (1 *^ 3) +: (1 *^ 4) +: Zero
 >>> takeWhileV f1 v1
 (1 *^ 1 + 1 *^ 2)_1
->>> f2 (i :*^ j) = j < 5
->>> v2 = vectorFromNonDecList [1 *^ i | i <- [1..]]
+>>> f2 (i :*^ [j]) = j < 5
+>>> v2 = vectorFromNonDecList [1 *^ intToDigits i | i <- [1..]]
 >>> takeWhileV f2 v2
-(1 *^ 1 + 1 *^ 2 + 1 *^ 3 + 1 *^ 4)_1
+(1 *^ [1] + 1 *^ [2] + 1 *^ [3] + 1 *^ [4])_1
 
 Properties:
 
@@ -1123,10 +1129,10 @@ takeWhileV f = vectorFromNonDecList . takeWhile f . terms
 
 Examples:
 
->>> f (_ :*^ j) = j `mod` 3 == 0
->>> v = vectorFromNonDecList [1 *^ i | i <- [1..]]
+>>> f (_ :*^ (j:_)) = j `mod` 3 == 0
+>>> v = vectorFromNonDecList [1 *^ intToDigits i | i <- [1..]]
 >>> takeV 10 $ filterV f v
-(1 *^ 3 + 1 *^ 6 + 1 *^ 9)_1 + (1 *^ 12 + 1 *^ 15 + 1 *^ 18 + 1 *^ 21 + 1 *^ 24 + 1 *^ 27 + 1 *^ 30)_2
+(1 *^ [3] + 1 *^ [6] + 1 *^ [9])_1 + (1 *^ [3,0] + 1 *^ [3,1] + 1 *^ [3,2] + 1 *^ [3,3] + 1 *^ [3,4] + 1 *^ [3,5] + 1 *^ [3,6])_2
 
 Properties:
 
@@ -1149,9 +1155,9 @@ filterV f = fromListV . map (fromListS . filter f . toListS) . toListV
 
 Examples:
 
->>> v = vectorFromNonDecList [1 *^ i | i <- [1..]]
+>>> v = vectorFromNonDecList [1 *^ intToDigits i | i <- [1..]]
 >>> takeV 10 v
-(1 *^ 1 + 1 *^ 2 + 1 *^ 3 + 1 *^ 4 + 1 *^ 5 + 1 *^ 6 + 1 *^ 7 + 1 *^ 8 + 1 *^ 9)_1 + (1 *^ 10)_2
+(1 *^ [1] + 1 *^ [2] + 1 *^ [3] + 1 *^ [4] + 1 *^ [5] + 1 *^ [6] + 1 *^ [7] + 1 *^ [8] + 1 *^ [9])_1 + (1 *^ [1,0])_2
 
 Properties:
 

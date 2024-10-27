@@ -226,6 +226,12 @@ instance (Show g, Show (Vertex g)) => Show (Rooted g) where
       where
         trimmedShowG = L.init $ show g
 
+instance (Eq (Vertex g), Eq g) => Eq (Rooted g) where
+    (R r1 g1) == (R r2 g2) = (r1 == r2) && (g1 == g2)
+
+instance (Graded g) => Graded (Rooted g) where
+    grading (R _ g) = grading g
+
 instance (Graph g) => Graph (Rooted g) where
     type Edge (Rooted g) = Edge g
     singleton v = R v $ singleton v
