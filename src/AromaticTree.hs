@@ -1,37 +1,63 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 {- |
 Module      : AromaticTree
-Description : Implementation of planar/non-planar aromatic trees, forests, their grafting, and divergence.
+Description : Implementation of non-planar aromatic trees, forests, their grafting, divergence, and substitution.
 Copyright   : (c) University of Geneva, 2024
 License     : MIT
 Maintainer  : Eugen Bronasco (ebronasco@gmail.com)
 Stability   : experimental
 -}
 module AromaticTree (
-    Aroma (Aroma),
-    graftOnAroma,
-    graftOnMultiAroma,
-    graftAF,
-    elemComp,
-    branchPaths,
-    divergenceT,
-    divergenceAT,
-    nonplanarAF,
-    planarAF,
+    Cycle (Cycle),
+    divergence,
+    PlanarAromatic,
+    Aromatic,
 ) where
 
-import Data.Bifunctor (second)
+import Control.Monad.State (evalState, get, put)
+import Data.Bifunctor (bimap, second)
 import qualified Data.List as L
-import Data.Maybe (fromJust)
 import qualified Data.MultiSet as MS
 import GradedList
 import Output
 import RootedTree
 import Symbolics
+import SyntacticTree
 
-{- | Orbit of a list under cyclic permutation.
+{- $setup
+  Integer Forest From Brackets
+>>> iffb str = fromBrackets read str :: [PlanarTree Integer]
+
+  Non-Planar Integer Forest From Brackets
+>>> npiffb str = fromBrackets read str :: MS.MultiSet (Tree Integer)
+
+  Integer Cycle From Brackets
+>>> icfb str = fromBrackets read str :: Cycle (PlanarTree Integer)
+
+  Non-Planar Integer Cycle From Brackets
+>>> npicfb str = fromBrackets read str :: Cycle (Tree Integer)
+
+  Planar Aromatic Integer Forest From Brackets
+>>> paiffb st = fromBrackets read st :: PlanarAromatic (PlanarTree Integer)
+
+  Aromatic Integer Forest From Brackets
+>>> aiffb st = fromBrackets read st :: Aromatic (Tree Integer)
+-}
+
+----------------------------------------------------------------------
+
+-- * Cycles
+
+----------------------------------------------------------------------
+
+{- |
+  Orbit of a list under cyclic permutation.
 
 Examples:
 
@@ -46,117 +72,154 @@ circulate l =
     take (length l) $
         map (take (length l)) (L.tails (cycle l))
 
--- | An aroma is a list of elements up to cyclic permutation.
-newtype Aroma a = Aroma {unAroma :: [a]}
+-- | A cycle is a list of elements up to cyclic permutation.
+newtype Cycle a = Cycle {unCycle :: [a]}
 
-{- | Check if two aromas are equal up to cyclic permutation.
+{- |
+  Check if two cycles are equal up to cyclic permutation.
 
 Examples:
 
->>> Aroma [1, 2, 3] == Aroma [3, 1, 2]
+>>> Cycle [1, 2, 3] == Cycle [3, 1, 2]
 True
->>> Aroma [1, 2, 3] == Aroma [3, 2, 1]
+>>> Cycle [1, 2, 3] == Cycle [3, 2, 1]
 False
 -}
-instance (Eq a) => Eq (Aroma a) where
-    (Aroma a) == (Aroma b) = a `L.elem` circulate b
+instance (Eq a) => Eq (Cycle a) where
+    (Cycle a) == (Cycle b) = a `elem` circulate b
 
--- | Compare two aromas by comparing the maximums of their cyclic permutation orbits.
-instance (Ord a) => Ord (Aroma a) where
-    compare (Aroma a) (Aroma b) = compare (maximum $ circulate a) (maximum $ circulate b)
+{- |
+  Compare two cycles by comparing the maximums of their cyclic
+  permutation orbits.
 
-instance Functor Aroma where
-    fmap f (Aroma l) = Aroma $ map f l
+Examples:
 
-instance (Show a) => Show (Aroma a) where
-    show (Aroma l) = "(" ++ init (tail $ show l) ++ ")"
+>>> compare (Cycle [1, 2, 3]) (Cycle [3, 1, 2])
+EQ
+>>> compare (Cycle [1, 3, 2]) (Cycle [3, 1, 2])
+GT
+-}
+instance (Ord a) => Ord (Cycle a) where
+    compare (Cycle a) (Cycle b) = compare (maximum $ circulate a) (maximum $ circulate b)
 
-instance (Graded a) => Graded (Aroma a) where
-    grading (Aroma l) = sum $ map grading l
+instance Functor Cycle where
+    fmap f (Cycle l) = Cycle $ map f l
 
--- * Planar aromatic forests
+instance (Show a) => Show (Cycle a) where
+    show (Cycle l) = "(" ++ init (tail $ show l) ++ ")"
 
--- Relies on the fact that @texify@ of @PRTree@ is @\\forest{...}@.
-instance (Texifiable a, Eq a) => Texifiable (Aroma (PRTree a)) where
-    texify (Aroma l) = "\\forest{(" ++ L.intercalate "," (map bracketNotation l) ++ ")}"
+instance (Graded a) => Graded (Cycle a) where
+    grading (Cycle l) = sum $ map grading l
+
+instance
+    ( IsVector a
+    , Num (VectorScalar a)
+    , Eq (VectorScalar a)
+    , Eq a
+    , Graded a
+    )
+    => IsVector (Cycle a)
+    where
+    type VectorScalar (Cycle a) = VectorScalar a
+    type VectorBasis (Cycle a) = Cycle a
+
+    vector = vector . (1 *^)
+
+instance (IsDecorated t) => IsDecorated (Cycle t) where
+    type Decoration (Cycle t) = Decoration t
+
+{- |
+  Represent a cycle in bracket notation or parse a cycle from bracket
+  notation.
+
+Examples:
+
+>>> toBrackets show $ Cycle $ iffb "1[2,3],2[3,4]"
+"(1[2,3],2[3,4])"
+>>> fromBrackets read "(1[2,3],2[3,4])" :: Cycle (PlanarTree Integer)
+(1[2,3],2[3,4])
+-}
+instance (IsTree t, HasBracketNotation t) => HasBracketNotation (Cycle t) where
+    toBrackets f a = "(" ++ L.intercalate "," (map (toBrackets f) $ unCycle a) ++ ")"
+
+    fromBrackets f = Cycle . fromBrackets f . escapeParentheses
       where
-        bracketNotation = init . fromJust . L.stripPrefix "\\forest{" . texify
+        escapeParentheses [] = []
+        escapeParentheses str =
+            if head str == '(' && last str == ')'
+                then init $ tail str
+                else str
 
--- | A planar aromatic tree is a pair of a list of aromas and a planar rooted tree.
-type APTree a =
-    ( [Aroma (PRTree a)]
-    , PRTree a
+----------------------------------------------------------------------
+
+-- * Planar Aromatic Forest
+
+----------------------------------------------------------------------
+
+type PlanarAromatic t =
+    ( [Cycle t]
+    , [t]
     )
 
--- | A planar aromatic forest is a pair of a list of aromas and a list of planar rooted trees.
-type APForest a =
-    ( [Aroma (PRTree a)]
-    , [PRTree a]
-    )
-
--- * Grafting
-
-{- | Graft a planar rooted forest onto a planar aroma.
+{- |
+  Represent a planar aromatic forest in bracket notation or parse a
+  planar aromatic forest from bracket notation.
 
 Examples:
 
->>> graftOnAroma [PRTree 1 []] (Aroma [PRTree 1 [], PRTree 1 []])
-(2 *^ (1,1[1]))_3
->>> graftOnAroma [PRTree 1 []] (Aroma [PRTree 1 [], PRTree 2 []])
-(1 *^ (1,2[1]) + 1 *^ (1[1],2))_3
->>> graftOnAroma [PRTree 1 [], PRTree 2 []] (Aroma [PRTree 1 [], PRTree 2 []])
-(1 *^ (1,2[1,2]) + 1 *^ (1[1],2[2]) + 1 *^ (1[2],2[1]) + 1 *^ (1[1,2],2))_4
+>>> af = ([icfb "(1[2,3],4[5])", icfb "(6[7])"], iffb "8[9],10")
+>>> toBrackets show af
+"(1[2,3],4[5]),(6[7]),8[9],10"
+>>> fromBrackets read "(1[2,3],4[5]),(6[7]),8[9],10" :: PlanarAromatic (PlanarTree Integer)
+([(1[2,3],4[5]),(6[7])],[8[9],10])
 -}
-graftOnAroma
-    :: ( Eq a
-       , Graded a
-       )
-    => [PRTree a]
-    -> Aroma (PRTree a)
-    -> PowerSeries Integer (Aroma (PRTree a))
-graftOnAroma f = linear ((1 *^) . Aroma) . (f `graftFF`) . unAroma
+instance (IsTree t, HasBracketNotation t) => HasBracketNotation (PlanarAromatic t) where
+    toBrackets f (ma, ts) =
+        L.intercalate "," $
+            map (toBrackets f) ma ++ map (toBrackets f) ts
 
-{- | Graft a planar rooted forest onto a multi-aroma.
+    fromBrackets f =
+        bimap
+            (map (fromBrackets f))
+            (concatMap (fromBrackets f))
+            . evalState splitAromasAndTrees
+      where
+        splitAromasAndTrees = do
+            str <- get
 
-Examples:
+            let (forest_str, rest) = break (== '(') str
+            let (aroma_str, rest') = break (== ')') rest
 
->>> graftOnMultiAroma [PRTree 1 []] [Aroma [PRTree 1 [], PRTree 1 []], Aroma [PRTree 1 [], PRTree 2 []]]
-(1 *^ [(1,1),(1,2[1])] + 1 *^ [(1,1),(1[1],2)] + 2 *^ [(1,1[1]),(1,2)])_5
--}
-graftOnMultiAroma
-    :: ( Eq a
-       , Graded a
-       )
-    => [PRTree a]
-    -> [Aroma (PRTree a)]
-    -> PowerSeries Integer [Aroma (PRTree a)]
-graftOnMultiAroma [] ma = vector (1 *^ ma)
-graftOnMultiAroma _ [] = vector Zero
-graftOnMultiAroma f (a : ma) = linear perCoproductTerm $ tensorCoproduct f
-  where
-    perCoproductTerm (x, y) = linear (: []) (x `graftOnAroma` a) * (y `graftOnMultiAroma` ma)
+            let forest_str' =
+                    if not (null forest_str) && last forest_str == ','
+                        then init forest_str
+                        else forest_str
+            let aroma_str' = aroma_str ++ if null rest' then "" else ")"
+            let rest'' = if null rest' then "" else tail rest'
+            let rest''' =
+                    if not (null rest'') && head rest'' == ','
+                        then tail rest''
+                        else rest''
 
-{- | Graft two aromatic planar forests.
+            put rest'''
 
-Examples:
+            (as, fs) <- case rest''' of
+                [] -> return ([], [])
+                _ -> splitAromasAndTrees
 
->>> graftAF ([Aroma [PRTree 1 []]], [PRTree 1 []]) ([Aroma [PRTree 1 []]], [PRTree 1 []])
-(1 *^ ([(1),(1)],[1[1]]) + 1 *^ ([(1),(1[1])],[1]))_4
--}
-graftAF
-    :: ( Eq a
-       , Graded a
-       )
-    => APForest a
-    -> APForest a
-    -> PowerSeries Integer (APForest a)
-graftAF (ma1, f1) (ma2, f2) = vector (ma1, []) * linear perCoproductTerm (tensorCoproduct f1)
-  where
-    perCoproductTerm (x, y) = linear (,[]) (x `graftOnMultiAroma` ma2) * linear ([],) (y `graftFF` f2)
+            let as' = if null aroma_str' then as else aroma_str' : as
+            let fs' = if null forest_str' then fs else forest_str' : fs
+
+            return (as', fs')
+
+----------------------------------------------------------------------
 
 -- * Divergence
 
-{- | Compute the list of all pairs of an element and the rest of the list.
+----------------------------------------------------------------------
+
+{- |
+  Compute the list of all pairs of an element and the rest of the list.
 
 Examples:
 
@@ -167,89 +230,319 @@ elemComp :: [a] -> [(a, [a])]
 elemComp [] = []
 elemComp (x : xs) = (x, xs) : map (second (x :)) (elemComp xs)
 
-{- | Build forests along the paths from the root to the vertices.
+{- |
+  Build forests along the paths from the root to the vertices.
 
 Examples:
 
->>> branchPaths (PRTree 1 [PRTree 2 [], PRTree 3 []])
+>>> branchPaths $ head $ iffb "1[2,3]"
 [[1[2,3]],[1[3],2],[1[2],3]]
->>> branchPaths (PRTree 1 [PRTree 2 [PRTree 3 []], PRTree 4 []])
+>>> branchPaths $ head $ iffb "1[2[3],4]"
 [[1[2[3],4]],[1[4],2[3]],[1[4],2,3],[1[2[3]],4]]
 -}
-branchPaths :: PRTree a -> [[PRTree a]]
-branchPaths t@(PRTree r cts) = [t] : recurs (map (second $ PRTree r) $ elemComp cts)
+branchPaths :: (IsTree t) => t -> [[t]]
+branchPaths t = [t] : recurs (map (second $ buildTree (root t)) $ elemComp $ children t)
   where
     recurs = concatMap (\(x, y) -> map (y :) (branchPaths x))
 
-{- | Compute the divergence of a planar rooted tree by connecting the root to the vertices.
+{- |
+  Compute the divergence of a planar aromatic tree by connecting the
+  root to the vertices.
 
 Examples:
 
->>> divergenceT (PRTree 1 [PRTree 2 [], PRTree 3 []])
-(1 *^ (1[2,3]) + 1 *^ (1[3],2) + 1 *^ (1[2],3))_3
->>> divergenceT (PRTree 1 [PRTree 2 [PRTree 3 []], PRTree 4 []])
-(1 *^ (1[2[3],4]) + 1 *^ (1[4],2[3]) + 1 *^ (1[4],2,3) + 1 *^ (1[2[3]],4))_4
+>>> divergence $ paiffb "1[2,3]"
+(1 *^ ([(1[2,3])],[]) + 1 *^ ([(1[3],2)],[]) + 1 *^ ([(1[2],3)],[]))_3
+>>> divergence $ paiffb "1[2[3],4]"
+(1 *^ ([(1[2[3],4])],[]) + 1 *^ ([(1[4],2[3])],[]) + 1 *^ ([(1[4],2,3)],[]) + 1 *^ ([(1[2[3]],4)],[]))_4
+>>> divergence $ paiffb "(1),1"
+(1 *^ ([(1[1])],[]) + 1 *^ ([(1),(1)],[]))_2
+>>> divergence $ paiffb "(1),1[2,3]"
+(1 *^ ([(1[1[2,3]])],[]) + 1 *^ ([(1[2,3]),(1)],[]) + 1 *^ ([(1[3],2),(1)],[]) + 1 *^ ([(1[2],3),(1)],[]))_4
+>>> divergence $ paiffb "1[2,3],4,(5)"
+(1 *^ ([(5)],[4[1[2,3]]]) + 1 *^ ([(5[1[2,3]])],[4]) + 1 *^ ([(1[2,3]),(5)],[4]) + 1 *^ ([(1[3],2),(5)],[4]) + 1 *^ ([(1[2],3),(5)],[4]))_5
 -}
-divergenceT :: (Eq a, Graded a) => PRTree a -> PowerSeries Integer (Aroma (PRTree a))
-divergenceT t = vector $ fromListS $ map ((1 *^) . Aroma) $ branchPaths t
+divergence
+    :: ( IsDecorated t
+       , Eq (Decoration t)
+       , Graded (Decoration t)
+       , IsTree t
+       , IsVector t
+       , Num (VectorScalar t)
+       , Eq (VectorScalar t)
+       , Eq t
+       , Graded t
+       )
+    => PlanarAromatic t
+    -> Vector (VectorScalar t) (PlanarAromatic t)
+divergence (_, []) = vector Zero
+divergence (ma, t : ts) = (([], [t]) `graft` (ma, ts)) + linear ((,ts) . (: ma)) (divergenceT t)
+  where
+    divergenceT t' = mconcat $ map (vector . Cycle) $ branchPaths t'
 
-{- | Compute the divergence of a planar aromatic tree by connecting the root to the vertices.
+----------------------------------------------------------------------
+
+-- * Grafting
+
+----------------------------------------------------------------------
+
+{- |
+  Graft a planar rooted forest onto a multi-aroma.
 
 Examples:
 
->>> divergenceAT ([Aroma [PRTree 1 []]], PRTree 1 [])
-(1 *^ [(1[1])] + 1 *^ [(1),(1)])_2
->>> divergenceAT ([Aroma [PRTree 1 []]], PRTree 1 [PRTree 2 [], PRTree 3 []])
-(1 *^ [(1[1[2,3]])] + 1 *^ [(1[2,3]),(1)] + 1 *^ [(1[3],2),(1)] + 1 *^ [(1[2],3),(1)])_4
+>>> graftOnMultiAroma (iffb "1") [icfb "(1,1)"]
+(2 *^ [(1,1[1])])_3
+>>> graftOnMultiAroma (iffb "1") [icfb "(1,2)"]
+(1 *^ [(1,2[1])] + 1 *^ [(1[1],2)])_3
+>>> graftOnMultiAroma (iffb "1,2") [icfb "(1,2)"]
+(1 *^ [(1,2[1,2])] + 1 *^ [(1[1],2[2])] + 1 *^ [(1[2],2[1])] + 1 *^ [(1[1,2],2)])_4
+>>> graftOnMultiAroma (iffb "1") [icfb "1,1", icfb "1,2"]
+(1 *^ [(1,1),(1,2[1])] + 1 *^ [(1,1),(1[1],2)] + 2 *^ [(1,1[1]),(1,2)])_5
 -}
-divergenceAT :: (Eq a, Graded a) => APTree a -> PowerSeries Integer [Aroma (PRTree a)]
-divergenceAT (ma, t) = ([t] `graftOnMultiAroma` ma) + linear (: ma) (divergenceT t)
+graftOnMultiAroma
+    :: ( IsDecorated t
+       , Eq (Decoration t)
+       , Graded (Decoration t)
+       , IsTree t
+       , IsVector t
+       , Num (VectorScalar t)
+       , Eq (VectorScalar t)
+       , Eq t
+       , Graded t
+       )
+    => [t]
+    -> [Cycle t]
+    -> Vector (VectorScalar t) [Cycle t]
+graftOnMultiAroma [] ma = vector (1 *^ ma)
+graftOnMultiAroma _ [] = vector Zero
+graftOnMultiAroma f [a] = linear ((1 *^) . (: []) . Cycle) $ (f `graft`) $ unCycle a
+graftOnMultiAroma f (a : ma) = linear perCoproductTerm $ deshuffleCoproduct f
+  where
+    perCoproductTerm (x, y) = (x `graftOnMultiAroma` [a]) * (y `graftOnMultiAroma` ma)
 
--- * Non-planar aromatic forests
+{- |
+  Graft two aromatic planar forests.
 
--- Relies on the fact that @texify@ of @RTree@ is @\\forest{...}@.
-instance (Texifiable a, Eq a, Ord a) => Texifiable (Aroma (RTree a)) where
-    texify (Aroma l) = "\\forest{(" ++ L.intercalate "," (map bracketNotation l) ++ ")}"
+Examples:
+
+>>> graft (paiffb "(1),1") (paiffb "(2),2")
+(1 *^ ([(1),(2)],[2[1]]) + 1 *^ ([(1),(2[1])],[2]))_4
+-}
+instance
+    ( IsDecorated t
+    , Eq (Decoration t)
+    , Graded (Decoration t)
+    , IsTree t
+    , IsVector t
+    , Num (VectorScalar t)
+    , Eq (VectorScalar t)
+    , Eq t
+    , Graded t
+    )
+    => Graftable (PlanarAromatic t)
+    where
+    graft (ma1, f1) (ma2, f2) =
+        vector (ma1, [])
+            * linear perCoproductTerm (deshuffleCoproduct f1)
       where
-        bracketNotation = init . fromJust . L.stripPrefix "\\forest{" . texify
+        perCoproductTerm (x, y) =
+            linear (,[]) (x `graftOnMultiAroma` ma2)
+                * linear ([],) (y `graft` f2)
 
-type AForest a =
-    ( MS.MultiSet (Aroma (RTree a))
-    , MS.MultiSet (RTree a)
+----------------------------------------------------------------------
+
+-- * Aromatic Forest
+
+----------------------------------------------------------------------
+
+type Aromatic t =
+    ( MS.MultiSet (Cycle t)
+    , MS.MultiSet t
     )
 
-{- | Forget the order of aromas and all rooted trees involved.
+instance (Planarable t) => Planarable (Cycle t) where
+    type Planar (Cycle t) = Cycle (Planar t)
+
+    planar = Cycle . map planar . unCycle
+    nonplanar = Cycle . map nonplanar . unCycle
+
+{- |
+  Represent an aromatic forest in bracket notation or parse an aromatic
+  forest from bracket notation.
 
 Examples:
 
->>> af1 = ([Aroma [PRTree 1 []], Aroma [PRTree 2 []]], [PRTree 1 [PRTree 2 [], PRTree 3 []]])
->>> af2 = ([Aroma [PRTree 2 []], Aroma [PRTree 1 []]], [PRTree 1 [PRTree 3 [], PRTree 2 []]])
->>> af1 == af2
-False
->>> nonplanarAF af1 == nonplanarAF af2
-True
+>>> toBrackets show $ aiffb "(1,2),(3[4]),5[6]"
+"(1,2),(3[4]),5[6]"
+>>> fromBrackets read "(1,2),(3[4]),5[6]" :: Aromatic (Tree Integer)
+(fromOccurList [((1,2),1),((3[4]),1)],fromOccurList [(5[6],1)])
 -}
-nonplanarAF
-    :: ( Eq a
-       , Graded a
-       , Ord a
-       )
-    => APForest a
-    -> AForest a
-nonplanarAF (ma, f) = (MS.fromList $ map (fmap nonplanarT) ma, nonplanarF f)
+instance
+    ( Ord t
+    , Planarable t
+    , IsTree t
+    , IsDecorated t
+    , Decoration t ~ Decoration (Planar (Aromatic t))
+    , HasBracketNotation t
+    , HasBracketNotation (Planar (Aromatic t))
+    )
+    => HasBracketNotation (Aromatic t)
+    where
+    toBrackets f = toBrackets f . planar
 
-{- | Choose a canonical planar representation of an aromatic forest.
+    fromBrackets f = nonplanar . fromBrackets f
+
+----------------------------------------------------------------------
+
+-- * Substitution
+
+----------------------------------------------------------------------
+
+-- ** Mark
+
+data Marked a = Marked a | Mark deriving (Eq)
+
+instance (Show a) => Show (Marked a) where
+    show (Marked a) = "m" ++ show a
+    show Mark = "x"
+
+instance (Graded a) => Graded (Marked a) where
+    grading (Marked a) = grading a
+    grading Mark = 0
+
+instance (Ord a) => Ord (Marked a) where
+    compare (Marked a) (Marked b) = compare a b
+    compare Mark Mark = EQ
+    compare Mark _ = LT
+    compare _ Mark = GT
+
+instance (Texifiable a) => Texifiable (Marked a) where
+    texify (Marked a) = texify a
+    texify Mark = "x"
+
+class Markable a where
+    type Marked' a
+
+    mark :: a -> Marked' a
+    unmark :: Marked' a -> a
+
+instance (Markable a) => Markable [a] where
+    type Marked' [a] = [Marked' a]
+
+    mark = map mark
+    unmark = map unmark
+
+instance (Markable a, Ord a, Ord (Marked' a)) => Markable (MS.MultiSet a) where
+    type Marked' (MS.MultiSet a) = MS.MultiSet (Marked' a)
+
+    mark = MS.map mark
+    unmark = MS.map unmark
+
+instance (Markable a, Markable b) => Markable (a, b) where
+    type Marked' (a, b) = (Marked' a, Marked' b)
+
+    mark (a, b) = (mark a, mark b)
+    unmark (a, b) = (unmark a, unmark b)
+
+instance (Markable a) => Markable (Cycle a) where
+    type Marked' (Cycle a) = Cycle (Marked' a)
+
+    mark = Cycle . mark . unCycle
+    unmark = Cycle . unmark . unCycle
+
+instance Markable (PlanarTree d) where
+    type Marked' (PlanarTree d) = PlanarTree (Marked d)
+
+    mark (PT r c) = PT (Marked r) (mark c)
+    unmark (PT (Marked r) c) = PT r (unmark c)
+    unmark (PT Mark _) = error "Cannot unmark a marked vertex"
+
+instance (Ord d) => Markable (Tree d) where
+    type Marked' (Tree d) = Tree (Marked d)
+
+    mark (T r c) = T (Marked r) (mark c)
+    unmark (T (Marked r) c) = T r (unmark c)
+    unmark (T Mark _) = error "Cannot unmark a marked vertex"
+
+{- |
+  Build a syntactic tree for planar aromatic forest.
 
 Examples:
 
->>> planarAF (MS.fromList [Aroma [RTree 1 MS.empty], Aroma [RTree 2 MS.empty]], MS.fromList [RTree 1 $ MS.fromList [RTree 2 MS.empty, RTree 3 MS.empty]])
-([(1),(2)],[1[2,3]])
+>>> syn $ mark $ paiffb "(1),1"
+concat(trace(graft(([],[x]),([],[m1]))),([],[m1]))
+>>> syn $ mark $ paiffb "(1[2]),(3,4[5]),6[7],8"
+concat(trace(graft(concat(([],[x]),([],[m2])),([],[m1]))),trace(graft(graft(concat(([],[x]),([],[m5])),([],[m4])),([],[m3]))),graft(([],[m7]),([],[m6])),([],[m8]))
 -}
-planarAF
-    :: ( Eq a
-       , Graded a
-       , Ord a
+instance
+    ( IsVector t
+    , Num (VectorScalar t)
+    , Eq (VectorScalar t)
+    , Eq t
+    , Graded t
+    , IsTree t
+    , Decoration t ~ Marked d
+    , Eq d
+    , Graded d
+    )
+    => HasSyntacticTree (PlanarAromatic t)
+    where
+    syn ([], []) = Node concatOp []
+    syn ([Cycle ts], []) = Node traceOp [syn $ ([],) $ (: []) $ breakCycle ts]
+      where
+        breakCycle [] = buildTree Mark []
+        breakCycle (t : ts') = addBranch (breakCycle ts') t
+        addBranch b t = buildTree (root t) (b : children t)
+    syn ([], [t]) = case children t of
+        [] -> Leaf ([], [t])
+        bs -> Node graftOp [syn ([], bs), Leaf ([], [buildTree (root t) []])]
+    syn (as, ts) =
+        Node concatOp $
+            map (syn . (,[]) . (: [])) as
+                ++ map (syn . ([],) . (: [])) ts
+
+{- |
+  Operation used in the syntactic tree to represent the trace
+  operation, that is, the connection of the root to the marked
+  vertex.
+
+Examples:
+
+>>> func traceOp $ [([], [PT (Marked 1) [PT Mark [], PT (Marked 2) []]])]
+(1 *^ ([(m1[m2])],[]))_2
+>>> func traceOp $ [([Cycle [PT (Marked 3) [PT (Marked 4) [PT Mark []]]]], [PT (Marked 1) [PT (Marked 2) []]])]
+(1 *^ ([(m3[m4[m1[m2]]])],[]))_4
+-}
+traceOp
+    :: ( IsTree t
+       , Decoration t ~ Marked d
+       , IsVector t
+       , Num (VectorScalar t)
+       , Eq (VectorScalar t)
+       , Eq t
+       , Graded t
+       , Eq d
+       , Graded d
        )
-    => AForest a
-    -> APForest a
-planarAF (ma, f) = (map (fmap planarT) $ MS.toList ma, planarF f)
+    => Operation (PlanarAromatic t)
+traceOp = Op "trace" "$Tr$" 1 $
+    \l -> case l of
+        [f] -> connectRootToMarked f
+        _ -> error "Trace operation takes one argument"
+  where
+    connectRootToMarked (_, []) = error "Cannot trace a forest without roots"
+    connectRootToMarked (as, [t]) = case searchMarkTree (as, t) of
+        Nothing -> searchMarkAroma (as, t)
+        Just x -> vector x
+    connectRootToMarked (_, _) = error "Cannot trace a forest with multiple roots"
+    searchMarkTree (as, t) = case filter ((== buildTree Mark []) . last) $ branchPaths t of
+        [] -> Nothing
+        l -> Just $ (,[]) $ (: as) $ Cycle $ init $ head l
+    searchMarkAroma (as, t) = vector $ (,[]) $ map searchMarkAroma' as
+      where
+        searchMarkAroma' (Cycle ts) = Cycle $ map searchMarkAroma'' ts
+        searchMarkAroma'' t2 =
+            if t2 == buildTree Mark []
+                then t
+                else buildTree (root t2) $ map searchMarkAroma'' $ children t2

@@ -5,9 +5,9 @@ main =
     doctest
         [ "-isrc"
         , "src/Symbolics.hs"
-        , "src/RootedTree.hs"
         , "src/GradedList.hs"
-        , "src/Graph.hs"
+        , "src/RootedTree.hs"
+        , "src/SyntacticTree.hs"
         , "src/AromaticTree.hs"
-        , "src/Substitution.hs"
+        , "src/Graph.hs"
         ]

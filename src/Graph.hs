@@ -15,7 +15,7 @@ Stability   : experimental
 Implementation of the general Graph and RootedGraph typeclasses. As
 an example, the @IntegerGraph@ type is defined as an instance of
 @Graph@. The data @Rooted@ is defined as a map from @Graph@ to
-@RootedGraph@. The @graft@ and @graftTo@ functions are also defined
+@RootedGraph@. The @graftGraph@ and @graftGraphTo@ functions are also defined
 here.
 -}
 module Graph (
@@ -38,8 +38,8 @@ module Graph (
     root,
     Rooted,
     rooted,
-    graft,
-    graftTo,
+    graftGraph,
+    graftGraphTo,
     getVertex,
 ) where
 
@@ -61,12 +61,16 @@ import GradedList (
     grading,
  )
 import Symbolics (
-    PowerSeries,
-    fromInfListV,
+    Vector,
+    vectorFromNonDecList,
     (*^),
  )
 
+----------------------------------------------------------------------
+
 -- * Graphs
+
+----------------------------------------------------------------------
 
 {- |
   To define a graph, we need to define a graph edge first. A graph
@@ -131,7 +135,8 @@ class
     -- | Add an edge to a graph.
     addEdge :: Edge g -> g -> g
 
-{- | Check if a vertex is in a graph.
+{- |
+  Check if a vertex is in a graph.
 
 Example:
 
@@ -143,7 +148,8 @@ False
 vertexOf :: (Eq a, Graph g, Vertex g ~ a) => a -> g -> Bool
 vertexOf v g = v `elem` vertices g
 
-{- | Naive implementation of a graph given by a multiset of vertices
+{- |
+  Naive implementation of a graph given by a multiset of vertices
 and a multiset of edges.
 -}
 data IntegerGraph
@@ -151,7 +157,8 @@ data IntegerGraph
         (MS.MultiSet Integer)
         (MS.MultiSet (Integer, Integer))
 
-{- | A constructor of the @IntegerGraph@ type.
+{- |
+  A constructor of the @IntegerGraph@ type.
 
 Example:
 
@@ -161,7 +168,8 @@ IntegerGraph(V=[1,2,3], E=[(1,2),(2,3)])
 integerGraph :: [Integer] -> [(Integer, Integer)] -> IntegerGraph
 integerGraph vs es = IG (MS.fromList vs) (MS.fromList es)
 
-{- | The @IntegerGraph@ type is an instance of the @Graph@ typeclass.
+{- |
+  The @IntegerGraph@ type is an instance of the @Graph@ typeclass.
 
 Example:
 
@@ -197,9 +205,14 @@ instance Show IntegerGraph where
         vs = show $ MS.toList $ vertices g
         es = show $ MS.toList $ edges g
 
+----------------------------------------------------------------------
+
 -- * Rooted graphs
 
-{- | A typeclass for rooted graphs which have a distinguished vertex
+----------------------------------------------------------------------
+
+{- |
+  A typeclass for rooted graphs which have a distinguished vertex
 called the root.
 -}
 class (Graph g) => RootedGraph g where
@@ -212,6 +225,12 @@ instance (Show g, Show (Vertex g)) => Show (Rooted g) where
     show (R r g) = "Rooted" ++ trimmedShowG ++ ", R=" ++ show r ++ ")"
       where
         trimmedShowG = L.init $ show g
+
+instance (Eq (Vertex g), Eq g) => Eq (Rooted g) where
+    (R r1 g1) == (R r2 g2) = (r1 == r2) && (g1 == g2)
+
+instance (Graded g) => Graded (Rooted g) where
+    grading (R _ g) = grading g
 
 instance (Graph g) => Graph (Rooted g) where
     type Edge (Rooted g) = Edge g
@@ -239,7 +258,11 @@ rooted g r =
         then R r g
         else error "Root vertex not in graph"
 
+----------------------------------------------------------------------
+
 -- * Grafting
+
+----------------------------------------------------------------------
 
 -- | Two integer graphs are equal if their vertices and edges are equal.
 instance Eq IntegerGraph where
@@ -249,15 +272,16 @@ instance Eq IntegerGraph where
 instance Graded IntegerGraph where
     grading = toInteger . length . vertices
 
-{- | Grafing of two graphs.
+{- |
+  Grafing of two graphs.
 
 Example:
 
 >>> g1 = integerGraph [1, 2, 3] [(2, 1), (3, 2)]
->>> graft (rooted g1 1) (integerGraph [4, 5] [(5, 4)])
+>>> graftGraph (rooted g1 1) (integerGraph [4, 5] [(5, 4)])
 (1 *^ IntegerGraph(V=[1,2,3,4,5], E=[(1,4),(2,1),(3,2),(5,4)]) + 1 *^ IntegerGraph(V=[1,2,3,4,5], E=[(1,5),(2,1),(3,2),(5,4)]))_5
 -}
-graft
+graftGraph
     :: ( Eq a2
        , Graded a2
        , RootedGraph a1
@@ -266,22 +290,23 @@ graft
        )
     => a1
     -> a2
-    -> PowerSeries Integer a2
-graft rg1 g2 =
-    fromInfListV $
-        map ((1 *^) . graftTo rg1 g2) $
+    -> Vector Integer a2
+graftGraph rg1 g2 =
+    vectorFromNonDecList $
+        map ((1 *^) . graftGraphTo rg1 g2) $
             MS.toList $
                 vertices g2
 
-{- | Grafing of a rooted graph to a graph at a given vertex.
+{- |
+  Grafing of a rooted graph to a graph at a given vertex.
 
 Example:
 
 >>> g1 = integerGraph [1, 2, 3] [(2, 1), (3, 2)]
->>> graftTo (rooted g1 1) (integerGraph [4, 5] [(5, 4)]) 5
+>>> graftGraphTo (rooted g1 1) (integerGraph [4, 5] [(5, 4)]) 5
 IntegerGraph(V=[1,2,3,4,5], E=[(1,5),(2,1),(3,2),(5,4)])
 -}
-graftTo
+graftGraphTo
     :: ( RootedGraph a1
        , Graph a2
        , Edge a1 ~ Edge a2
@@ -290,7 +315,7 @@ graftTo
     -> a2
     -> Vertex a2
     -> a2
-graftTo rg1 g2 v = addGraph rg1 $ addEdge new_edge g2
+graftGraphTo rg1 g2 v = addGraph rg1 $ addEdge new_edge g2
   where
     new_edge = edge () (root rg1) v
 

@@ -27,12 +27,12 @@ import GradedList (
     grading,
  )
 import Symbolics (
-    PowerSeries (..),
     ScalarProduct,
     Sum (Zero),
+    Vector (..),
     lengthV,
-    toListPS,
     toListS,
+    toListV,
     pattern (:*^),
  )
 import System.Directory (copyFile)
@@ -110,6 +110,9 @@ instance Texifiable Char where
     texify c = [c]
 
 instance Texifiable Integer where
+    texify = show
+
+instance Texifiable Int where
     texify = show
 
 -- | Lists represent products.
@@ -194,19 +197,19 @@ instance
     , Texifiable k
     , Texifiable a
     )
-    => Texifiable (PowerSeries k a)
+    => Texifiable (Vector k a)
     where
     texifyID _ = "PowSer"
     texify v =
         intercalate " + " $
             map texify $
                 filter (/= Zero) $
-                    toListPS v
+                    toListV v
     texifyDebug i j v =
         intercalate " + " $
             map (texifyD i j) $
                 filter (/= Zero) $
-                    toListPS v
+                    toListV v
     texifyParentheses x =
         if lengthV x > 1
             then ("(", ")")
@@ -241,6 +244,7 @@ printPdf str = do
                 proc "pdflatex" ["tmp.tex"]
 
     copyFile "texput/tmp.pdf" "output.pdf"
+    copyFile "texput/tmp.tex" "output.tex"
 
     runProcess_ $
         shell "zathura --synctex-forward :: output.pdf > /dev/null &"
@@ -256,7 +260,7 @@ display
        , Texifiable k
        , Texifiable a
        )
-    => PowerSeries k a
+    => Vector k a
     -> IO ()
 display v = printPdf $ " $ " ++ texify v ++ " $ "
 
@@ -273,7 +277,7 @@ displayDebug
        )
     => Integer
     -> Integer
-    -> PowerSeries k a
+    -> Vector k a
     -> IO ()
 displayDebug startLevel endLevel v =
     printPdf $
