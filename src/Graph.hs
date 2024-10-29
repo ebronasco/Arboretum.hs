@@ -8,7 +8,7 @@
 Module      : Graph
 Description : General graphs, rooted graphs, and grafting of graphs.
 Copyright   : (c) University of Geneva, 2024
-License     : MIT
+License     : BSD-3
 Maintainer  : Eugen Bronasco (ebronasco@gmail.com)
 Stability   : experimental
 

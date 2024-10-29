@@ -9,7 +9,7 @@
 Module      : RootedTree
 Description : Planar and non-planar trees, forests, and their grafting and substitution.
 Copyright   : (c) University of Geneva, 2024
-License     : MIT
+License     : BSD-3
 Maintainer  : Eugen Bronasco (ebronasco@gmail.com)
 Stability   : experimental
 

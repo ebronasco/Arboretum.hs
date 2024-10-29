@@ -8,7 +8,7 @@
 Module      : SyntacticTree
 Description : Syntactic trees and their compositions are used to implement automorphisms and are related to the concept of operads.
 Copyright   : (c) University of Geneva, 2024
-License     : MIT
+License     : BSD-3
 Maintainer  : Eugen Bronasco (ebronasco@gmail.com)
 Stability   : experimental
 

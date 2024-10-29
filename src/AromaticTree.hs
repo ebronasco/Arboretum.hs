@@ -9,7 +9,7 @@
 Module      : AromaticTree
 Description : Implementation of non-planar aromatic trees, forests, their grafting, divergence, and substitution.
 Copyright   : (c) University of Geneva, 2024
-License     : MIT
+License     : BSD-3
 Maintainer  : Eugen Bronasco (ebronasco@gmail.com)
 Stability   : experimental
 -}

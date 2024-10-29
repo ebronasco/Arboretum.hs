@@ -9,7 +9,7 @@
 Module      : Symbolics
 Description : Symbolic algebra in Haskell using graded vector spaces.
 Copyright   : (c) University of Geneva, 2024
-License     : MIT
+License     : BSD-3
 Maintainer  : Eugen Bronasco (ebronasco@gmail.com)
 Stability   : experimental
 

@@ -4,7 +4,7 @@
 Module      : Output
 Description : Generate TeX output, pdf, and display it in a pdf viewer.
 Copyright   : (c) University of Geneva, 2024
-License     : MIT
+License     : BSD-3
 Maintainer  : Eugen Bronasco (ebronasco@gmail.com)
 Stability   : experimental
 

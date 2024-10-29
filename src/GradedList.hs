@@ -2,7 +2,7 @@
 Module      : GradedList
 Description : Utilities for lists of graded elements.
 Copyright   : (c) University of Geneva, 2024
-License     : MIT
+License     : BSD-3
 Maintainer  : Eugen Bronasco (ebronasco@gmail.com)
 Stability   : experimental
 
