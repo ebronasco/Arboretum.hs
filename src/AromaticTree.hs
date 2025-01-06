@@ -150,6 +150,17 @@ instance (IsTree t, HasBracketNotation t) => HasBracketNotation (Cycle t) where
                 then init $ tail str
                 else str
 
+{- |
+  Use brakcet notation of cycles to generate TeX code.
+
+Examples:
+
+>>> texify $ Cycle $ iffb "1[2,3],2[3,4]"
+"\\forest{(1[2,3],2[3,4])}"
+-}
+instance (Texifiable (Decoration t), IsTree t, HasBracketNotation t) => Texifiable (Cycle t) where
+    texify c = "\\forest{" ++ toBrackets texify c ++ "}"
+
 ----------------------------------------------------------------------
 
 -- * Planar Aromatic Forest
