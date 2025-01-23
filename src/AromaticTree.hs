@@ -18,6 +18,9 @@ module AromaticTree (
     divergence,
     PlanarAromatic,
     Aromatic,
+    Marked(Marked),
+    mark,
+    unmark,
 ) where
 
 import Control.Monad.State (evalState, get, put)

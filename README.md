@@ -2,7 +2,7 @@
 
 Haskell package for symbolic manipulation of algebras of graphs, including Butcher series (B-series).
 
-#### README to be completed soon.
+The manual can be found in the **manual** directory.
 
 ### Tools used:
 
