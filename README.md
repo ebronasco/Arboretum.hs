@@ -51,7 +51,7 @@ Contributions are welcome! Please:
 
 This project is licensed under the **BSD 3-Clause "New" or "Revised" License**. See the `LICENSE` file for details.
 
-### Development
+## Development
 
 - **Autoformatting**:  
   `fourmolu -i <file-name>`  
