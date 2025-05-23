@@ -1,6 +1,6 @@
-name:                graphal
+name:                arboretum
 version:             0.1.0.0
-github:              "ebronasco/graphal"
+github:              "ebronasco/arboretum"
 license:             BSD-3-Clause
 author:              "Eugen Bronasco"
 maintainer:          "ebronasco@gmail.com"
@@ -17,7 +17,7 @@ extra-source-files:
 # To avoid duplicated efforts in documentation and dealing with the
 # complications of embedding Haddock markup inside cabal files, it is
 # common to point users to the README.md file.
-description:         Please see the README on GitHub at <https://github.com/ebronasco/graphal#readme>
+description:         Please see the README on GitHub at <https://github.com/ebronasco/arboretum#readme>
 
 dependencies:
 - base >= 4.7 && < 5
@@ -41,7 +41,7 @@ library:
   source-dirs: src
 
 executables:
-  graphal-exe:
+  arboretum-exe:
     main:                Main.hs
     source-dirs:         app
     ghc-options:
@@ -49,13 +49,13 @@ executables:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - graphal
+    - arboretum
     when:
     - condition: false
-      other-modules: Paths_graphal
+      other-modules: Paths_arboretum
 
 tests:
-  graphal-test:
+  arboretum-test:
     main:                Spec.hs
     source-dirs:         test
     ghc-options:
@@ -63,7 +63,7 @@ tests:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - graphal
+    - arboretum
     - doctest
     - QuickCheck
     - mtl

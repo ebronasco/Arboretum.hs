@@ -18,7 +18,7 @@ module AromaticTree (
     divergence,
     PlanarAromatic,
     Aromatic,
-    Marked(Marked),
+    Marked (Marked),
     mark,
     unmark,
 ) where

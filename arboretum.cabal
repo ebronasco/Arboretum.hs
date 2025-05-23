@@ -4,11 +4,11 @@ cabal-version: 2.2
 --
 -- see: https://github.com/sol/hpack
 
-name:           graphal
+name:           arboretum
 version:        0.1.0.0
-description:    Please see the README on GitHub at <https://github.com/ebronasco/graphal#readme>
-homepage:       https://github.com/ebronasco/graphal#readme
-bug-reports:    https://github.com/ebronasco/graphal/issues
+description:    Please see the README on GitHub at <https://github.com/ebronasco/arboretum#readme>
+homepage:       https://github.com/ebronasco/arboretum#readme
+bug-reports:    https://github.com/ebronasco/arboretum/issues
 author:         Eugen Bronasco
 maintainer:     ebronasco@gmail.com
 copyright:      2023
@@ -21,7 +21,7 @@ extra-source-files:
 
 source-repository head
   type: git
-  location: https://github.com/ebronasco/graphal
+  location: https://github.com/ebronasco/arboretum.hs
 
 library
   exposed-modules:
@@ -33,9 +33,9 @@ library
       Symbolics
       SyntacticTree
   other-modules:
-      Paths_graphal
+      Paths_arboretum
   autogen-modules:
-      Paths_graphal
+      Paths_arboretum
   hs-source-dirs:
       src
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields
@@ -48,7 +48,7 @@ library
     , typed-process
   default-language: Haskell2010
 
-executable graphal-exe
+executable arboretum-exe
   main-is: Main.hs
   hs-source-dirs:
       app
@@ -56,20 +56,20 @@ executable graphal-exe
   build-depends:
       base >=4.7 && <5
     , directory
-    , graphal
+    , arboretum
     , groups
     , mtl
     , multiset
     , typed-process
   default-language: Haskell2010
 
-test-suite graphal-test
+test-suite arboretum-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
-      Paths_graphal
+      Paths_arboretum
   autogen-modules:
-      Paths_graphal
+      Paths_arboretum
   hs-source-dirs:
       test
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -threaded -rtsopts -with-rtsopts=-N
@@ -78,7 +78,7 @@ test-suite graphal-test
     , base >=4.7 && <5
     , directory
     , doctest
-    , graphal
+    , arboretum
     , groups
     , mtl
     , multiset

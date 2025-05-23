@@ -21,6 +21,8 @@ module RootedTree (
     IsTree (..),
     HasBracketNotation (..),
     parseForest,
+    parseTree,
+    parseDecoration,
     PlanarTree (..),
     Tree (..),
     Planarable,
@@ -95,20 +97,14 @@ instance (Ord t, IsTree t, HasBracketNotation t) => HasBracketNotation (MS.Multi
     toBrackets f = intercalate "," . map (toBrackets f) . MS.toList
     fromBrackets decFromStr = MS.fromList . evalState (parseForest decFromStr)
 
-{-
-  The functions @parseTree@, @parseDecoration@, and @parseForest@ are
-  used to parse a string into a tree or forest using the bracket
-  notation. They are placed outside the instance definition to allow
-  other instances to use them.
+{- |
+  The function @parseTree@ is used to parse a string into a tree
+  using the bracket notation.
 
 Examples:
 
->>> evalState (parseTree read) "1[2]"
+>>> evalState (parseTree read) "1[2]" :: PlanarTree Integer
 1[2]
->>> evalState (parseForest read) "1[2],3[4,5[6]],7"
-[1[2],3[4,5[6]],7]
->>> evalState (parseDecoration read) "1234["
-1234
 -}
 parseTree :: (IsTree t) => (String -> Decoration t) -> State String t
 parseTree decFromStr = do
@@ -130,6 +126,15 @@ parseTree decFromStr = do
             return $ buildTree dec []
         _ -> error "fromBrackets: invalid input"
 
+{- |
+  The function @parseDecoration@ is used to parse a string as a
+  decoration using the bracket notation.
+
+Examples:
+
+>>> evalState (parseDecoration read) "1234[" :: Integer
+1234
+-}
 parseDecoration :: (String -> d) -> State String d
 parseDecoration decFromStr = do
     str <- get
@@ -140,6 +145,15 @@ parseDecoration decFromStr = do
             put str'
             return $ decFromStr dec'
 
+{- |
+  The function @parseForest@ is used to parse a string into a forest
+  using the bracket notation.
+
+Examples:
+
+>>> evalState (parseForest read) "1[2],3[4,5[6]],7" :: [PlanarTree Integer]
+[1[2],3[4,5[6]],7]
+-}
 parseForest :: (IsTree t) => (String -> Decoration t) -> State String [t]
 parseForest decFromStr = do
     str <- get
