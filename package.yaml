@@ -1,6 +1,6 @@
 name:                arboretum
-version:             0.1.0.0
-github:              "ebronasco/arboretum"
+version:             0.1.0.1
+github:              "ebronasco/arboretum.hs"
 license:             BSD-3-Clause
 author:              "Eugen Bronasco"
 maintainer:          "ebronasco@gmail.com"
@@ -11,13 +11,13 @@ extra-source-files:
 - CHANGELOG.md
 
 # Metadata used when publishing your package
-# synopsis:            Short description of your package
-# category:            Web
+synopsis:            Symbolic computation in algebras of graphs.
+category:            Symbolic Computation, Operads, Algebra, Graphs
 
 # To avoid duplicated efforts in documentation and dealing with the
 # complications of embedding Haddock markup inside cabal files, it is
 # common to point users to the README.md file.
-description:         Please see the README on GitHub at <https://github.com/ebronasco/arboretum#readme>
+description:         Please see the README on GitHub at <https://github.com/ebronasco/arboretum.hs#readme>
 
 dependencies:
 - base >= 4.7 && < 5
