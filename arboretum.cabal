@@ -1,12 +1,14 @@
 cabal-version: 2.2
 
--- This file has been generated from package.yaml by hpack version 0.36.0.
+-- This file has been generated from package.yaml by hpack version 0.35.2.
 --
 -- see: https://github.com/sol/hpack
 
 name:           arboretum
 version:        0.1.0.0
+synopsis:       Symbolic computation in algebras of graphs.
 description:    Please see the README on GitHub at <https://github.com/ebronasco/arboretum.hs#readme>
+category:       Symbolic Computation, Operads, Algebra, Graphs
 homepage:       https://github.com/ebronasco/arboretum.hs#readme
 bug-reports:    https://github.com/ebronasco/arboretum.hs/issues
 author:         Eugen Bronasco
@@ -54,9 +56,9 @@ executable arboretum-exe
       app
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -rtsopts -with-rtsopts=-N
   build-depends:
-      base >=4.7 && <5
+      arboretum
+    , base >=4.7 && <5
     , directory
-    , arboretum
     , groups
     , mtl
     , multiset
@@ -75,10 +77,10 @@ test-suite arboretum-test
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       QuickCheck
+    , arboretum
     , base >=4.7 && <5
     , directory
     , doctest
-    , arboretum
     , groups
     , mtl
     , multiset
