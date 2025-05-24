@@ -6,9 +6,9 @@ cabal-version: 2.2
 
 name:           arboretum
 version:        0.1.0.0
-description:    Please see the README on GitHub at <https://github.com/ebronasco/arboretum#readme>
-homepage:       https://github.com/ebronasco/arboretum#readme
-bug-reports:    https://github.com/ebronasco/arboretum/issues
+description:    Please see the README on GitHub at <https://github.com/ebronasco/arboretum.hs#readme>
+homepage:       https://github.com/ebronasco/arboretum.hs#readme
+bug-reports:    https://github.com/ebronasco/arboretum.hs/issues
 author:         Eugen Bronasco
 maintainer:     ebronasco@gmail.com
 copyright:      2023
