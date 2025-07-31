@@ -235,7 +235,7 @@ instance (Show d) => Show (PlanarTree d) where
 
 -- | Planar trees are vectors with integer coefficients.
 instance (Eq d, Graded d) => IsVector (PlanarTree d) where
-    type VectorScalar (PlanarTree d) = Integer
+    type VectorScalar (PlanarTree d) = Double
     type VectorBasis (PlanarTree d) = PlanarTree d
 
     vector = vector . (1 *^)
@@ -315,7 +315,7 @@ instance (Show d, Ord d) => Show (Tree d) where
     show = toBrackets show
 
 instance (Eq d, Ord d, Graded d) => IsVector (Tree d) where
-    type VectorScalar (Tree d) = Integer
+    type VectorScalar (Tree d) = Double
     type VectorBasis (Tree d) = Tree d
 
     vector = vector . (1 *^)

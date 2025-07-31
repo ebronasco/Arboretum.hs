@@ -30,6 +30,7 @@ module Symbolics (
     vectorFromList,
     vectorFromNonDecList,
     terms,
+    termsGraded,
     basisElements,
     linear,
     linearGraded,
@@ -608,6 +609,20 @@ Examples:
 -}
 terms :: Vector k a -> [ScalarProduct k a]
 terms = concatMap toListS . toListV
+
+{- |
+  Returns a graded list of @ScalarProduct@ of a vector.
+
+Examples:
+
+>>> v = Zero &: (1 *^ "x" +: 1 *^ "y" +: Zero) &: (1 *^ "xy" +: 1 *^ "yy" +: Zero) &: Empty
+>>> termsGraded v
+[[1 *^ "x",1 *^ "y"],[1 *^ "xy",1 *^ "yy"]]
+-}
+termsGraded :: Vector k a -> [[ScalarProduct k a]]
+termsGraded = map toListS . toListV
+
+
 
 {- |
   A list of basis elements of a vector.

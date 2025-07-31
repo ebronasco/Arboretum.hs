@@ -42,11 +42,16 @@ expGL
        , Graded t
        , Eq (Decoration t)
        , Graded (Decoration t)
+       , Fractional (VectorScalar t)
        )
     => S.Vector (S.VectorScalar t) [t]
     -> S.Vector (S.VectorScalar t) [t]
     -> S.Vector (S.VectorScalar t) [t]
-expGL gen start = S.vectorFromNonDecList $ foldr1 (++) $ map terms $ iterate (S.bilinear gl gen) start
+expGL gen start = S.vectorFromNonDecList
+                    $ foldr1 (++)
+                    $ map (terms . (\(k,x) -> S.scale (1 / (fromInteger $ product [1..k])) x))
+                    $ zip (1:[1..] :: [Integer])
+                    $ iterate (S.bilinear gl gen) start
 
 bseries
     :: ( IsTree t
@@ -57,11 +62,12 @@ bseries
        , Graded t
        , Eq (Decoration t)
        , Graded (Decoration t)
+       , Fractional (VectorScalar t)
        )
     => S.Vector (S.VectorScalar t) [t]
-    -> (S.VectorScalar t -> [t] -> S.VectorScalar t)
+    -> ([t] -> S.VectorScalar t)
     -> S.Vector (S.VectorScalar t) [t]
-bseries f a = S.renormalize a $ expGL f $ S.vector []
+bseries gen coeff = S.renormalize (\_ x -> coeff x) $ expGL gen $ S.vector []
 
 -- RK coeffs
 
@@ -72,8 +78,38 @@ b = LA.vector [1 / 8, 3 / 8, 3 / 8, 1 / 8]
 
 a = LA.matrix 4 [0, 0, 0, 0, 1 / 3, 0, 0, 0, -1 / 3, 1, 0, 0, 1, -1, 1, 0]
 
-rk_coeff :: LA.Matrix LA.R -> LA.Vector LA.R -> t -> LA.R
-rk_coeff a_ij b_i t = 1
+rkCoeff
+    :: (IsTree t)
+    => LA.Matrix LA.R
+    -> LA.Vector LA.R
+    -> t
+    -> LA.R
+rkCoeff aij bi t = (<.>) bi $ product $ (v1 :) $ map (rkInternalCoeff aij) $ children t
+
+rkInternalCoeff
+    :: (IsTree t)
+    => LA.Matrix LA.R
+    -> t
+    -> LA.Vector R
+rkInternalCoeff aij t = (#>) aij $ product $ (v1 :) $ map (rkInternalCoeff aij) $ children t
+
+rkbseries
+    :: ( IsTree t
+       , IsVector t
+       , Num (VectorScalar t)
+       , Eq (VectorScalar t)
+       , Eq t
+       , Graded t
+       , Eq (Decoration t)
+       , Graded (Decoration t)
+       , VectorScalar t ~ LA.R
+       , Fractional (VectorScalar t)
+       )
+    => S.Vector (S.VectorScalar t) [t]
+    -> LA.Matrix LA.R
+    -> LA.Vector LA.R
+    -> S.Vector (S.VectorScalar t) [t]
+rkbseries gen aij bi = bseries gen $ product . map (rkCoeff aij bi)
 
 -- DEBUG
 
