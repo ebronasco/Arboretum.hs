@@ -109,7 +109,15 @@ rkbseries
     -> LA.Matrix LA.R
     -> LA.Vector LA.R
     -> S.Vector (S.VectorScalar t) [t]
-rkbseries gen aij bi = bseries gen $ product . map (rkCoeff aij bi)
+rkbseries gen aij bi = renormalize factorize $ bseries gen $ product . map (rkCoeff aij bi)
+  where
+    factorize k ts = k * (factorize' ts)
+    factorize' ts = (1 / (factorial $ length ts)) * (product $ map (factorize' . children) ts)
+    factorial n = fromInteger $ toInteger $ product [1..n]
+
+exact = expGL (S.vector [PT 1 []]) $ S.vector [] :: S.Vector LA.R [PlanarTree Integer]
+rk = rkbseries (S.vector [PT 1 []]) a b
+err = S.takeV 10 $ rk - exact
 
 -- DEBUG
 
