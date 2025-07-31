@@ -45,6 +45,7 @@ library
       base >=4.7 && <5
     , directory
     , groups
+    , hmatrix
     , mtl
     , multiset
     , typed-process
@@ -60,6 +61,7 @@ executable arboretum-exe
     , base >=4.7 && <5
     , directory
     , groups
+    , hmatrix
     , mtl
     , multiset
     , typed-process
@@ -82,6 +84,7 @@ test-suite arboretum-test
     , directory
     , doctest
     , groups
+    , hmatrix
     , mtl
     , multiset
     , typed-process

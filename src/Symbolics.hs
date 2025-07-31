@@ -587,9 +587,9 @@ instance
 
     fromInteger n = fromInteger n &: Empty
 
-    abs = error "abs not implemented for GradedAlgebra"
+    abs = error "abs not implemented for Vector"
 
-    signum = error "signum not implemented for GradedAlgebra"
+    signum = error "signum not implemented for Vector"
 
 ----------------------------------------------------------------------
 

@@ -26,6 +26,7 @@ dependencies:
 - directory
 - typed-process
 - mtl
+- hmatrix
 
 ghc-options:
 - -Wall
