@@ -38,6 +38,8 @@ import Symbolics (
 import System.Directory (copyFile)
 import System.Process.Typed
 import Text.Printf
+import Data.MultiSet qualified as MS
+import Numeric.LinearAlgebra qualified as LA
 
 {- |
   To be displayed in a pdf using LaTeX, a type must be an
@@ -115,7 +117,10 @@ instance Texifiable Integer where
 instance Texifiable Int where
     texify = show
 
--- | Lists represent products.
+instance Texifiable LA.R where
+    texify = show
+
+-- | Lists represent free associative products.
 instance
     ( Texifiable a
     , Eq a
@@ -133,6 +138,26 @@ instance
         if length x > 1
             then ("(", ")")
             else ("", "")
+
+-- | MultiSets represent free associative commutative products.
+instance
+    ( Texifiable a
+    , Eq a
+    )
+    => Texifiable (MS.MultiSet a)
+    where
+    texifyID _ = "CommProd"
+    texify os
+        | null os = "1"
+        | otherwise = intercalate " \\cdot " $ MS.elems $ MS.map texifyP os
+    texifyDebug i j os
+        | null os = "1"
+        | otherwise = intercalate " \\cdot " $ MS.elems $ MS.map (texifyD i j) os
+    texifyParentheses x =
+        if length x > 1
+            then ("(", ")")
+            else ("", "")
+
 
 -- | Tuples represent tensor products.
 instance

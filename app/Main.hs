@@ -1,5 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -w #-}
 
 import AromaticTree
@@ -32,6 +34,26 @@ buildGraphs = do
     return (rg1, g1, g2)
 
 (rg1, g1, g2) = evalState buildGraphs [1 ..]
+
+
+-- Butcher series
+
+setTolerancePow :: (Floating k, Ord k, Num k, Eq k, Eq t, Graded t) => Integer -> S.Vector k t -> S.Vector k t
+setTolerancePow tol = S.renormalize checkTol
+  where
+    checkTol k x
+        | k < 10.0**(fromInteger $ -tol) = fromInteger 0
+        | otherwise = k
+
+instance (Planarable t, Num k, Eq k, Eq t, Eq (Planar t), Graded (Planar t), Graded t) => Planarable (S.Vector k t) where
+    type Planar (S.Vector k t) = S.Vector k (Planar t)
+ 
+    planar = linearNonDec lplanar
+      where
+        lplanar t = S.vector $ 1 *^ (planar t)    
+    nonplanar = linearNonDec lnonplanar
+      where
+        lnonplanar t = S.vector $ 1 *^ (nonplanar t)    
 
 expGL
     :: ( IsTree t
