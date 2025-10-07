@@ -115,6 +115,9 @@ instance Texifiable Integer where
 instance Texifiable Int where
     texify = show
 
+instance Texifiable Double where
+    texify = show
+
 -- | Lists represent products.
 instance
     ( Texifiable a

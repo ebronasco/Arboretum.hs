@@ -33,25 +33,7 @@ buildGraphs = do
 
 (rg1, g1, g2) = evalState buildGraphs [1 ..]
 
-expGL
-    :: ( IsTree t
-       , IsVector t
-       , Num (VectorScalar t)
-       , Eq (VectorScalar t)
-       , Eq t
-       , Graded t
-       , Eq (Decoration t)
-       , Graded (Decoration t)
-       , Fractional (VectorScalar t)
-       )
-    => S.Vector (S.VectorScalar t) [t]
-    -> S.Vector (S.VectorScalar t) [t]
-    -> S.Vector (S.VectorScalar t) [t]
-expGL gen start = S.vectorFromNonDecList
-                    $ foldr1 (++)
-                    $ map (terms . (\(k,x) -> S.scale (1 / (fromInteger $ product [1..k])) x))
-                    $ zip (1:[1..] :: [Integer])
-                    $ iterate (S.bilinear gl gen) start
+-------------- Butcher series
 
 bseries
     :: ( IsTree t
@@ -68,6 +50,31 @@ bseries
     -> ([t] -> S.VectorScalar t)
     -> S.Vector (S.VectorScalar t) [t]
 bseries gen coeff = S.renormalize (\_ x -> coeff x) $ expGL gen $ S.vector []
+
+-- Exact solution
+
+expGL
+    :: ( IsTree t
+       , IsVector t
+       , Num (VectorScalar t)
+       , Eq (VectorScalar t)
+       , Eq t
+       , Graded t
+       , Eq (Decoration t)
+       , Graded (Decoration t)
+       , Fractional (VectorScalar t)
+       )
+    => S.Vector (S.VectorScalar t) [t]
+    -> S.Vector (S.VectorScalar t) [t]
+    -> S.Vector (S.VectorScalar t) [t]
+expGL gen start =
+    S.vectorFromNonDecList $
+        foldr1 (++) $
+            map (terms . (\(k, x) -> S.scale (1 / (fromInteger $ product [1 .. k])) x)) $
+                zip (1 : [1 ..] :: [Integer]) $
+                    iterate (S.bilinear gl gen) start
+
+-- Runge-Kutta methods
 
 -- RK coeffs
 
@@ -126,6 +133,48 @@ conc = (++)
 infvec = vectorFromNonDecList [i *^ (take i $ repeat 'c') | i <- [0 ..]]
 
 -- / DEBUG
+
+----------------------- Magmatic product
+
+magprod
+    :: ( IsTree t
+       , Graded t
+       , S.IsVector t
+       , Eq t
+       , Eq (S.VectorScalar t)
+       , Num (S.VectorScalar t)
+       , Num (Decoration t)
+       )
+    => [t] -> [t] -> S.Vector (S.VectorScalar t) [t]
+magprod f1 f2 = S.vector $ f1 ++ [buildTree 1 f2]
+
+-- | Magmatic product operation.
+magrpodOp
+    :: ( IsTree t
+       , Graded t
+       , S.IsVector t
+       , Eq t
+       , Eq (S.VectorScalar t)
+       , Num (S.VectorScalar t)
+       , Num (Decoration t)
+       ) => Operation [t]
+magrpodOp = Op "magprod" "$\\times_\\bullet$" 2 $
+    \ops ->
+        case ops of
+            [x, y] -> magprod x y
+            _ -> error "magrpodOp: arity"
+
+buildSyntacticTree
+    :: ( IsTree t
+       , Graded t
+       , S.IsVector t
+       , Eq t
+       , Eq (S.VectorScalar t)
+       , Num (S.VectorScalar t)
+       , Num (Decoration t)
+    ) => [t] -> SyntacticTree [t]
+buildSyntacticTree [] = Leaf []
+buildSyntacticTree ts = Node magrpodOp $ map buildSyntacticTree [init ts, children $ last ts]
 
 main = do
     putStrLn "Graph 1"
