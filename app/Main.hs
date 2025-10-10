@@ -136,7 +136,32 @@ infvec = vectorFromNonDecList [i *^ (take i $ repeat 'c') | i <- [0 ..]]
 
 ----------------------- Magmatic product
 
-magprod
+magIsEmpty :: [t] -> Bool
+magIsEmpty [] = True
+magIsEmpty _ = False
+
+magLeft :: [t] -> [t]
+magLeft = init
+
+magRight :: (IsTree t) => [t] -> [t]
+magRight = children . last
+
+magRoot :: (IsTree t) => [t] -> Decoration t
+magRoot = RootedTree.root . last
+
+magBm :: (IsTree t) => t -> [t]
+magBm = children
+
+magBp :: (IsTree t, Num (Decoration t)) => [t] -> t
+magBp = buildTree 1
+
+magProd :: (IsTree t, Num (Decoration t)) => [t] -> [t] -> [t]
+magProd f1 f2 = f1 ++ [magBp f2]
+
+magButcherProd :: (IsTree t, Num (Decoration t)) => t -> t -> t
+magButcherProd t1 t2 = magBp $ (magBm t1) `magProd` (magBm t2)
+
+magShuffle 
     :: ( IsTree t
        , Graded t
        , S.IsVector t
@@ -146,10 +171,40 @@ magprod
        , Num (Decoration t)
        )
     => [t] -> [t] -> S.Vector (S.VectorScalar t) [t]
-magprod f1 f2 = S.vector $ f1 ++ [buildTree 1 f2]
+magShuffle [] f = S.vector f
+magShuffle f [] = S.vector f
+magShuffle f1@(t1:ts1) f2@(t2:ts2) = (S.vector [t1]) * (magShuffle ts1 f2) + (S.vector [t2]) * (magShuffle f1 ts2)
+
+
+magCK 
+    :: ( IsTree t
+       , Graded t
+       , S.IsVector t
+       , Eq t
+       , Eq (S.VectorScalar t)
+       , Num (S.VectorScalar t)
+       , Num (Decoration t)
+       )
+    => [t] -> S.Vector (S.VectorScalar t) ([t], [t])
+magCK f = (S.vector (f, [])) + (bilinear shuffleCross (magCK $ magLeft f) (magCK $ magRight f))
+  where
+    shuffleCross (f11, f12) (f21, f22) = S.vector (f11 ++ f21, f12 ++ f22)
+
+{--
+magProd
+    :: ( IsTree t
+       , Graded t
+       , S.IsVector t
+       , Eq t
+       , Eq (S.VectorScalar t)
+       , Num (S.VectorScalar t)
+       , Num (Decoration t)
+       )
+    => [t] -> [t] -> S.Vector (S.VectorScalar t) [t]
+magProd f1 f2 = S.vector $ f1 ++ [buildTree 1 f2]
 
 -- | Magmatic product operation.
-magrpodOp
+magProdOp
     :: ( IsTree t
        , Graded t
        , S.IsVector t
@@ -158,10 +213,10 @@ magrpodOp
        , Num (S.VectorScalar t)
        , Num (Decoration t)
        ) => Operation [t]
-magrpodOp = Op "magprod" "$\\times_\\bullet$" 2 $
+magProdOp = Op "magprod" "$\\times_\\bullet$" 2 $
     \ops ->
         case ops of
-            [x, y] -> magprod x y
+            [x, y] -> magProd x y
             _ -> error "magrpodOp: arity"
 
 buildSyntacticTree
@@ -174,7 +229,10 @@ buildSyntacticTree
        , Num (Decoration t)
     ) => [t] -> SyntacticTree [t]
 buildSyntacticTree [] = Leaf []
-buildSyntacticTree ts = Node magrpodOp $ map buildSyntacticTree [init ts, children $ last ts]
+buildSyntacticTree ts = Node magProdOp $ map buildSyntacticTree [magLeft ts, magRight ts]
+
+--}
+
 
 main = do
     putStrLn "Graph 1"
