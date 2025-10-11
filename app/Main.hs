@@ -175,6 +175,17 @@ magShuffle [] f = S.vector f
 magShuffle f [] = S.vector f
 magShuffle f1@(t1:ts1) f2@(t2:ts2) = (S.vector [t1]) * (magShuffle ts1 f2) + (S.vector [t2]) * (magShuffle f1 ts2)
 
+shuffleCross
+    :: ( IsTree t
+       , Graded t
+       , S.IsVector t
+       , Eq t
+       , Eq (S.VectorScalar t)
+       , Num (S.VectorScalar t)
+       , Num (Decoration t)
+       )
+    => ([t], [t]) -> ([t], [t]) -> S.Vector (S.VectorScalar t) ([t], [t])
+shuffleCross (f11, f12) (f21, f22) = S.bilinear (,) (magShuffle f11 f21) (S.vector $ magProd f12 f22)
 
 magCK 
     :: ( IsTree t
@@ -186,9 +197,37 @@ magCK
        , Num (Decoration t)
        )
     => [t] -> S.Vector (S.VectorScalar t) ([t], [t])
-magCK f = (S.vector (f, [])) + (bilinear shuffleCross (magCK $ magLeft f) (magCK $ magRight f))
+magCK [] = S.vector ([], [])
+magCK f = (S.vector (f, [])) + (S.bilinear shuffleCross (magCK $ magLeft f) (magCK $ magRight f))
+
+coproductCK 
+    :: ( IsTree t
+       , Graded t
+       , S.IsVector t
+       , Eq t
+       , Eq (S.VectorScalar t)
+       , Num (S.VectorScalar t)
+       , Num (Decoration t)
+       )
+    => [t] -> S.Vector (S.VectorScalar t) ([t], [t])
+coproductCK [] = S.vector ([], [])
+coproductCK [t] = (S.vector ([t], [])) + (linear perTerm $ coproductCK $ children t)
   where
-    shuffleCross (f11, f12) (f21, f22) = S.vector (f11 ++ f21, f12 ++ f22)
+    perTerm (f1, f2) = (f1, (:[]) $ buildTree 1 f2)
+coproductCK f = morphism (\s -> coproductCK [s]) $ S.vector f
+
+magPrune 
+    :: ( IsTree t
+       , Graded t
+       , S.IsVector t
+       , Eq t
+       , Eq (S.VectorScalar t)
+       , Num (S.VectorScalar t)
+       , Num (Decoration t)
+       )
+    => [t] -> S.Vector (S.VectorScalar t) ([t], [t])
+magPrune [] = S.vector ([], [])
+magPrune f = bilinear shuffleCross (magPrune $ magLeft f) (magCK $ magRight f)
 
 {--
 magProd
