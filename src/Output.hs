@@ -224,6 +224,9 @@ instance
   generate a temporary TeX file. It then compiles it with pdflatex,
   pythontex, and pdflatex again. The resulting pdf is copied to the
   current directory and displayed in a pdf viewer.
+
+    Linux:
+        shell "zathura --synctex-forward :: output.pdf > /dev/null &"
 -}
 printPdf :: String -> IO ()
 printPdf str = do
@@ -250,9 +253,10 @@ printPdf str = do
     copyFile "texput/tmp.tex" "output.tex"
 
     runProcess_ $
-        shell "zathura --synctex-forward :: output.pdf > /dev/null &"
+        shell "open output.pdf > /dev/null &"
 
     return ()
+
 
 -- | Generate a TeX string from a type and display it in a pdf viewer.
 display

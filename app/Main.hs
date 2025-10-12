@@ -152,14 +152,17 @@ magRoot = RootedTree.root . last
 magBm :: (IsTree t) => t -> [t]
 magBm = children
 
-magBp :: (IsTree t, Num (Decoration t)) => [t] -> t
-magBp = buildTree 1
+magBp :: (IsTree t) => Decoration t -> [t] -> t
+magBp c = buildTree c
 
-magProd :: (IsTree t, Num (Decoration t)) => [t] -> [t] -> [t]
-magProd f1 f2 = f1 ++ [magBp f2]
+magProd :: (IsTree t) => Decoration t -> [t] -> [t] -> [t]
+magProd c f1 f2 = f1 ++ [magBp c f2]
 
-magButcherProd :: (IsTree t, Num (Decoration t)) => t -> t -> t
-magButcherProd t1 t2 = magBp $ (magBm t1) `magProd` (magBm t2)
+magButcherProd :: (IsTree t) => t -> t -> t
+magButcherProd t1 t2 = magBp c $ magProd c' (magBm t1) (magBm t2)
+  where
+    c = magRoot [t1]
+    c' = magRoot [t2]
 
 magShuffle 
     :: ( IsTree t
@@ -184,8 +187,8 @@ shuffleCross
        , Num (S.VectorScalar t)
        , Num (Decoration t)
        )
-    => ([t], [t]) -> ([t], [t]) -> S.Vector (S.VectorScalar t) ([t], [t])
-shuffleCross (f11, f12) (f21, f22) = S.bilinear (,) (magShuffle f11 f21) (S.vector $ magProd f12 f22)
+    => Decoration t -> ([t], [t]) -> ([t], [t]) -> S.Vector (S.VectorScalar t) ([t], [t])
+shuffleCross c (f11, f12) (f21, f22) = S.bilinear (,) (magShuffle f11 f21) (S.vector $ magProd c f12 f22)
 
 magCK 
     :: ( IsTree t
@@ -198,7 +201,9 @@ magCK
        )
     => [t] -> S.Vector (S.VectorScalar t) ([t], [t])
 magCK [] = S.vector ([], [])
-magCK f = (S.vector (f, [])) + (S.bilinear shuffleCross (magCK $ magLeft f) (magCK $ magRight f))
+magCK f = (S.vector (f, [])) + (S.bilinear (shuffleCross c) (magCK $ magLeft f) (magCK $ magRight f))
+  where
+    c = magRoot f
 
 coproductCK 
     :: ( IsTree t
@@ -213,7 +218,8 @@ coproductCK
 coproductCK [] = S.vector ([], [])
 coproductCK [t] = (S.vector ([t], [])) + (linear perTerm $ coproductCK $ children t)
   where
-    perTerm (f1, f2) = (f1, (:[]) $ buildTree 1 f2)
+    perTerm (f1, f2) = (f1, (:[]) $ buildTree c f2)
+    c = RootedTree.root t
 coproductCK f = morphism (\s -> coproductCK [s]) $ S.vector f
 
 magPrune 
@@ -227,7 +233,9 @@ magPrune
        )
     => [t] -> S.Vector (S.VectorScalar t) ([t], [t])
 magPrune [] = S.vector ([], [])
-magPrune f = bilinear shuffleCross (magPrune $ magLeft f) (magCK $ magRight f)
+magPrune f = bilinear (shuffleCross c) (magPrune $ magLeft f) (magCK $ magRight f)
+  where
+    c = magRoot f
 
 {--
 magProd
