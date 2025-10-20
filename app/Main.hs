@@ -40,6 +40,13 @@ buildGraphs = do
 
 -- DEBUG
 
+a' :: PlanarTree Integer -> Double
+a' (PT 1 []) = 2.0
+a' (PT 1 [PT 1 []]) = 3.0
+a' (PT 1 [PT 1 [PT 1 []]]) = 5.0
+a' (PT 1 [PT 1 [], PT 1 []]) = 7.0
+
+
 -- RK coeffs
 
 v1 = LA.vector $ take 4 [1, 1 ..]

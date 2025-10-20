@@ -22,10 +22,14 @@ module MagmaticProduct (
     magShuffle,
     shuffleCross,
     magCK,
+    magDecon,
+    magCosub,
     coproductCK,
     magPrune,
     buildSyntacticTree,
 ) where
+
+import Data.List (tails, inits)
 
 import RootedTree
 import Symbolics
@@ -100,6 +104,40 @@ magCK [] = vector ([], [])
 magCK f = (vector (f, [])) + (bilinear (shuffleCross c) (magCK $ magLeft f) (magCK $ magRight f))
   where
     c = magRoot f
+
+magDecon 
+    :: ( IsTree t
+       , Graded t
+       , IsVector t
+       , Eq t
+       , Eq (VectorScalar t)
+       , Num (VectorScalar t)
+       , Num (Decoration t)
+       )
+    => [t] -> Vector (VectorScalar t) ([t], [t])
+magDecon [] = vector ([], [])
+magDecon f = vectorFromList $ map ((*^) 1) $ zip (inits f) (tails f)
+
+magCosub 
+    :: ( IsTree t
+       , Graded t
+       , IsVector t
+       , Eq t
+       , Eq (VectorScalar t)
+       , Num (VectorScalar t)
+       , Num (Decoration t)
+       )
+    => (t -> VectorScalar t) -> [t] -> Vector (VectorScalar t) [t]
+magCosub _ [] = vector []
+magCosub a f = linear perDecompTerm $ linear perDeconTerm $ linear removeTerm $ magDecon f
+  where
+    perDeconTerm (f1, f2) = linear (\(f21, f22) -> 1 *^ ((f1, f21), f22)) $ magPrune f2
+    perDecompTerm ((f1, f21), f22) = scale (a' f22) $ bilinear (magProd 1) (magCosub a f1) (magCosub a f21)
+    a' [t] = a t
+    a' _ = 0
+    removeTerm (_, []) = Empty
+    removeTerm term = vector term
+
 
 coproductCK 
     :: ( IsTree t
