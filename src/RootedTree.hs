@@ -81,9 +81,10 @@ class (IsDecorated t) => IsTree t where
     buildTree :: Decoration t -> [t] -> t
 
 class (IsDecorated t) => HasBracketNotation t where
-    -- | Convert a tree to a string using bracket notation.
-    -- The first argument is a function that converts the decoration
-    -- to a string.
+    {- | Convert a tree to a string using bracket notation.
+    The first argument is a function that converts the decoration
+    to a string.
+    -}
     toBrackets :: (Decoration t -> String) -> t -> String
 
     -- | Convert a string to a tree using bracket notation.

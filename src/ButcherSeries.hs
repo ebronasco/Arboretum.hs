@@ -1,5 +1,5 @@
-{-# LANGUAGE FlexibleContexts  #-}
-{-# LANGUAGE TypeOperators  #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TypeOperators #-}
 
 {- |
 Module      : ButcherSeries
@@ -18,11 +18,10 @@ module ButcherSeries (
     rkbseries,
 ) where
 
+import GradedList
+import Numeric.LinearAlgebra as LA
 import RootedTree
 import Symbolics as S
-import GradedList
-
-import Numeric.LinearAlgebra as LA
 
 bseries
     :: ( IsTree t
@@ -59,13 +58,11 @@ expGL
 expGL gen start =
     vectorFromNonDecList $
         foldr1 (++) $
-            map (terms . (\(k, x) -> S.scale (1 / (fromInteger $ product [1 .. k])) x)) $
+            map (terms . (\(k, x) -> S.scale (1 / (fromInteger (product [1 .. k]))) x)) $
                 zip (1 : [1 ..] :: [Integer]) $
                     iterate (bilinear gl gen) start
 
 -- Runge-Kutta methods
-
-
 
 v1 :: LA.Vector LA.R
 v1 = LA.vector $ take 1 [1, 1 ..]
@@ -102,5 +99,3 @@ rkbseries
     -> LA.Vector LA.R
     -> S.Vector (VectorScalar t) [t]
 rkbseries gen aij bi = bseries gen $ product . map (rkCoeff aij bi)
-
-

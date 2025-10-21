@@ -77,8 +77,9 @@ import Symbolics (
   edge must be an instance of the @GraphEdge@ typeclass.
 -}
 class GraphEdge e where
-    -- | The @EndPoint@ type family is used to define the type of
-    -- the vertices of the graph.
+    {- | The @EndPoint@ type family is used to define the type of
+    the vertices of the graph.
+    -}
     type EndPoint e
 
     -- | Every edge must have a source @EndPoint@, ...
@@ -87,8 +88,9 @@ class GraphEdge e where
     -- | ... a target @EndPoint@, ...
     target :: e -> EndPoint e
 
-    -- | ... and a way to build the edge from source, target, and
-    -- possibly some additional information @a@.
+    {- | ... and a way to build the edge from source, target, and
+    possibly some additional information @a@.
+    -}
     edge :: a -> EndPoint e -> EndPoint e -> e
 
 -- | A naive instance of the @GraphEdge@ typeclass.
@@ -116,8 +118,9 @@ class
     -- | The type of the vertices of the graph.
     type Vertex g
 
-    -- | Note that the type of the vertices is defined as the
-    -- @EndPoint@ of the edges by default.
+    {- | Note that the type of the vertices is defined as the
+    @EndPoint@ of the edges by default.
+    -}
     type Vertex g = EndPoint (Edge g)
 
     -- | A graph with a single vertex and no edges.

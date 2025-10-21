@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -256,10 +257,9 @@ substitute x gens obj = linear eval $ symmetricCompose (syn x) (map syn gens) $ 
 -- | Grafting operation.
 graftOp :: (IsVector a, Graftable a) => Operation a
 graftOp = Op "graft" "$\\curvearrowright$" 2 $
-    \ops ->
-        case ops of
-            [x, y] -> graft x y
-            _ -> error "graftOp: arity"
+    \case
+        [x, y] -> graft x y
+        _ -> error "graftOp: arity"
 
 -- | Concatenation operation.
 concatOp :: (IsVector a, Monoid a) => Operation a

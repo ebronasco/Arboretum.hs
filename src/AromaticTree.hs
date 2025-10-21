@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
@@ -541,7 +542,7 @@ traceOp
        )
     => Operation (PlanarAromatic t)
 traceOp = Op "trace" "$Tr$" 1 $
-    \l -> case l of
+    \case
         [f] -> connectRootToMarked f
         _ -> error "Trace operation takes one argument"
   where

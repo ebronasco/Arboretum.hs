@@ -1,4 +1,5 @@
-{-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 
 {- |
 Module      : MagmaticProduct
@@ -29,11 +30,10 @@ module MagmaticProduct (
     buildSyntacticTree,
 ) where
 
-import Data.List (tails, inits)
-
+import Data.List (inits, tails)
+import GradedList
 import RootedTree
 import Symbolics
-import GradedList
 import SyntacticTree
 
 magIsEmpty :: [t] -> Bool
@@ -53,7 +53,7 @@ magBm :: (IsTree t) => t -> [t]
 magBm = children
 
 magBp :: (IsTree t) => Decoration t -> [t] -> t
-magBp c = buildTree c
+magBp = buildTree
 
 magProd :: (IsTree t) => Decoration t -> [t] -> [t] -> [t]
 magProd c f1 f2 = f1 ++ [magBp c f2]
@@ -64,7 +64,7 @@ magButcherProd t1 t2 = magBp c $ magProd c' (magBm t1) (magBm t2)
     c = magRoot [t1]
     c' = magRoot [t2]
 
-magShuffle 
+magShuffle
     :: ( IsTree t
        , Graded t
        , IsVector t
@@ -76,7 +76,9 @@ magShuffle
     => [t] -> [t] -> Vector (VectorScalar t) [t]
 magShuffle [] f = vector f
 magShuffle f [] = vector f
-magShuffle f1@(t1:ts1) f2@(t2:ts2) = (vector [t1]) * (magShuffle ts1 f2) + (vector [t2]) * (magShuffle f1 ts2)
+magShuffle f1@(t1 : ts1) f2@(t2 : ts2) =
+    vector [t1] * magShuffle ts1 f2
+        + vector [t2] * magShuffle f1 ts2
 
 shuffleCross
     :: ( IsTree t
@@ -87,10 +89,13 @@ shuffleCross
        , Num (VectorScalar t)
        , Num (Decoration t)
        )
-    => Decoration t -> ([t], [t]) -> ([t], [t]) -> Vector (VectorScalar t) ([t], [t])
+    => Decoration t
+    -> ([t], [t])
+    -> ([t], [t])
+    -> Vector (VectorScalar t) ([t], [t])
 shuffleCross c (f11, f12) (f21, f22) = bilinear (,) (magShuffle f11 f21) (vector $ magProd c f12 f22)
 
-magCK 
+magCK
     :: ( IsTree t
        , Graded t
        , IsVector t
@@ -101,11 +106,11 @@ magCK
        )
     => [t] -> Vector (VectorScalar t) ([t], [t])
 magCK [] = vector ([], [])
-magCK f = (vector (f, [])) + (bilinear (shuffleCross c) (magCK $ magLeft f) (magCK $ magRight f))
+magCK f = vector (f, []) + bilinear (shuffleCross c) (magCK $ magLeft f) (magCK $ magRight f)
   where
     c = magRoot f
 
-magDecon 
+magDecon
     :: ( IsTree t
        , Graded t
        , IsVector t
@@ -116,9 +121,9 @@ magDecon
        )
     => [t] -> Vector (VectorScalar t) ([t], [t])
 magDecon [] = vector ([], [])
-magDecon f = vectorFromList $ map ((*^) 1) $ zip (inits f) (tails f)
+magDecon f = vectorFromList $ map (1 *^) $ zip (inits f) (tails f)
 
-magCosub 
+magCosub
     :: ( IsTree t
        , Graded t
        , IsVector t
@@ -127,19 +132,27 @@ magCosub
        , Num (VectorScalar t)
        , Num (Decoration t)
        )
-    => (t -> VectorScalar t) -> [t] -> Vector (VectorScalar t) [t]
-magCosub _ [] = vector []
-magCosub a f = linear perDecompTerm $ linear perDeconTerm $ linear removeTerm $ magDecon f
+    => [Decoration t]
+    -> (Decoration t -> t -> VectorScalar t)
+    -> [t]
+    -> Vector (VectorScalar t) [t]
+magCosub _ _ [] = vector []
+magCosub cs a f = sum $ map (\c -> linear (perDecompTerm c) $ linear perDeconTerm $ magDecon' f) cs
   where
-    perDeconTerm (f1, f2) = linear (\(f21, f22) -> 1 *^ ((f1, f21), f22)) $ magPrune f2
-    perDecompTerm ((f1, f21), f22) = scale (a' f22) $ bilinear (magProd 1) (magCosub a f1) (magCosub a f21)
-    a' [t] = a t
-    a' _ = 0
-    removeTerm (_, []) = Empty
-    removeTerm term = vector term
+    perDeconTerm (f1, f2) =
+        linear (\(f21, f22) -> 1 *^ ((f1, f21), f22)) $
+            magPrune f2
+    perDecompTerm c ((f1, f21), f22) =
+        scale (a' c f22) $
+            bilinear (magProd c) (magCosub cs a f1) (magCosub cs a f21)
+    a' c [t] = a c t
+    a' _ _ = 0
+    magDecon' = linear removeTerm . magDecon
+      where
+        removeTerm (_, []) = Empty
+        removeTerm term = vector term
 
-
-coproductCK 
+coproductCK
     :: ( IsTree t
        , Graded t
        , IsVector t
@@ -150,13 +163,13 @@ coproductCK
        )
     => [t] -> Vector (VectorScalar t) ([t], [t])
 coproductCK [] = vector ([], [])
-coproductCK [t] = (vector ([t], [])) + (linear perTerm $ coproductCK $ children t)
+coproductCK [t] = vector ([t], []) + (linear perTerm $ coproductCK $ children t)
   where
-    perTerm (f1, f2) = (f1, (:[]) $ buildTree c f2)
+    perTerm (f1, f2) = (f1, (: []) $ buildTree c f2)
     c = RootedTree.root t
 coproductCK f = morphism (\s -> coproductCK [s]) $ vector f
 
-magPrune 
+magPrune
     :: ( IsTree t
        , Graded t
        , IsVector t
@@ -171,13 +184,14 @@ magPrune f = bilinear (shuffleCross c) (magPrune $ magLeft f) (magCK $ magRight 
   where
     c = magRoot f
 
--- | Magmatic product operation.
--- data Operation a = Op
---    { name :: String
---    , tex :: String
---    , arity :: Int
---    , func :: [a] -> Vector (VectorScalar a) (VectorBasis a)
---    }
+{- | Magmatic product operation.
+data Operation a = Op
+   { name :: String
+   , tex :: String
+   , arity :: Int
+   , func :: [a] -> Vector (VectorScalar a) (VectorBasis a)
+   }
+-}
 magProdOp
     :: ( IsTree t
        , Graded t
@@ -186,12 +200,12 @@ magProdOp
        , Eq (VectorScalar t)
        , Num (VectorScalar t)
        , Show (Decoration t)
-       ) => Decoration t -> Operation [t]
-magProdOp c = Op ("magprod[" ++ (show c) ++ "]") ("$\\times_" ++ (show c) ++ "$") 2 $
-    \ops ->
-        case ops of
-            [x, y] -> vector $ magProd c x y
-            _ -> error $ "magrpodOp " ++ (show c) ++ ": arity"
+       )
+    => Decoration t -> Operation [t]
+magProdOp c = Op ("magprod[" ++ show c ++ "]") ("$\\times_" ++ show c ++ "$") 2 $
+    \case
+        [x, y] -> vector $ magProd c x y
+        _ -> error $ "magrpodOp " ++ show c ++ ": arity"
 
 buildSyntacticTree
     :: ( IsTree t
@@ -201,7 +215,8 @@ buildSyntacticTree
        , Eq (VectorScalar t)
        , Num (VectorScalar t)
        , Show (Decoration t)
-    ) => [t] -> SyntacticTree [t]
+       )
+    => [t] -> SyntacticTree [t]
 buildSyntacticTree [] = Leaf []
 buildSyntacticTree ts = Node (magProdOp c) $ map buildSyntacticTree [magLeft ts, magRight ts]
   where

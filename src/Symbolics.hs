@@ -622,8 +622,6 @@ Examples:
 termsGraded :: Vector k a -> [[ScalarProduct k a]]
 termsGraded = map toListS . toListV
 
-
-
 {- |
   A list of basis elements of a vector.
 

@@ -49,43 +49,49 @@ import Text.Printf
   and @texifyID@ to display the identifier of the type.
 -}
 class Texifiable a where
-    -- | The main function of the typeclass. It returns the TeX code
-    -- of @a@. Use @texifyP@ for recursion when defining this if you
-    -- want the parentheses to be displayed.
+    {- | The main function of the typeclass. It returns the TeX code
+    of @a@. Use @texifyP@ for recursion when defining this if you
+    want the parentheses to be displayed.
+    -}
     texify :: a -> String
 
-    -- | Returns the TeX code of the left and right parentheses of
-    -- @a@. By default, it returns the empty string for both.
+    {- | Returns the TeX code of the left and right parentheses of
+    @a@. By default, it returns the empty string for both.
+    -}
     texifyParentheses :: a -> (String, String)
     texifyParentheses _ = ("", "")
 
-    -- | The identifier of the type used for debugging. By default,
-    -- it returns the empty string.
+    {- | The identifier of the type used for debugging. By default,
+    it returns the empty string.
+    -}
     texifyID :: a -> String
     texifyID _ = ""
 
-    -- | Returns the TeX code of @a@ with debug information. Use
-    -- @texifyD@ for recursion when defining this. By default, it
-    -- returns the same as @texifyP@. The first two arguments are
-    -- used to specify the levels of the syntax tree at which the
-    -- debug information is displayed.
+    {- | Returns the TeX code of @a@ with debug information. Use
+    @texifyD@ for recursion when defining this. By default, it
+    returns the same as @texifyP@. The first two arguments are
+    used to specify the levels of the syntax tree at which the
+    debug information is displayed.
+    -}
     texifyDebug :: Integer -> Integer -> a -> String
     texifyDebug _ _ = texifyP
 
-    -- | Returns the TeX code of @a@ with parentheses. By default, it
-    -- wraps @texify a@ with parentheses specified by
-    -- @texifyParentheses@.
+    {- | Returns the TeX code of @a@ with parentheses. By default, it
+    wraps @texify a@ with parentheses specified by
+    @texifyParentheses@.
+    -}
     texifyP :: a -> String
     texifyP x =
         fst (texifyParentheses x)
             ++ texify x
             ++ snd (texifyParentheses x)
 
-    -- | Returns the TeX code of @a@ with debug information. By
-    -- default, it wraps @texifyDebug a@ with underbrace and uses
-    -- @texifyID@. The first two arguments are used to specify the
-    -- levels of the syntax tree at which the debug information is
-    -- displayed.
+    {- | Returns the TeX code of @a@ with debug information. By
+    default, it wraps @texifyDebug a@ with underbrace and uses
+    @texifyID@. The first two arguments are used to specify the
+    levels of the syntax tree at which the debug information is
+    displayed.
+    -}
     texifyD :: Integer -> Integer -> a -> String
     texifyD i j x =
         underbrace i j (texifyID x) $
@@ -256,7 +262,6 @@ printPdf str = do
         shell "open output.pdf > /dev/null &"
 
     return ()
-
 
 -- | Generate a TeX string from a type and display it in a pdf viewer.
 display
