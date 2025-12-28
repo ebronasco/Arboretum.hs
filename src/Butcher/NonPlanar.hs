@@ -16,19 +16,9 @@ Stability   : experimental
 Implementation of the post-Lie algebra of planar trees and
 pre-Lie algebra of non-planar trees.
 -}
-module RootedTree (
-    IsDecorated (..),
-    IsTree (..),
-    HasBracketNotation (..),
-    parseForest,
-    parseTree,
-    parseDecoration,
+module Butcher.NonPlanar (
     PlanarTree (..),
     Tree (..),
-    Planarable,
-    Planar,
-    nonplanar,
-    planar,
     Graftable,
     graft,
     gl,
@@ -37,9 +27,12 @@ module RootedTree (
 import Control.Monad.State
 import Data.List (intercalate)
 import qualified Data.MultiSet as MS
-import GradedList
-import Output
-import Symbolics
+
+import Core.GradedList
+import Core.Parse
+import Core.Output
+import Core.Symbolics
+import TensorAlgebra
 
 {- $setup
   Integer Tree From Brackets
@@ -55,121 +48,6 @@ import Symbolics
 >>> npiffb str = fromBrackets read str :: MS.MultiSet (Tree Integer)
 -}
 
-class IsDecorated a where
-    type Decoration a
-
-instance (IsDecorated t) => IsDecorated [t] where
-    type Decoration [t] = Decoration t
-
-instance (IsDecorated t) => IsDecorated (MS.MultiSet t) where
-    type Decoration (MS.MultiSet t) = Decoration t
-
-instance
-    ( IsDecorated t1
-    , IsDecorated t2
-    , Decoration t1 ~ Decoration t2
-    )
-    => IsDecorated (t1, t2)
-    where
-    type Decoration (t1, t2) = Decoration t1
-
-class (IsDecorated t) => IsTree t where
-    root :: t -> Decoration t
-
-    children :: t -> [t]
-
-    buildTree :: Decoration t -> [t] -> t
-
-class (IsDecorated t) => HasBracketNotation t where
-    {- | Convert a tree to a string using bracket notation.
-    The first argument is a function that converts the decoration
-    to a string.
-    -}
-    toBrackets :: (Decoration t -> String) -> t -> String
-
-    -- | Convert a string to a tree using bracket notation.
-    fromBrackets :: (String -> Decoration t) -> String -> t
-
-instance (IsTree t, HasBracketNotation t) => HasBracketNotation [t] where
-    toBrackets f = intercalate "," . map (toBrackets f)
-    fromBrackets decFromStr = evalState (parseForest decFromStr)
-
-instance (Ord t, IsTree t, HasBracketNotation t) => HasBracketNotation (MS.MultiSet t) where
-    toBrackets f = intercalate "," . map (toBrackets f) . MS.toList
-    fromBrackets decFromStr = MS.fromList . evalState (parseForest decFromStr)
-
-{- |
-  The function @parseTree@ is used to parse a string into a tree
-  using the bracket notation.
-
-Examples:
-
->>> evalState (parseTree read) "1[2]" :: PlanarTree Integer
-1[2]
--}
-parseTree :: (IsTree t) => (String -> Decoration t) -> State String t
-parseTree decFromStr = do
-    dec <- parseDecoration decFromStr
-
-    str <- get
-
-    case str of
-        [] -> return $ buildTree dec []
-        ('[' : str') -> do
-            put str'
-            chldrn <- parseForest decFromStr
-            return $ buildTree dec chldrn
-        (',' : str') -> do
-            put str'
-            return $ buildTree dec []
-        (']' : str') -> do
-            put str'
-            return $ buildTree dec []
-        _ -> error "fromBrackets: invalid input"
-
-{- |
-  The function @parseDecoration@ is used to parse a string as a
-  decoration using the bracket notation.
-
-Examples:
-
->>> evalState (parseDecoration read) "1234[" :: Integer
-1234
--}
-parseDecoration :: (String -> d) -> State String d
-parseDecoration decFromStr = do
-    str <- get
-    let (dec', str') = span (`notElem` ",[]") str
-    case dec' of
-        [] -> error "fromBrackets: empty decoration"
-        _ -> do
-            put str'
-            return $ decFromStr dec'
-
-{- |
-  The function @parseForest@ is used to parse a string into a forest
-  using the bracket notation.
-
-Examples:
-
->>> evalState (parseForest read) "1[2],3[4,5[6]],7" :: [PlanarTree Integer]
-[1[2],3[4,5[6]],7]
--}
-parseForest :: (IsTree t) => (String -> Decoration t) -> State String [t]
-parseForest decFromStr = do
-    str <- get
-    case str of
-        [] -> return []
-        (']' : str') -> do
-            put str'
-            return []
-        (',' : str') -> do
-            put str'
-            return []
-        _ -> do
-            chld <- parseTree decFromStr
-            chldrn <- parseForest decFromStr
-            return $ chld : chldrn
 
 ---------------------------------------------------------------------
 
@@ -236,7 +114,7 @@ instance (Show d) => Show (PlanarTree d) where
 
 -- | Planar trees are vectors with integer coefficients.
 instance (Eq d, Graded d) => IsVector (PlanarTree d) where
-    type VectorScalar (PlanarTree d) = Double
+    type VectorScalar (PlanarTree d) = Integer
     type VectorBasis (PlanarTree d) = PlanarTree d
 
     vector = vector . (1 *^)
@@ -316,7 +194,7 @@ instance (Show d, Ord d) => Show (Tree d) where
     show = toBrackets show
 
 instance (Eq d, Ord d, Graded d) => IsVector (Tree d) where
-    type VectorScalar (Tree d) = Double
+    type VectorScalar (Tree d) = Integer
     type VectorBasis (Tree d) = Tree d
 
     vector = vector . (1 *^)
@@ -345,18 +223,6 @@ instance (Ord d) => Ord (Tree d) where
 instance (Ord d, Graded d) => Graded (Tree d) where
     grading = grading . planar
 
----------------------------------------------------------------------
-
--- * Moving between planar and non-planar trees
-
----------------------------------------------------------------------
-
-class Planarable t where
-    type Planar t
-
-    planar :: t -> Planar t
-    nonplanar :: Planar t -> t
-
 {- |
   Choose a canonical planar representation of a non-planar tree to get
   a planar tree or forget the order of children in a planar tree to
@@ -374,59 +240,8 @@ True
 instance (Ord d) => Planarable (Tree d) where
     type Planar (Tree d) = PlanarTree d
 
-    planar (T r xs) = PT r (planar xs)
-
     nonplanar (PT r xs) = T r (nonplanar xs)
-
-{- |
-  Choose a canonical planar representation of a non-planar forest to
-  get a planar forest or forget the order of trees and children in a
-  forest to get a non-planar forest.
-
-Examples:
-
->>> planar $ npiffb "1[2,3],4"
-[1[2,3],4]
->>> a = nonplanar $ iffb "1[2,3],4" :: MS.MultiSet (Tree Integer)
->>> b = nonplanar $ iffb "4,1[3,2]"
->>> a == b
-True
--}
-instance (Ord t, Planarable t) => Planarable (MS.MultiSet t) where
-    type Planar (MS.MultiSet t) = [Planar t]
-
-    planar = map planar . MS.toList
-
-    nonplanar = MS.fromList . map nonplanar
-
-{- |
-  Apply @planar@ and @nonplanar@ to both components of a pair.
-
-Examples:
-
->>> f1 = (iffb "1[2,3]",iffb "4,5")
->>> f2 = (iffb "1[3,2]",iffb "5,4")
->>> f1 == f2
-False
->>> nonplanar f1 == (nonplanar f2 :: (MS.MultiSet (Tree Integer), MS.MultiSet (Tree Integer)))
-True
->>> af1 = (npiffb "1[2,3]",npiffb "4,5")
->>> planar af1
-([1[2,3]],[4,5])
->>> af2 = (npiffb "1[3,2]",npiffb "5,4")
->>> planar af2
-([1[2,3]],[4,5])
--}
-instance (Planarable a, Planarable b) => Planarable (a, b) where
-    type Planar (a, b) = (Planar a, Planar b)
-
-    nonplanar (x, y) = (nonplanar x, nonplanar y)
-
-    planar (x, y) = (planar x, planar y)
-
----------------------------------------------------------------------
-
--- * Grafting product
+    planar (T r xs) = PT r (planar xs)
 
 ---------------------------------------------------------------------
 
@@ -461,7 +276,7 @@ instance
     graft [] f2 = vector f2
     graft f [t] = linear ((: []) . buildTree (root t)) $ gl f $ children t
     graft f1 (t : f2) =
-        linear perCoproductTerm $ deshuffleCoproduct f1
+        linear perCoproductTerm $ deshuffle f1
       where
         perCoproductTerm (f11, f12) = graft f11 [t] * graft f12 f2
 
@@ -504,6 +319,6 @@ gl
     => [t]
     -> [t]
     -> Vector (VectorScalar t) [t]
-gl f1 f2 = linear perCoproductTerm $ deshuffleCoproduct f1
+gl f1 f2 = linear perCoproductTerm $ deshuffle f1
   where
     perCoproductTerm (f11, f12) = vector f11 * graft f12 f2

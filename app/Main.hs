@@ -2,21 +2,23 @@
 {-# LANGUAGE TupleSections #-}
 {-# OPTIONS_GHC -w #-}
 
-import AromaticTree
 import Control.Monad.State.Lazy
 import Data.Group
-import qualified Data.List as L
-import Data.Monoid as M
-import qualified Data.MultiSet as MS
 import Debug.Trace
-import GradedList
-import Graph
-import Output
-import RootedTree
-import Symbolics as S
-import SyntacticTree
-import MagmaticProduct
-import ButcherSeries
+import Data.Monoid as M
+import qualified Data.List as L
+import qualified Data.MultiSet as MS
+
+import Core.GradedList
+import Core.Output
+import Core.SyntacticTree
+import Core.Symbolics as S
+import Butcher.Aromatic
+import Butcher.Graph
+import Butcher.NonPlanar
+import Butcher.Planar
+import Butcher.Series
+import TensorAlgebra
 
 import Numeric.LinearAlgebra as LA
 

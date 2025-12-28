@@ -18,7 +18,7 @@ an example, the @IntegerGraph@ type is defined as an instance of
 @RootedGraph@. The @graftGraph@ and @graftGraphTo@ functions are also defined
 here.
 -}
-module Graph (
+module Butcher.Graph (
     GraphEdge,
     EndPoint,
     edge,
@@ -56,11 +56,11 @@ import qualified Data.MultiSet as MS (
     toList,
     union,
  )
-import GradedList (
+import Core.GradedList (
     Graded,
     grading,
  )
-import Symbolics (
+import Core.Symbolics (
     Vector,
     vectorFromNonDecList,
     (*^),

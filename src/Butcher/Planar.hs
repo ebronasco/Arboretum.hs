@@ -11,7 +11,7 @@ Stability   : experimental
 
 Implementation of formulas which use the magmatic product of planar forests: a * b = a B^+(b)
 -}
-module MagmaticProduct (
+module Butcher.Planar (
     magIsEmpty,
     magLeft,
     magRight,
@@ -31,10 +31,11 @@ module MagmaticProduct (
 ) where
 
 import Data.List (inits, tails)
-import GradedList
-import RootedTree
-import Symbolics
-import SyntacticTree
+
+import Core.Parse as P
+import Core.GradedList
+import Core.Symbolics
+import Core.SyntacticTree
 
 magIsEmpty :: [t] -> Bool
 magIsEmpty [] = True
@@ -47,7 +48,7 @@ magRight :: (IsTree t) => [t] -> [t]
 magRight = children . last
 
 magRoot :: (IsTree t) => [t] -> Decoration t
-magRoot = RootedTree.root . last
+magRoot = P.root . last
 
 magBm :: (IsTree t) => t -> [t]
 magBm = children
@@ -166,7 +167,7 @@ coproductCK [] = vector ([], [])
 coproductCK [t] = vector ([t], []) + (linear perTerm $ coproductCK $ children t)
   where
     perTerm (f1, f2) = (f1, (: []) $ buildTree c f2)
-    c = RootedTree.root t
+    c = P.root t
 coproductCK f = morphism (\s -> coproductCK [s]) $ vector f
 
 magPrune

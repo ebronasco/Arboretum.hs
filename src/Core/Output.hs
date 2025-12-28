@@ -11,7 +11,7 @@ Stability   : experimental
 Implementation of the @Texifiable@ typeclass, its instances for the
 @Symbolics@ module and functions to display the output in a pdf viewer.
 -}
-module Output (
+module Core.Output (
     Texifiable,
     texify,
     texifyParentheses,
@@ -22,11 +22,11 @@ module Output (
 ) where
 
 import Data.List (intercalate)
-import GradedList (
+import Core.GradedList (
     Graded,
     grading,
  )
-import Symbolics (
+import Core.Symbolics (
     ScalarProduct,
     Sum (Zero),
     Vector (..),

@@ -10,7 +10,7 @@
 \tikzset{every picture/.style={scale=2}}
 \fontsize{30}{36}\selectfont
 
- $ 10.0(\forest{i_1} \cdot \forest{i_1}) + 24.0(\forest{i_1} \cdot \forest{i_1[i_1]}) + 16.0(\forest{i_1} \cdot \forest{i_1[i_1[i_1]]}) $ 
+ $ (\forest{i_1[i_1[i_1,i_1]]} \otimes 1) + (\forest{i_1[i_1,i_1]} \otimes \forest{i_1}) + ((\forest{i_1} \cdot \forest{i_1}) \otimes \forest{i_1[i_1]}) + 2.0(\forest{i_1} \otimes \forest{i_1[i_1[i_1]]}) + (1 \otimes \forest{i_1[i_1[i_1,i_1]]}) $ 
 
 \endgroup
 \end{document}

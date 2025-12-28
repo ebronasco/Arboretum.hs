@@ -17,7 +17,7 @@ An implementation of symbolic algebra using graded vector spaces
 with the aim of being able to represent and manipulate algebras over
 the vector spaces of graphs.
 -}
-module Symbolics (
+module Core.Symbolics (
     ScalarProduct,
     pattern (:*^),
     (*^),
@@ -54,7 +54,6 @@ module Symbolics (
     Vector (Empty),
     fromListV,
     toListV,
-    deshuffleCoproduct,
     bilinear,
     bilinearGraded,
     bilinearNonDec,
@@ -70,7 +69,7 @@ import qualified Data.List as L (
 import qualified Data.MultiSet as MS (
     MultiSet,
  )
-import GradedList (
+import Core.GradedList (
     Graded,
     distributeGradedLists,
     distributeLists,
@@ -617,7 +616,7 @@ Examples:
 
 >>> v = Zero &: (1 *^ "x" +: 1 *^ "y" +: Zero) &: (1 *^ "xy" +: 1 *^ "yy" +: Zero) &: Empty
 >>> termsGraded v
-[[1 *^ "x",1 *^ "y"],[1 *^ "xy",1 *^ "yy"]]
+[[],[1 *^ "x",1 *^ "y"],[1 *^ "xy",1 *^ "yy"]]
 -}
 termsGraded :: Vector k a -> [[ScalarProduct k a]]
 termsGraded = map toListS . toListV
@@ -723,6 +722,25 @@ instance IsVector (Vector k a) where
     type VectorScalar (Vector k a) = k
     type VectorBasis (Vector k a) = a
     vector = id
+
+instance
+    ( Eq a
+    , Graded a
+    , IsVector a
+    , Num (VectorScalar a)
+    , Eq (VectorScalar a)
+    , Eq b
+    , Graded b
+    , IsVector b
+    , VectorScalar a ~ VectorScalar b
+    )
+    => IsVector (a, b)
+    where
+    type VectorScalar (a, b) = VectorScalar a
+    type VectorBasis (a, b) = (a, b)
+    vector = vector . (1 *^)
+
+
 
 {- |
   Construct a vector from a finite list of terms by ordering the terms
@@ -897,6 +915,119 @@ linearNonDec f = fromListV . addLevels . map (toListV . mconcat . map applyf . t
         newBound (_ : t) = newBound t
         splitList (h : t) = (h, t)
         splitList [] = (Zero, [])
+
+{- |
+  Takes a function with two arguments and extends it to a bilinear
+  map.
+
+!!! The function @bilinear f@ accepts only finite vectors.
+
+Examples:
+
+>>> f a b = 1 *^ [a + b]
+>>> v1 = vector $ (1 *^ 1) +: (1 *^ 2) +: (1 *^ 3) +: (1 *^ 4) +: Zero
+>>> v2 = vector $ (1 *^ 1) +: (1 *^ 2) +: (1 *^ 3) +: (1 *^ 4) +: Zero
+>>> bilinear f v1 v2
+(1 *^ [2] + 2 *^ [3] + 3 *^ [4] + 4 *^ [5] + 3 *^ [6] + 2 *^ [7] + 1 *^ [8])_1
+-}
+bilinear
+    :: ( IsVector v
+       , Num k
+       , Eq k
+       , Eq a
+       , Eq b
+       , Eq c
+       , Graded a
+       , Graded b
+       , Graded c
+       , VectorScalar v ~ k
+       , VectorBasis v ~ c
+       )
+    => (a -> b -> v)
+    -> Vector k a
+    -> Vector k b
+    -> Vector k c
+bilinear f ps1 ps2 =
+    linear (uncurry f . BF.bimap head head) $
+        linearGraded ((1 *^) . (,[]) . (: [])) ps1 * linearGraded ((1 *^) . ([],) . (: [])) ps2
+
+{- |
+  Takes a function with two arguments and extends it to a bilinear
+  map.
+
+!!! The function @f@ must preserve the grading, that is,
+@grading (f a b) = (grading a) + (grading b)@.
+
+Examples:
+
+>>> f1 a b = 1 *^ [a, b]
+>>> f2 a b = 1 *^ [a + b]
+>>> v1 = vector $ (1 *^ 1) +: (1 *^ 2) +: (1 *^ 3) +: (1 *^ 4) +: Zero
+>>> v2 = vector $ (1 *^ 1) +: (1 *^ 2) +: (1 *^ 3) +: (1 *^ 4) +: Zero
+>>> bilinearGraded f1 v1 v2
+(1 *^ [1,1] + 1 *^ [2,1] + 1 *^ [1,2] + 1 *^ [3,1] + 1 *^ [2,2] + 1 *^ [1,3] + 1 *^ [4,1] + 1 *^ [3,2] + 1 *^ [2,3] + 1 *^ [1,4] + 1 *^ [4,2] + 1 *^ [3,3] + 1 *^ [2,4] + 1 *^ [4,3] + 1 *^ [3,4] + 1 *^ [4,4])_2
+>>> bilinearGraded f2 v1 v2
+*** Exception: Grading mismatch in a list of terms
+...
+-}
+bilinearGraded
+    :: ( IsVector v
+       , Num k
+       , Eq k
+       , Eq a
+       , Eq b
+       , Eq c
+       , Graded a
+       , Graded b
+       , Graded c
+       , VectorScalar v ~ k
+       , VectorBasis v ~ c
+       )
+    => (a -> b -> v)
+    -> Vector k a
+    -> Vector k b
+    -> Vector k c
+bilinearGraded f ps1 ps2 =
+    linearGraded (uncurry f . BF.bimap head head) $
+        linearGraded ((1 *^) . (,[]) . (: [])) ps1 * linearGraded ((1 *^) . ([],) . (: [])) ps2
+
+{- |
+  Takes a function with two arguments and extends it to a bilinear
+  map.
+
+!!! The function @f@ must be non-decreasing with respect to the
+grading, that is, if
+@(grading a) + (grading b) > (grading c) + (grading d)@,
+then @grading (f a b) >= grading (f c d)@.
+
+Examples:
+
+>>> f a b = 1 *^ [a + b]
+>>> v1 = vector $ (1 *^ 1) +: (1 *^ 2) +: (1 *^ 3) +: (1 *^ 4) +: Zero
+>>> v2 = vector $ (1 *^ 1) +: (1 *^ 2) +: (1 *^ 3) +: (1 *^ 4) +: Zero
+>>> bilinearNonDec f v1 v2
+(1 *^ [2] + 2 *^ [3] + 3 *^ [4] + 4 *^ [5] + 3 *^ [6] + 2 *^ [7] + 1 *^ [8])_1
+-}
+bilinearNonDec
+    :: ( IsVector v
+       , Num k
+       , Eq k
+       , Eq a
+       , Eq b
+       , Eq c
+       , Graded a
+       , Graded b
+       , Graded c
+       , VectorScalar v ~ k
+       , VectorBasis v ~ c
+       )
+    => (a -> b -> v)
+    -> Vector k a
+    -> Vector k b
+    -> Vector k c
+bilinearNonDec f ps1 ps2 =
+    linearNonDec (uncurry f . BF.bimap head head) $
+        linearGraded ((1 *^) . (,[]) . (: [])) ps1 * linearGraded ((1 *^) . ([],) . (: [])) ps2
 
 {- |
   Take a function @f@ that maps basis elements to basis elements and
@@ -1187,162 +1318,3 @@ takeV
     -> Vector k a
     -> Vector k a
 takeV n = vectorFromNonDecList . take n . terms
-
------------------------------------------------------------------------------
-
--- * Tensor algebra
-
------------------------------------------------------------------------------
-
-instance
-    ( Eq a
-    , Graded a
-    , IsVector a
-    , Num (VectorScalar a)
-    , Eq (VectorScalar a)
-    , Eq b
-    , Graded b
-    , IsVector b
-    , VectorScalar a ~ VectorScalar b
-    )
-    => IsVector (a, b)
-    where
-    type VectorScalar (a, b) = VectorScalar a
-    type VectorBasis (a, b) = (a, b)
-    vector = vector . (1 *^)
-
-{- |
-  Takes a product of basis elements and returns a tensor product of
-  the corresponding basis vectors.
-
-Examples:
-
->>> deshuffleCoproduct "xyz"
-(1 *^ ("","xyz") + 1 *^ ("x","yz") + 1 *^ ("z","xy") + 1 *^ ("y","xz") + 1 *^ ("xz","y") + 1 *^ ("xy","z") + 1 *^ ("yz","x") + 1 *^ ("xyz",""))_3
--}
-deshuffleCoproduct
-    :: ( Eq a
-       , Graded a
-       , IsVector a
-       , Num (VectorScalar a)
-       , Eq (VectorScalar a)
-       , IsVector v
-       , VectorScalar v ~ VectorScalar a
-       , VectorBasis v ~ [a]
-       )
-    => v
-    -> Vector (VectorScalar a) ([a], [a])
-deshuffleCoproduct = morphism (\b -> 1 *^ (mempty, [b]) +: 1 *^ ([b], mempty) +: Zero) . vector
-
-{- |
-  Takes a function with two arguments and extends it to a bilinear
-  map.
-
-!!! The function @bilinear f@ accepts only finite vectors.
-
-Examples:
-
->>> f a b = 1 *^ [a + b]
->>> v1 = vector $ (1 *^ 1) +: (1 *^ 2) +: (1 *^ 3) +: (1 *^ 4) +: Zero
->>> v2 = vector $ (1 *^ 1) +: (1 *^ 2) +: (1 *^ 3) +: (1 *^ 4) +: Zero
->>> bilinear f v1 v2
-(1 *^ [2] + 2 *^ [3] + 3 *^ [4] + 4 *^ [5] + 3 *^ [6] + 2 *^ [7] + 1 *^ [8])_1
--}
-bilinear
-    :: ( IsVector v
-       , Num k
-       , Eq k
-       , Eq a
-       , Eq b
-       , Eq c
-       , Graded a
-       , Graded b
-       , Graded c
-       , VectorScalar v ~ k
-       , VectorBasis v ~ c
-       )
-    => (a -> b -> v)
-    -> Vector k a
-    -> Vector k b
-    -> Vector k c
-bilinear f ps1 ps2 =
-    linear (uncurry f . BF.bimap head head) $
-        linearGraded ((1 *^) . (,[]) . (: [])) ps1 * linearGraded ((1 *^) . ([],) . (: [])) ps2
-
-{- |
-  Takes a function with two arguments and extends it to a bilinear
-  map.
-
-!!! The function @f@ must preserve the grading, that is,
-@grading (f a b) = (grading a) + (grading b)@.
-
-Examples:
-
->>> f1 a b = 1 *^ [a, b]
->>> f2 a b = 1 *^ [a + b]
->>> v1 = vector $ (1 *^ 1) +: (1 *^ 2) +: (1 *^ 3) +: (1 *^ 4) +: Zero
->>> v2 = vector $ (1 *^ 1) +: (1 *^ 2) +: (1 *^ 3) +: (1 *^ 4) +: Zero
->>> bilinearGraded f1 v1 v2
-(1 *^ [1,1] + 1 *^ [2,1] + 1 *^ [1,2] + 1 *^ [3,1] + 1 *^ [2,2] + 1 *^ [1,3] + 1 *^ [4,1] + 1 *^ [3,2] + 1 *^ [2,3] + 1 *^ [1,4] + 1 *^ [4,2] + 1 *^ [3,3] + 1 *^ [2,4] + 1 *^ [4,3] + 1 *^ [3,4] + 1 *^ [4,4])_2
->>> bilinearGraded f2 v1 v2
-*** Exception: Grading mismatch in a list of terms
-...
--}
-bilinearGraded
-    :: ( IsVector v
-       , Num k
-       , Eq k
-       , Eq a
-       , Eq b
-       , Eq c
-       , Graded a
-       , Graded b
-       , Graded c
-       , VectorScalar v ~ k
-       , VectorBasis v ~ c
-       )
-    => (a -> b -> v)
-    -> Vector k a
-    -> Vector k b
-    -> Vector k c
-bilinearGraded f ps1 ps2 =
-    linearGraded (uncurry f . BF.bimap head head) $
-        linearGraded ((1 *^) . (,[]) . (: [])) ps1 * linearGraded ((1 *^) . ([],) . (: [])) ps2
-
-{- |
-  Takes a function with two arguments and extends it to a bilinear
-  map.
-
-!!! The function @f@ must be non-decreasing with respect to the
-grading, that is, if
-@(grading a) + (grading b) > (grading c) + (grading d)@,
-then @grading (f a b) >= grading (f c d)@.
-
-Examples:
-
->>> f a b = 1 *^ [a + b]
->>> v1 = vector $ (1 *^ 1) +: (1 *^ 2) +: (1 *^ 3) +: (1 *^ 4) +: Zero
->>> v2 = vector $ (1 *^ 1) +: (1 *^ 2) +: (1 *^ 3) +: (1 *^ 4) +: Zero
->>> bilinearNonDec f v1 v2
-(1 *^ [2] + 2 *^ [3] + 3 *^ [4] + 4 *^ [5] + 3 *^ [6] + 2 *^ [7] + 1 *^ [8])_1
--}
-bilinearNonDec
-    :: ( IsVector v
-       , Num k
-       , Eq k
-       , Eq a
-       , Eq b
-       , Eq c
-       , Graded a
-       , Graded b
-       , Graded c
-       , VectorScalar v ~ k
-       , VectorBasis v ~ c
-       )
-    => (a -> b -> v)
-    -> Vector k a
-    -> Vector k b
-    -> Vector k c
-bilinearNonDec f ps1 ps2 =
-    linearNonDec (uncurry f . BF.bimap head head) $
-        linearGraded ((1 *^) . (,[]) . (: [])) ps1 * linearGraded ((1 *^) . ([],) . (: [])) ps2

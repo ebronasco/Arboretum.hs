@@ -18,7 +18,7 @@ algebra as expressions involving generators and operations. This
 allows us to use syntactic trees to define automorphisms and, if
 extended, homomorphisms.
 -}
-module SyntacticTree (
+module Core.SyntacticTree (
     Operation (..),
     SyntacticTree (..),
     compose,
@@ -34,10 +34,11 @@ import Control.Monad.State
 import Data.List (intercalate, permutations)
 import Data.Maybe (fromJust)
 import qualified Data.MultiSet as MS
-import GradedList
-import Output
-import RootedTree
-import Symbolics
+import Core.GradedList
+import Core.Parse
+import Core.Output
+import Core.Symbolics
+import Butcher.NonPlanar
 
 {- $setup
 >>> l1 = Leaf [PT 1 []]

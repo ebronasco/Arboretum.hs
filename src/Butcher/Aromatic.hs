@@ -14,7 +14,7 @@ License     : BSD-3
 Maintainer  : Eugen Bronasco (ebronasco@gmail.com)
 Stability   : experimental
 -}
-module AromaticTree (
+module Butcher.Aromatic (
     Cycle (Cycle),
     divergence,
     PlanarAromatic,
@@ -28,11 +28,14 @@ import Control.Monad.State (evalState, get, put)
 import Data.Bifunctor (bimap, second)
 import qualified Data.List as L
 import qualified Data.MultiSet as MS
-import GradedList
-import Output
-import RootedTree
-import Symbolics
-import SyntacticTree
+
+import Core.GradedList
+import Core.Parse
+import Core.Output
+import Core.Symbolics
+import Core.SyntacticTree
+import Butcher.NonPlanar
+import TensorAlgebra
 
 {- $setup
   Integer Forest From Brackets
@@ -332,7 +335,7 @@ graftOnMultiAroma
 graftOnMultiAroma [] ma = vector (1 *^ ma)
 graftOnMultiAroma _ [] = vector Zero
 graftOnMultiAroma f [a] = linear ((1 *^) . (: []) . Cycle) $ (f `graft`) $ unCycle a
-graftOnMultiAroma f (a : ma) = linear perCoproductTerm $ deshuffleCoproduct f
+graftOnMultiAroma f (a : ma) = linear perCoproductTerm $ deshuffle f
   where
     perCoproductTerm (x, y) = (x `graftOnMultiAroma` [a]) * (y `graftOnMultiAroma` ma)
 
@@ -359,7 +362,7 @@ instance
     where
     graft (ma1, f1) (ma2, f2) =
         vector (ma1, [])
-            * linear perCoproductTerm (deshuffleCoproduct f1)
+            * linear perCoproductTerm (deshuffle f1)
       where
         perCoproductTerm (x, y) =
             linear (,[]) (x `graftOnMultiAroma` ma2)

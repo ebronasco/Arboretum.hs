@@ -11,17 +11,18 @@ Stability   : experimental
 
 Implementation Butcher and Lie-Butcher series over classical, decorated, aromatic, exotic forests
 -}
-module ButcherSeries (
+module Butcher.Series (
     bseries,
     expGL,
     rkCoeff,
     rkbseries,
 ) where
 
-import GradedList
 import Numeric.LinearAlgebra as LA
-import RootedTree
-import Symbolics as S
+import Core.GradedList
+import Core.Symbolics as S
+import Core.Parse
+import Butcher.NonPlanar
 
 bseries
     :: ( IsTree t

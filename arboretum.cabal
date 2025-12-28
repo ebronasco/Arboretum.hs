@@ -27,15 +27,17 @@ source-repository head
 
 library
   exposed-modules:
-      AromaticTree
-      ButcherSeries
-      GradedList
-      Graph
-      MagmaticProduct
-      Output
-      RootedTree
-      Symbolics
-      SyntacticTree
+      Butcher.Aromatic
+      Butcher.Graph
+      Butcher.NonPlanar
+      Butcher.Planar
+      Butcher.Series
+      Core.GradedList
+      Core.Output
+      Core.Parse
+      Core.Symbolics
+      Core.SyntacticTree
+      TensorAlgebra
   other-modules:
       Paths_arboretum
   autogen-modules:
