@@ -26,7 +26,7 @@ import Core.GradedList (
     Graded,
     grading,
  )
-import Core.Symbolics (
+import Core.VectorSpace (
     ScalarProduct,
     Sum (Zero),
     Vector (..),

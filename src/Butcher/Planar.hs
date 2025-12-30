@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE LambdaCase #-}
 
 {- |
@@ -12,6 +13,8 @@ Stability   : experimental
 Implementation of formulas which use the magmatic product of planar forests: a * b = a B^+(b)
 -}
 module Butcher.Planar (
+    PlanarTree (..),
+    gl,
     magIsEmpty,
     magLeft,
     magRight,
@@ -21,8 +24,7 @@ module Butcher.Planar (
     magProd,
     magButcherProd,
     magShuffle,
-    shuffleCross,
-    magCK,
+    shuffleCross, magCK,
     magDecon,
     magCosub,
     coproductCK,
@@ -32,10 +34,73 @@ module Butcher.Planar (
 
 import Data.List (inits, tails)
 
-import Core.Parse as P
 import Core.GradedList
-import Core.Symbolics
+import Core.VectorSpace
+import Core.Algebra
 import Core.SyntacticTree
+import Butcher.Tree as T
+
+{- $setup
+  Integer Tree From Brackets
+>>> itfb str = fromBrackets str :: PlanarTree Integer
+
+  Integer Forest From Brackets
+>>> iffb str = fromBrackets str :: [PlanarTree Integer]
+-}
+
+---------------------------------------------------------------------
+
+-- * Planar trees
+
+---------------------------------------------------------------------
+
+{- | Planar trees are represented as a tree with a root and a list of
+children which are planar trees themselves.
+-}
+data PlanarTree d = PT
+    { planarRoot :: d
+    , planarChildren :: [PlanarTree d]
+    }
+    deriving (Eq)
+
+instance IsDecorated (PlanarTree d) where
+    type Decoration (PlanarTree d) = d
+
+instance (Graded d) => IsTree (PlanarTree d) where
+    root = planarRoot
+    children = planarChildren
+
+    buildTree = PT
+
+instance (Graded d) => HasBracketNotation (PlanarTree d) where
+    toBracketsWith = treeToBracketsWith
+    fromBracketsWith = treeFromBracketsWith
+
+instance (Show d, Graded d) => Show (PlanarTree d) where
+    show = toBrackets 
+
+-- | Planar trees are vectors with integer coefficients.
+instance (Eq d, Graded d) => IsVector (PlanarTree d) where
+    type VectorScalar (PlanarTree d) = Integer
+    type VectorBasis (PlanarTree d) = PlanarTree d
+
+    vector = vector . (1 *^)
+
+{- |
+  Grading of a planar tree is the sum of gradings of the nodes.
+
+Example:
+
+>>> grading $ itfb "1[2,34]"
+3
+
+Note: the grading of an integer is the number of digits with @0@ having grading @0@.
+-}
+instance (Graded d) => Graded (PlanarTree d) where
+    grading (PT r xs) = grading r + sum (map grading xs)
+
+
+
 
 magIsEmpty :: [t] -> Bool
 magIsEmpty [] = True
@@ -48,7 +113,7 @@ magRight :: (IsTree t) => [t] -> [t]
 magRight = children . last
 
 magRoot :: (IsTree t) => [t] -> Decoration t
-magRoot = P.root . last
+magRoot = T.root . last
 
 magBm :: (IsTree t) => t -> [t]
 magBm = children
@@ -67,12 +132,7 @@ magButcherProd t1 t2 = magBp c $ magProd c' (magBm t1) (magBm t2)
 
 magShuffle
     :: ( IsTree t
-       , Graded t
        , IsVector t
-       , Eq t
-       , Eq (VectorScalar t)
-       , Num (VectorScalar t)
-       , Num (Decoration t)
        )
     => [t] -> [t] -> Vector (VectorScalar t) [t]
 magShuffle [] f = vector f
@@ -83,12 +143,7 @@ magShuffle f1@(t1 : ts1) f2@(t2 : ts2) =
 
 shuffleCross
     :: ( IsTree t
-       , Graded t
        , IsVector t
-       , Eq t
-       , Eq (VectorScalar t)
-       , Num (VectorScalar t)
-       , Num (Decoration t)
        )
     => Decoration t
     -> ([t], [t])
@@ -98,12 +153,7 @@ shuffleCross c (f11, f12) (f21, f22) = bilinear (,) (magShuffle f11 f21) (vector
 
 magCK
     :: ( IsTree t
-       , Graded t
        , IsVector t
-       , Eq t
-       , Eq (VectorScalar t)
-       , Num (VectorScalar t)
-       , Num (Decoration t)
        )
     => [t] -> Vector (VectorScalar t) ([t], [t])
 magCK [] = vector ([], [])
@@ -113,12 +163,7 @@ magCK f = vector (f, []) + bilinear (shuffleCross c) (magCK $ magLeft f) (magCK 
 
 magDecon
     :: ( IsTree t
-       , Graded t
        , IsVector t
-       , Eq t
-       , Eq (VectorScalar t)
-       , Num (VectorScalar t)
-       , Num (Decoration t)
        )
     => [t] -> Vector (VectorScalar t) ([t], [t])
 magDecon [] = vector ([], [])
@@ -126,12 +171,7 @@ magDecon f = vectorFromList $ map (1 *^) $ zip (inits f) (tails f)
 
 magCosub
     :: ( IsTree t
-       , Graded t
        , IsVector t
-       , Eq t
-       , Eq (VectorScalar t)
-       , Num (VectorScalar t)
-       , Num (Decoration t)
        )
     => [Decoration t]
     -> (Decoration t -> t -> VectorScalar t)
@@ -155,29 +195,19 @@ magCosub cs a f = sum $ map (\c -> linear (perDecompTerm c) $ linear perDeconTer
 
 coproductCK
     :: ( IsTree t
-       , Graded t
        , IsVector t
-       , Eq t
-       , Eq (VectorScalar t)
-       , Num (VectorScalar t)
-       , Num (Decoration t)
        )
     => [t] -> Vector (VectorScalar t) ([t], [t])
 coproductCK [] = vector ([], [])
 coproductCK [t] = vector ([t], []) + (linear perTerm $ coproductCK $ children t)
   where
     perTerm (f1, f2) = (f1, (: []) $ buildTree c f2)
-    c = P.root t
+    c = T.root t
 coproductCK f = morphism (\s -> coproductCK [s]) $ vector f
 
 magPrune
     :: ( IsTree t
-       , Graded t
        , IsVector t
-       , Eq t
-       , Eq (VectorScalar t)
-       , Num (VectorScalar t)
-       , Num (Decoration t)
        )
     => [t] -> Vector (VectorScalar t) ([t], [t])
 magPrune [] = vector ([], [])
@@ -195,11 +225,7 @@ data Operation a = Op
 -}
 magProdOp
     :: ( IsTree t
-       , Graded t
        , IsVector t
-       , Eq t
-       , Eq (VectorScalar t)
-       , Num (VectorScalar t)
        , Show (Decoration t)
        )
     => Decoration t -> Operation [t]
@@ -210,11 +236,7 @@ magProdOp c = Op ("magprod[" ++ show c ++ "]") ("$\\times_" ++ show c ++ "$") 2 
 
 buildSyntacticTree
     :: ( IsTree t
-       , Graded t
        , IsVector t
-       , Eq t
-       , Eq (VectorScalar t)
-       , Num (VectorScalar t)
        , Show (Decoration t)
        )
     => [t] -> SyntacticTree [t]

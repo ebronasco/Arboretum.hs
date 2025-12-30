@@ -17,7 +17,7 @@ An implementation of symbolic algebra using graded vector spaces
 with the aim of being able to represent and manipulate algebras over
 the vector spaces of graphs.
 -}
-module Core.Symbolics (
+module Core.VectorSpace (
     ScalarProduct,
     pattern (:*^),
     (*^),
@@ -35,6 +35,9 @@ module Core.Symbolics (
     linear,
     linearGraded,
     linearNonDec,
+    bilinear,
+    bilinearGraded,
+    bilinearNonDec,
     renormalize,
     scale,
     rescale,
@@ -43,9 +46,6 @@ module Core.Symbolics (
     takeWhileV,
     filterV,
     takeV,
-    morphism,
-    morphismGraded,
-    morphismNonDec,
     Sum (Zero),
     fromListS,
     toListS,
@@ -54,9 +54,6 @@ module Core.Symbolics (
     Vector (Empty),
     fromListV,
     toListV,
-    bilinear,
-    bilinearGraded,
-    bilinearNonDec,
 ) where
 
 import qualified Data.Bifunctor as BF (
@@ -634,7 +631,15 @@ basisElements :: Vector k a -> [a]
 basisElements = map basisElement . terms
 
 -- | A class of types that can be cast to a vector.
-class IsVector v where
+class
+    ( Eq v
+    , Eq (VectorBasis v)
+    , Graded (VectorBasis v)
+    , Eq (VectorScalar v)
+    , Num (VectorScalar v)
+    )
+    => IsVector v
+    where
     type VectorScalar v
     type VectorBasis v
     vector :: v -> Vector (VectorScalar v) (VectorBasis v)
@@ -649,11 +654,8 @@ Examples:
 (1 *^ fromOccurList [('x',1),('y',1)])_2
 -}
 instance
-    ( Eq a
-    , Graded a
+    ( Graded a
     , IsVector a
-    , Num (VectorScalar a)
-    , Eq (VectorScalar a)
     )
     => IsVector (MS.MultiSet a)
     where
@@ -672,11 +674,8 @@ Examples:
 (1 *^ "xy")_2
 -}
 instance
-    ( Eq a
-    , Graded a
+    ( Graded a
     , IsVector a
-    , Num (VectorScalar a)
-    , Eq (VectorScalar a)
     )
     => IsVector [a]
     where
@@ -718,18 +717,14 @@ instance (Num k, Eq k, Eq a, Graded a) => IsVector (Sum k a) where
     vector s@(S g _ _) = fromListV $ replicate (fromInteger g) Zero ++ [s]
 
 -- | @Vector@ has a trivial @IsVector@ instance.
-instance IsVector (Vector k a) where
+instance (Num k, Eq k, Eq a, Graded a) => IsVector (Vector k a) where
     type VectorScalar (Vector k a) = k
     type VectorBasis (Vector k a) = a
     vector = id
 
 instance
-    ( Eq a
-    , Graded a
+    ( Graded a
     , IsVector a
-    , Num (VectorScalar a)
-    , Eq (VectorScalar a)
-    , Eq b
     , Graded b
     , IsVector b
     , VectorScalar a ~ VectorScalar b
@@ -739,8 +734,6 @@ instance
     type VectorScalar (a, b) = VectorScalar a
     type VectorBasis (a, b) = (a, b)
     vector = vector . (1 *^)
-
-
 
 {- |
   Construct a vector from a finite list of terms by ordering the terms
@@ -805,12 +798,7 @@ Examples:
 (1 *^ 1 + 2 *^ 2 + 2 *^ 3 + 2 *^ 4 + 1 *^ 5)_1
 -}
 linear
-    :: ( Num k
-       , Eq k
-       , Eq a
-       , Eq b
-       , Graded b
-       , IsVector v
+    :: ( IsVector v
        , VectorScalar v ~ k
        , VectorBasis v ~ b
        )
@@ -843,12 +831,7 @@ Examples:
 ...
 -}
 linearGraded
-    :: ( Num k
-       , Eq k
-       , Eq a
-       , Eq b
-       , Graded b
-       , IsVector v
+    :: ( IsVector v
        , VectorScalar v ~ k
        , VectorBasis v ~ b
        )
@@ -882,12 +865,7 @@ Examples:
 (1 *^ [2] + 1 *^ [3] + 1 *^ [4] + 1 *^ [5] + 1 *^ [6] + 1 *^ [7] + 1 *^ [8] + 1 *^ [9])_1 + (1 *^ [1,9] + 1 *^ [2,0])_2
 -}
 linearNonDec
-    :: ( Num k
-       , Eq k
-       , Eq a
-       , Eq b
-       , Graded b
-       , IsVector v
+    :: ( IsVector v
        , VectorScalar v ~ k
        , VectorBasis v ~ b
        )
@@ -932,14 +910,10 @@ Examples:
 -}
 bilinear
     :: ( IsVector v
-       , Num k
-       , Eq k
        , Eq a
        , Eq b
-       , Eq c
        , Graded a
        , Graded b
-       , Graded c
        , VectorScalar v ~ k
        , VectorBasis v ~ c
        )
@@ -972,14 +946,10 @@ Examples:
 -}
 bilinearGraded
     :: ( IsVector v
-       , Num k
-       , Eq k
        , Eq a
        , Eq b
-       , Eq c
        , Graded a
        , Graded b
-       , Graded c
        , VectorScalar v ~ k
        , VectorBasis v ~ c
        )
@@ -1010,14 +980,10 @@ Examples:
 -}
 bilinearNonDec
     :: ( IsVector v
-       , Num k
-       , Eq k
        , Eq a
        , Eq b
-       , Eq c
        , Graded a
        , Graded b
-       , Graded c
        , VectorScalar v ~ k
        , VectorBasis v ~ c
        )
@@ -1028,118 +994,6 @@ bilinearNonDec
 bilinearNonDec f ps1 ps2 =
     linearNonDec (uncurry f . BF.bimap head head) $
         linearGraded ((1 *^) . (,[]) . (: [])) ps1 * linearGraded ((1 *^) . ([],) . (: [])) ps2
-
-{- |
-  Take a function @f@ that maps basis elements to basis elements and
-  extends it to a morphism of the algebra.
-
-!!! The function @morphism f@ accepts only finite vectors.
-
-Examples:
-
->>> f1 x = if x < 9 then 1 *^ [x+1] else 1 *^ [x, 1]
->>> v1 = vectorFromList [1 *^ [6, 7], 1 *^ [8, 9]]
->>> morphism f1 v1
-(1 *^ [7,8])_2 + (1 *^ [9,9,1])_3
->>> f2 x = vectorFromList [1 *^ [x], 1 *^ [x+1]]
->>> v2 = vectorFromList [1 *^ [1, 2], 1 *^ [3, 4]]
->>> morphism f2 v2
-(1 *^ [1,2] + 1 *^ [2,2] + 1 *^ [1,3] + 1 *^ [2,3] + 1 *^ [3,4] + 1 *^ [4,4] + 1 *^ [3,5] + 1 *^ [4,5])_2
--}
-morphism
-    :: ( Num k
-       , Eq k
-       , Functor f
-       , Foldable f
-       , Eq (f a)
-       , Eq b
-       , Graded b
-       , Monoid b
-       , IsVector v
-       , VectorScalar v ~ k
-       , VectorBasis v ~ b
-       )
-    => (a -> v)
-    -> Vector k (f a)
-    -> Vector k b
-morphism f = linear $ product . fmap (vector . f)
-
-{- |
-  Take a function @f@ that maps basis elements to basis elements and
-  extends it to a morphism of the tensor algebra.
-
-!!! The function @f@ must preserve the grading.
-
-Examples:
-
->>> f1 x = 1 *^ [1,x]
->>> v1 = vectorFromList [1 *^ [6,7], 1 *^ [8, 9]]
->>> morphismGraded f1 v1
-*** Exception: Grading mismatch in a list of terms
-...
->>> f2 x = 1 *^ [x + 1]
->>> v2 = vectorFromList [1 *^ [6, 7], 1 *^ [8, 9]]
->>> morphismGraded f2 v2
-(1 *^ [7,8] + 1 *^ [9,10])_2
->>> v3 = vectorFromNonDecList [i *^ (replicate i 1) | i <- [1..]]
->>> takeV 10 $ morphismGraded f2 v3
-(1 *^ [2])_1 + (2 *^ [2,2])_2 + (3 *^ [2,2,2])_3 + (4 *^ [2,2,2,2])_4 + (5 *^ [2,2,2,2,2])_5 + (6 *^ [2,2,2,2,2,2])_6 + (7 *^ [2,2,2,2,2,2,2])_7 + (8 *^ [2,2,2,2,2,2,2,2])_8 + (9 *^ [2,2,2,2,2,2,2,2,2])_9 + (10 *^ [2,2,2,2,2,2,2,2,2,2])_10
--}
-morphismGraded
-    :: ( Num k
-       , Eq k
-       , Functor f
-       , Foldable f
-       , Eq (f a)
-       , Eq b
-       , Graded b
-       , Monoid b
-       , IsVector v
-       , VectorScalar v ~ k
-       , VectorBasis v ~ b
-       )
-    => (a -> v)
-    -> Vector k (f a)
-    -> Vector k b
-morphismGraded f = linearGraded $ product . fmap (vector . f)
-
-{- |
-  Take a function @f@ that maps basis elements to basis elements and
-  extends it to a morphism of the tensor algebra.
-
-!!! The function @f@ must be non-decreasing (see @linearNonDec@).
-
-Examples:
-
->>> f1 x = 1 *^ [x+1]
->>> v1 = vectorFromList [1 *^ [6,7], 1 *^ [8, 9]]
->>> morphismNonDec f1 v1
-(1 *^ [7,8] + 1 *^ [9,10])_2
->>> f2 x = if x > 0 && x < 9 then 1*^ [x + 1] else 1 *^ [x]
->>> v2 = vectorFromList [1 *^ [6, 7], 1 *^ [8, 9]]
->>> morphismNonDec f2 v2
-(1 *^ [7,8] + 1 *^ [9,9])_2
->>> v3 = vectorFromNonDecList [i *^ (replicate i 1) | i <- [1..]]
->>> takeV 10 $ morphismNonDec f2 v3
-(1 *^ [2])_1 + (2 *^ [2,2])_2 + (3 *^ [2,2,2])_3 + (4 *^ [2,2,2,2])_4 + (5 *^ [2,2,2,2,2])_5 + (6 *^ [2,2,2,2,2,2])_6 + (7 *^ [2,2,2,2,2,2,2])_7 + (8 *^ [2,2,2,2,2,2,2,2])_8 + (9 *^ [2,2,2,2,2,2,2,2,2])_9 + (10 *^ [2,2,2,2,2,2,2,2,2,2])_10
--}
-morphismNonDec
-    :: ( Num k
-       , Eq k
-       , Functor f
-       , Foldable f
-       , Eq (f a)
-       , Eq b
-       , Graded b
-       , Monoid b
-       , IsVector v
-       , VectorScalar v ~ k
-       , VectorBasis v ~ b
-       )
-    => (a -> v)
-    -> Vector k (f a)
-    -> Vector k b
-morphismNonDec f = linearNonDec $ product . fmap (vector . f)
 
 {- |
   Change the coefficients in a vector using a function @f@ that takes
@@ -1195,7 +1049,17 @@ Examples:
 >>> rescale f v
 (2 *^ 'x' + 3 *^ 'y' + 4 *^ 'z' + 5 *^ 'w')_1
 -}
-rescale :: (Num k1, Eq k1, Num k2, Eq k2, Eq a, Graded a) => (k1 -> k2) -> Vector k1 a -> Vector k2 a
+rescale
+    :: ( Num k1
+       , Eq k1
+       , Num k2
+       , Eq k2
+       , Eq a
+       , Graded a
+       )
+    => (k1 -> k2)
+    -> Vector k1 a
+    -> Vector k2 a
 rescale f = renormalize (\s _ -> f s)
 
 {- |

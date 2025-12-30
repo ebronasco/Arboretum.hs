@@ -26,19 +26,14 @@ module Core.SyntacticTree (
     HasSyntacticTree (..),
     eval,
     substitute,
-    graftOp,
-    concatOp,
 ) where
 
 import Control.Monad.State
 import Data.List (intercalate, permutations)
 import Data.Maybe (fromJust)
-import qualified Data.MultiSet as MS
 import Core.GradedList
-import Core.Parse
 import Core.Output
-import Core.Symbolics
-import Butcher.NonPlanar
+import Core.VectorSpace
 
 {- $setup
 >>> l1 = Leaf [PT 1 []]
@@ -86,22 +81,20 @@ instance (Show a) => Show (SyntacticTree a) where
 {- | Use the representation of syntactic tree as a planar tree to
 generate LaTeX code.
 -}
-instance (Show a, Texifiable a) => Texifiable (SyntacticTree a) where
-    texify = texify . syntacticToPlanar
+instance (Show a) => Texifiable (SyntacticTree a) where
+    texifyID _ = "SyntacticTree"
+    texify t = "\\forest{" ++ brackets t ++ "}"
       where
-        syntacticToPlanar :: (Show a) => SyntacticTree a -> PlanarTree String
-        syntacticToPlanar (Leaf a) = PT (show a) []
-        syntacticToPlanar (Node op as) = PT (tex op) $ map syntacticToPlanar as
+        brackets (Node op as) =
+            (wrap $ tex op)
+                ++ ( case as of
+                        [] -> ""
+                        _ -> "[" ++ intercalate "," (map brackets as) ++ "]"
+                   )
+        brackets (Leaf a) = wrap a
+        wrap r = "i_" ++ filter (/= '"') (show r)
 
-instance
-    ( IsVector a
-    , Eq (VectorScalar a)
-    , Num (VectorScalar a)
-    , Eq a
-    , Graded a
-    )
-    => IsVector (SyntacticTree a)
-    where
+instance (IsVector a, Graded a) => IsVector (SyntacticTree a) where
     type VectorScalar (SyntacticTree a) = VectorScalar a
     type VectorBasis (SyntacticTree a) = SyntacticTree a
 
@@ -171,9 +164,6 @@ _0
 -}
 symmetricCompose
     :: ( IsVector a
-       , Eq (VectorScalar a)
-       , Num (VectorScalar a)
-       , Eq a
        , Graded a
        )
     => SyntacticTree a
@@ -208,10 +198,6 @@ Examples:
 eval
     :: ( IsVector a
        , VectorBasis a ~ a
-       , Num (VectorScalar a)
-       , Eq (VectorScalar a)
-       , Eq a
-       , Graded a
        )
     => SyntacticTree a
     -> Vector (VectorScalar a) a
@@ -243,10 +229,6 @@ _0
 substitute
     :: ( HasSyntacticTree a
        , IsVector a
-       , Eq (VectorScalar a)
-       , Num (VectorScalar a)
-       , Eq a
-       , Graded a
        , VectorBasis a ~ a
        )
     => a
@@ -254,69 +236,3 @@ substitute
     -> a
     -> Vector (VectorScalar a) a
 substitute x gens obj = linear eval $ symmetricCompose (syn x) (map syn gens) $ syn obj
-
--- | Grafting operation.
-graftOp :: (IsVector a, Graftable a) => Operation a
-graftOp = Op "graft" "$\\curvearrowright$" 2 $
-    \case
-        [x, y] -> graft x y
-        _ -> error "graftOp: arity"
-
--- | Concatenation operation.
-concatOp :: (IsVector a, Monoid a) => Operation a
-concatOp = Op "concat" "$\\cdot$" (-1) (vector . mconcat)
-
-{- |
-  Construct a syntactic tree of a list of trees.
-
-Examples:
-
->>> f = [PT 1 [PT 2 [], PT 3 []], PT 4 []]
->>> syn f
-concat(graft(concat([2],[3]),[1]),[4])
--}
-instance
-    ( IsVector t
-    , IsTree t
-    , Num (VectorScalar t)
-    , Eq (VectorScalar t)
-    , Eq t
-    , Graded t
-    , Eq (Decoration t)
-    , Graded (Decoration t)
-    )
-    => HasSyntacticTree [t]
-    where
-    syn [t] = case children t of
-        [] -> Leaf [t]
-        _ -> Node graftOp [syn (children t), Leaf [buildTree (root t) []]]
-    syn ts = Node concatOp $ map (syn . (: [])) ts
-
-{- |
-  Construct a syntactic tree of a multiset of trees.
-
-Examples:
-
->>> f = nonplanar [PT 1 [PT 2 [], PT 3 []], PT 4 []] :: MS.MultiSet (Tree Integer)
->>> syn f
-concat(graft(concat(fromOccurList [(2,1)],fromOccurList [(3,1)]),fromOccurList [(1,1)]),fromOccurList [(4,1)])
--}
-instance
-    ( IsVector t
-    , IsTree t
-    , Num (VectorScalar t)
-    , Eq (VectorScalar t)
-    , Eq t
-    , Graded t
-    , Ord t
-    , Eq (Decoration t)
-    , Graded (Decoration t)
-    , Ord (Decoration t)
-    )
-    => HasSyntacticTree (MS.MultiSet t)
-    where
-    syn ts = case MS.toList ts of
-        [t] -> case children t of
-            [] -> Leaf $ MS.singleton t
-            _ -> Node graftOp [syn (MS.fromList $ children t), Leaf $ MS.singleton $ buildTree (root t) []]
-        ts' -> Node concatOp $ map (syn . MS.singleton) ts'

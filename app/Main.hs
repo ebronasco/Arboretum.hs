@@ -12,13 +12,13 @@ import qualified Data.MultiSet as MS
 import Core.GradedList
 import Core.Output
 import Core.SyntacticTree
-import Core.Symbolics as S
+import Core.VectorSpace as V
+import Core.Algebra
 import Butcher.Aromatic
 import Butcher.Graph
 import Butcher.NonPlanar
 import Butcher.Planar
 import Butcher.Series
-import TensorAlgebra
 
 import Numeric.LinearAlgebra as LA
 

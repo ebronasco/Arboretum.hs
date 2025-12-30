@@ -30,31 +30,32 @@ import qualified Data.List as L
 import qualified Data.MultiSet as MS
 
 import Core.GradedList
-import Core.Parse
 import Core.Output
-import Core.Symbolics
+import Core.VectorSpace
+import Core.Algebra
 import Core.SyntacticTree
+import Butcher.Tree
+import Butcher.Planar
 import Butcher.NonPlanar
-import TensorAlgebra
 
 {- $setup
   Integer Forest From Brackets
->>> iffb str = fromBrackets read str :: [PlanarTree Integer]
+>>> iffb str = fromBrackets str :: [PlanarTree Integer]
 
   Non-Planar Integer Forest From Brackets
->>> npiffb str = fromBrackets read str :: MS.MultiSet (Tree Integer)
+>>> npiffb str = fromBrackets str :: MS.MultiSet (Tree Integer)
 
   Integer Cycle From Brackets
->>> icfb str = fromBrackets read str :: Cycle (PlanarTree Integer)
+>>> icfb str = fromBrackets str :: Cycle (PlanarTree Integer)
 
   Non-Planar Integer Cycle From Brackets
->>> npicfb str = fromBrackets read str :: Cycle (Tree Integer)
+>>> npicfb str = fromBrackets str :: Cycle (Tree Integer)
 
   Planar Aromatic Integer Forest From Brackets
->>> paiffb st = fromBrackets read st :: PlanarAromatic (PlanarTree Integer)
+>>> paiffb st = fromBrackets st :: PlanarAromatic (PlanarTree Integer)
 
   Aromatic Integer Forest From Brackets
->>> aiffb st = fromBrackets read st :: Aromatic (Tree Integer)
+>>> aiffb st = fromBrackets st :: Aromatic (Tree Integer)
 -}
 
 ----------------------------------------------------------------------
@@ -118,15 +119,7 @@ instance (Show a) => Show (Cycle a) where
 instance (Graded a) => Graded (Cycle a) where
     grading (Cycle l) = sum $ map grading l
 
-instance
-    ( IsVector a
-    , Num (VectorScalar a)
-    , Eq (VectorScalar a)
-    , Eq a
-    , Graded a
-    )
-    => IsVector (Cycle a)
-    where
+instance (IsVector a, Graded a) => IsVector (Cycle a) where
     type VectorScalar (Cycle a) = VectorScalar a
     type VectorBasis (Cycle a) = Cycle a
 
@@ -141,15 +134,15 @@ instance (IsDecorated t) => IsDecorated (Cycle t) where
 
 Examples:
 
->>> toBrackets show $ Cycle $ iffb "1[2,3],2[3,4]"
+>>> toBrackets $ Cycle $ iffb "1[2,3],2[3,4]"
 "(1[2,3],2[3,4])"
->>> fromBrackets read "(1[2,3],2[3,4])" :: Cycle (PlanarTree Integer)
+>>> fromBrackets "(1[2,3],2[3,4])" :: Cycle (PlanarTree Integer)
 (1[2,3],2[3,4])
 -}
 instance (IsTree t, HasBracketNotation t) => HasBracketNotation (Cycle t) where
-    toBrackets f a = "(" ++ L.intercalate "," (map (toBrackets f) $ unCycle a) ++ ")"
+    toBracketsWith f a = "(" ++ L.intercalate "," (map (toBracketsWith f) $ unCycle a) ++ ")"
 
-    fromBrackets f = Cycle . fromBrackets f . escapeParentheses
+    fromBracketsWith f = Cycle . fromBracketsWith f . escapeParentheses
       where
         escapeParentheses [] = []
         escapeParentheses str =
@@ -166,7 +159,7 @@ Examples:
 "\\forest{(1[2,3],2[3,4])}"
 -}
 instance (Texifiable (Decoration t), IsTree t, HasBracketNotation t) => Texifiable (Cycle t) where
-    texify c = "\\forest{" ++ toBrackets texify c ++ "}"
+    texify c = "\\forest{" ++ toBracketsWith texify c ++ "}"
 
 ----------------------------------------------------------------------
 
@@ -186,20 +179,20 @@ type PlanarAromatic t =
 Examples:
 
 >>> af = ([icfb "(1[2,3],4[5])", icfb "(6[7])"], iffb "8[9],10")
->>> toBrackets show af
+>>> toBrackets af
 "(1[2,3],4[5]),(6[7]),8[9],10"
->>> fromBrackets read "(1[2,3],4[5]),(6[7]),8[9],10" :: PlanarAromatic (PlanarTree Integer)
+>>> fromBrackets "(1[2,3],4[5]),(6[7]),8[9],10" :: PlanarAromatic (PlanarTree Integer)
 ([(1[2,3],4[5]),(6[7])],[8[9],10])
 -}
 instance (IsTree t, HasBracketNotation t) => HasBracketNotation (PlanarAromatic t) where
-    toBrackets f (ma, ts) =
+    toBracketsWith f (ma, ts) =
         L.intercalate "," $
-            map (toBrackets f) ma ++ map (toBrackets f) ts
+            map (toBracketsWith f) ma ++ map (toBracketsWith f) ts
 
-    fromBrackets f =
+    fromBracketsWith f =
         bimap
-            (map (fromBrackets f))
-            (concatMap (fromBrackets f))
+            (map (fromBracketsWith f))
+            (concatMap (fromBracketsWith f))
             . evalState splitAromasAndTrees
       where
         splitAromasAndTrees = do
@@ -319,15 +312,8 @@ Examples:
 (1 *^ [(1,1),(1,2[1])] + 1 *^ [(1,1),(1[1],2)] + 2 *^ [(1,1[1]),(1,2)])_5
 -}
 graftOnMultiAroma
-    :: ( IsDecorated t
-       , Eq (Decoration t)
-       , Graded (Decoration t)
-       , IsTree t
+    :: ( IsTree t
        , IsVector t
-       , Num (VectorScalar t)
-       , Eq (VectorScalar t)
-       , Eq t
-       , Graded t
        )
     => [t]
     -> [Cycle t]
@@ -348,17 +334,10 @@ Examples:
 (1 *^ ([(1),(2)],[2[1]]) + 1 *^ ([(1),(2[1])],[2]))_4
 -}
 instance
-    ( IsDecorated t
-    , Eq (Decoration t)
-    , Graded (Decoration t)
-    , IsTree t
+    ( IsTree t
     , IsVector t
-    , Num (VectorScalar t)
-    , Eq (VectorScalar t)
-    , Eq t
-    , Graded t
     )
-    => Graftable (PlanarAromatic t)
+    => CanGraft (PlanarAromatic t)
     where
     graft (ma1, f1) (ma2, f2) =
         vector (ma1, [])
@@ -391,9 +370,9 @@ instance (Planarable t) => Planarable (Cycle t) where
 
 Examples:
 
->>> toBrackets show $ aiffb "(1,2),(3[4]),5[6]"
+>>> toBrackets $ aiffb "(1,2),(3[4]),5[6]"
 "(1,2),(3[4]),5[6]"
->>> fromBrackets read "(1,2),(3[4]),5[6]" :: Aromatic (Tree Integer)
+>>> fromBrackets "(1,2),(3[4]),5[6]" :: Aromatic (Tree Integer)
 (fromOccurList [((1,2),1),((3[4]),1)],fromOccurList [(5[6],1)])
 -}
 instance
@@ -407,9 +386,9 @@ instance
     )
     => HasBracketNotation (Aromatic t)
     where
-    toBrackets f = toBrackets f . planar
+    toBracketsWith f = toBracketsWith f . planar
 
-    fromBrackets f = nonplanar . fromBrackets f
+    fromBracketsWith f = nonplanar . fromBracketsWith f
 
 ----------------------------------------------------------------------
 
@@ -495,10 +474,6 @@ concat(trace(graft(concat(([],[x]),([],[m2])),([],[m1]))),trace(graft(graft(conc
 -}
 instance
     ( IsVector t
-    , Num (VectorScalar t)
-    , Eq (VectorScalar t)
-    , Eq t
-    , Graded t
     , IsTree t
     , Decoration t ~ Marked d
     , Eq d
@@ -536,10 +511,6 @@ traceOp
     :: ( IsTree t
        , Decoration t ~ Marked d
        , IsVector t
-       , Num (VectorScalar t)
-       , Eq (VectorScalar t)
-       , Eq t
-       , Graded t
        , Eq d
        , Graded d
        )

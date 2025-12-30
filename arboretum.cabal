@@ -32,12 +32,12 @@ library
       Butcher.NonPlanar
       Butcher.Planar
       Butcher.Series
+      Butcher.Tree
+      Core.Algebra
       Core.GradedList
       Core.Output
-      Core.Parse
-      Core.Symbolics
       Core.SyntacticTree
-      TensorAlgebra
+      Core.VectorSpace
   other-modules:
       Paths_arboretum
   autogen-modules:

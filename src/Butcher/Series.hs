@@ -20,46 +20,37 @@ module Butcher.Series (
 
 import Numeric.LinearAlgebra as LA
 import Core.GradedList
-import Core.Symbolics as S
-import Core.Parse
-import Butcher.NonPlanar
+import Core.VectorSpace as V
+import Butcher.Tree
 
 bseries
     :: ( IsTree t
        , IsVector t
-       , Num (VectorScalar t)
-       , Eq (VectorScalar t)
-       , Eq t
-       , Graded t
        , Eq (Decoration t)
        , Graded (Decoration t)
        , Fractional (VectorScalar t)
        )
-    => S.Vector (VectorScalar t) [t]
+    => V.Vector (VectorScalar t) [t]
     -> ([t] -> VectorScalar t)
-    -> S.Vector (VectorScalar t) [t]
-bseries gen coeff = renormalize (\_ x -> coeff x) $ expGL gen $ S.vector []
+    -> V.Vector (VectorScalar t) [t]
+bseries gen coeff = renormalize (\_ x -> coeff x) $ expGL gen $ V.vector []
 
 -- Exact solution
 
 expGL
     :: ( IsTree t
        , IsVector t
-       , Num (VectorScalar t)
-       , Eq (VectorScalar t)
-       , Eq t
-       , Graded t
        , Eq (Decoration t)
        , Graded (Decoration t)
        , Fractional (VectorScalar t)
        )
-    => S.Vector (VectorScalar t) [t]
-    -> S.Vector (VectorScalar t) [t]
-    -> S.Vector (VectorScalar t) [t]
+    => V.Vector (VectorScalar t) [t]
+    -> V.Vector (VectorScalar t) [t]
+    -> V.Vector (VectorScalar t) [t]
 expGL gen start =
     vectorFromNonDecList $
         foldr1 (++) $
-            map (terms . (\(k, x) -> S.scale (1 / (fromInteger (product [1 .. k]))) x)) $
+            map (terms . (\(k, x) -> V.scale (1 / (fromInteger (product [1 .. k]))) x)) $
                 zip (1 : [1 ..] :: [Integer]) $
                     iterate (bilinear gl gen) start
 
@@ -86,17 +77,13 @@ rkInternalCoeff aij t = (#>) aij $ product $ (v1 :) $ map (rkInternalCoeff aij) 
 rkbseries
     :: ( IsTree t
        , IsVector t
-       , Num (VectorScalar t)
-       , Eq (VectorScalar t)
-       , Eq t
-       , Graded t
        , Eq (Decoration t)
        , Graded (Decoration t)
        , VectorScalar t ~ LA.R
        , Fractional (VectorScalar t)
        )
-    => S.Vector (VectorScalar t) [t]
+    => V.Vector (VectorScalar t) [t]
     -> LA.Matrix LA.R
     -> LA.Vector LA.R
-    -> S.Vector (VectorScalar t) [t]
+    -> V.Vector (VectorScalar t) [t]
 rkbseries gen aij bi = bseries gen $ product . map (rkCoeff aij bi)

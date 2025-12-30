@@ -60,7 +60,7 @@ import Core.GradedList (
     Graded,
     grading,
  )
-import Core.Symbolics (
+import Core.VectorSpace (
     Vector,
     vectorFromNonDecList,
     (*^),
