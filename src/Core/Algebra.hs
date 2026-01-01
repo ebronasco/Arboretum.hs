@@ -2,6 +2,9 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 {- |
 Module      : Algebra
@@ -13,39 +16,63 @@ Stability   : experimental
 
 -}
 module Core.Algebra (
+    HasMorphism (..),
     CanDeshuffle (..),
-    IsMonomial (..),
+    shuffle,
+    deconcatenate,
     morphism,
     morphismGraded,
     morphismNonDec,
 ) where
 
 import qualified Data.MultiSet as MS
-import Data.Kind (Constraint)
+import Data.List (inits, tails)
 
 import Core.VectorSpace
 import Core.GradedList
 
-class (Foldable m) => IsMonomial m where
-    type MapConstraint m b :: Constraint
-    singleton :: a -> m a
-    mmap :: MapConstraint m b => (a -> b) -> m a -> m b
-
-instance IsMonomial [] where
-    type MapConstraint [] b = ()
-    singleton = (:[])
-    mmap = map
-
-instance IsMonomial MS.MultiSet where
-    type MapConstraint MS.MultiSet b = (Ord b)
-    singleton = MS.singleton
-    mmap = MS.map
 
 ---------------------------------------------------------------------
 
 -- * Algebra functions
 
 ---------------------------------------------------------------------
+
+class (Foldable f, IsVector v) => HasMorphism f func a v | func -> a v where
+    morphism' :: func -> Vector k (f a) -> Vector k (VectorBasis v)
+
+instance {-# OVERLAPABLE #-} ( IsVector v
+                   , VectorScalar v ~ k
+                   , VectorBasis v ~ b
+                   , Monoid b
+                   , Functor f
+                   , Foldable f
+                   , Eq (f a)
+                   ) => HasMorphism f (a -> v) a v
+    where
+    morphism' = morphism
+
+instance {-# OVERLAPPABLE #-} ( IsVector v
+                   , VectorScalar v ~ k
+                   , VectorBasis v ~ b
+                   , Monoid b
+                   , Functor f
+                   , Foldable f
+                   , Eq (f a)
+                   ) => HasMorphism f (GradedFunc a v) a v
+    where
+    morphism' = morphismGraded
+
+instance {-# OVERLAPPABLE #-} ( IsVector v
+                   , VectorScalar v ~ k
+                   , VectorBasis v ~ b
+                   , Monoid b
+                   , Functor f
+                   , Foldable f
+                   , Eq (f a)
+                   ) => HasMorphism f (NonDecFunc a v) a v
+    where
+    morphism' = morphismNonDec
 
 {- |
   Take a function @f@ that maps basis elements to basis elements and
@@ -108,10 +135,10 @@ morphismGraded
        , VectorScalar v ~ k
        , VectorBasis v ~ b
        )
-    => (a -> v)
+    => GradedFunc a v
     -> Vector k (f a)
     -> Vector k b
-morphismGraded f = linearGraded $ product . fmap (vector . f)
+morphismGraded (GradedFunc f) = linearGraded $ GradedFunc $ product . fmap (vector . f)
 
 {- |
   Take a function @f@ that maps basis elements to basis elements and
@@ -142,10 +169,10 @@ morphismNonDec
        , VectorScalar v ~ k
        , VectorBasis v ~ b
        )
-    => (a -> v)
+    => NonDecFunc a v
     -> Vector k (f a)
     -> Vector k b
-morphismNonDec f = linearNonDec $ product . fmap (vector . f)
+morphismNonDec (NonDecFunc f) = linearNonDec $ NonDecFunc $ product . fmap (vector . f)
 
 
 
@@ -188,4 +215,24 @@ instance (IsVector a, Graded a, Ord a) => CanDeshuffle (MS.MultiSet a)
     deshuffle = (linear fromList') . deshuffle . MS.toList
       where
         fromList' (l1, l2) = 1 *^ (MS.fromList l1, MS.fromList l2)
+
+shuffle
+    :: ( IsVector v
+       , Graded v
+       )
+    => [v] -> [v] -> Vector (VectorScalar v) [v]
+shuffle [] l = vector l
+shuffle l [] = vector l
+shuffle l1@(x1 : xs1) l2@(x2 : xs2) =
+    vector [x1] * shuffle xs1 l2
+        + vector [x2] * shuffle l1 xs2
+
+deconcatenate
+    :: ( IsVector v 
+       , Graded v 
+       )
+    => [v] -> Vector (VectorScalar v) ([v], [v])
+deconcatenate [] = vector ([], [])
+deconcatenate l = vectorFromList $ map (1 *^) $ zip (inits l) (tails l)
+
 

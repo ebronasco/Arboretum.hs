@@ -252,7 +252,7 @@ Examples:
 [[1[2[3],4]],[1[4],2[3]],[1[4],2,3],[1[2[3]],4]]
 -}
 branchPaths :: (IsTree t) => t -> [[t]]
-branchPaths t = [t] : recurs (map (second $ buildTree (root t)) $ elemComp $ children t)
+branchPaths t = [t] : recurs (map (second $ buildTree (root t)) $ elemComp $ branches t)
   where
     recurs = concatMap (\(x, y) -> map (y :) (branchPaths x))
 
@@ -486,8 +486,8 @@ instance
       where
         breakCycle [] = buildTree Mark []
         breakCycle (t : ts') = addBranch (breakCycle ts') t
-        addBranch b t = buildTree (root t) (b : children t)
-    syn ([], [t]) = case children t of
+        addBranch b t = buildTree (root t) (b : branches t)
+    syn ([], [t]) = case branches t of
         [] -> Leaf ([], [t])
         bs -> Node graftOp [syn ([], bs), Leaf ([], [buildTree (root t) []])]
     syn (as, ts) =
@@ -534,4 +534,4 @@ traceOp = Op "trace" "$Tr$" 1 $
         searchMarkAroma'' t2 =
             if t2 == buildTree Mark []
                 then t
-                else buildTree (root t2) $ map searchMarkAroma'' $ children t2
+                else buildTree (root t2) $ map searchMarkAroma'' $ branches t2

@@ -4,6 +4,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 {- |
 Module      : Symbolics
@@ -27,6 +28,9 @@ module Core.VectorSpace (
 
     --    VectorSpace,
     IsVector (..),
+    Finite (..),
+    GradedFunc (..),
+    NonDecFunc (..),
     vectorFromList,
     vectorFromNonDecList,
     terms,
@@ -594,6 +598,14 @@ instance
 
 ----------------------------------------------------------------------
 
+
+-- | Some functions assume the vector to be finite.
+newtype Finite v = Finite {getFinite :: v} deriving (Show, Eq, Semigroup, Monoid, Group, Num, IsVector)
+
+-- | Some higher order functions assume the functions they accept are graded or at least nen-decreasing.
+newtype GradedFunc a b = GradedFunc {getGradedFunc :: a -> b}
+newtype NonDecFunc a b = NonDecFunc {getNonDecFunc :: a -> b}
+
 {- |
   Returns a list of @ScalarProduct@ of a vector.
 
@@ -835,10 +847,10 @@ linearGraded
        , VectorScalar v ~ k
        , VectorBasis v ~ b
        )
-    => (a -> v)
+    => GradedFunc a v
     -> Vector k a
     -> Vector k b
-linearGraded f = fromListV . map (fromListS . concatMap applyf . toListS) . toListV
+linearGraded (GradedFunc f) = fromListV . map (fromListS . concatMap applyf . toListS) . toListV
   where
     applyf t = terms $ scale (scalar t) $ vector $ f $ basisElement t
 
@@ -869,10 +881,10 @@ linearNonDec
        , VectorScalar v ~ k
        , VectorBasis v ~ b
        )
-    => (a -> v)
+    => NonDecFunc a v
     -> Vector k a
     -> Vector k b
-linearNonDec f = fromListV . addLevels . map (toListV . mconcat . map applyf . toListS) . toListV
+linearNonDec (NonDecFunc f) = fromListV . addLevels . map (toListV . mconcat . map applyf . toListS) . toListV
   where
     applyf t = scale (scalar t) $ vector $ f $ basisElement t
     addLevels = map mconcat . transposeUntilZero 0
@@ -923,7 +935,10 @@ bilinear
     -> Vector k c
 bilinear f ps1 ps2 =
     linear (uncurry f . BF.bimap head head) $
-        linearGraded ((1 *^) . (,[]) . (: [])) ps1 * linearGraded ((1 *^) . ([],) . (: [])) ps2
+        linearGraded wrapLeft ps1 * linearGraded wrapRight ps2
+  where
+     wrapLeft = GradedFunc ((1 *^) . (,[]) . (: []))
+     wrapRight = GradedFunc ((1 *^) . ([],) . (: []))
 
 {- |
   Takes a function with two arguments and extends it to a bilinear
@@ -958,8 +973,12 @@ bilinearGraded
     -> Vector k b
     -> Vector k c
 bilinearGraded f ps1 ps2 =
-    linearGraded (uncurry f . BF.bimap head head) $
-        linearGraded ((1 *^) . (,[]) . (: [])) ps1 * linearGraded ((1 *^) . ([],) . (: [])) ps2
+    linearGraded applyf $
+        linearGraded wrapLeft ps1 * linearGraded wrapRight ps2
+  where
+    applyf = GradedFunc (uncurry f . BF.bimap head head)
+    wrapLeft = GradedFunc ((1 *^) . (,[]) . (: []))
+    wrapRight = GradedFunc ((1 *^) . ([],) . (: []))
 
 {- |
   Takes a function with two arguments and extends it to a bilinear
@@ -992,8 +1011,12 @@ bilinearNonDec
     -> Vector k b
     -> Vector k c
 bilinearNonDec f ps1 ps2 =
-    linearNonDec (uncurry f . BF.bimap head head) $
-        linearGraded ((1 *^) . (,[]) . (: [])) ps1 * linearGraded ((1 *^) . ([],) . (: [])) ps2
+    linearNonDec applyf $
+        linearGraded wrapLeft ps1 * linearGraded wrapRight ps2
+  where
+    applyf = NonDecFunc (uncurry f . BF.bimap head head)
+    wrapLeft = GradedFunc ((1 *^) . (,[]) . (: []))
+    wrapRight = GradedFunc ((1 *^) . ([],) . (: []))
 
 {- |
   Change the coefficients in a vector using a function @f@ that takes

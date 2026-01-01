@@ -26,6 +26,7 @@ module Butcher.Tree (
     parseDecoration,
     CanGraft (..),
     CanGrossmanLarson (..),
+    CanConnesKreimer (..),
     graftOp,
     concatOp,
 ) where
@@ -75,7 +76,7 @@ class (IsDecorated t) => HasBracketNotation t where
 class (IsDecorated t, Graded t) => IsTree t where
     root :: t -> Decoration t
 
-    children :: t -> [t]
+    branches :: t -> [t]
 
     buildTree :: Decoration t -> [t] -> t
 
@@ -94,9 +95,9 @@ Example:
 treeToBracketsWith :: (IsTree t) => (Decoration t -> String) -> t -> String
 treeToBracketsWith f t =
         f (root t)
-            ++ ( case children t of
+            ++ ( case branches t of
                     [] -> ""
-                    _ -> "[" ++ intercalate "," (map (treeToBracketsWith f) (children t)) ++ "]"
+                    _ -> "[" ++ intercalate "," (map (treeToBracketsWith f) (branches t)) ++ "]"
                )
 
 treeFromBracketsWith :: (IsTree t) => (String -> Decoration t) -> String -> t
@@ -221,14 +222,24 @@ instance
     graft [] [] = vector []
     graft _ [] = vector Zero
     graft [] f2 = vector f2
-    graft f [t] = linear ((: []) . buildTree (root t)) $ gl f $ children t
+    graft f [t] = linear ((: []) . buildTree (root t)) $ grossmanLarson f $ branches t
     graft f1 (t : f2) =
         linear perCoproductTerm $ deshuffle f1
       where
         perCoproductTerm (f11, f12) = graft f11 [t] * graft f12 f2
 
+instance
+    ( IsTree t
+    , IsVector t
+    , Ord t
+    )
+    => CanGraft (MS.MultiSet t)
+    where
+    graft f1 f2 = linear MS.fromList $ graft (MS.toList f1) (MS.toList f2)
+
+
 class (IsVector a) => CanGrossmanLarson a where
-    gl :: a -> a -> Vector (VectorScalar a) (VectorBasis a)
+    grossmanLarson :: a -> a -> Vector (VectorScalar a) (VectorBasis a)
 
 {- |
   Grossman-Larson product of two forests.
@@ -237,7 +248,7 @@ Example:
 
 >>> f1 = iffb "1[2]"
 >>> f2 = iffb "3,4[5]"
->>> gl f1 f2
+>>> grossmanLarson f1 f2
 (1 *^ [3,4[5[1[2]]]] + 1 *^ [3,4[1[2],5]] + 1 *^ [3[1[2]],4[5]] + 1 *^ [1[2],3,4[5]])_5
 -}
 instance 
@@ -246,9 +257,24 @@ instance
     )
     => CanGrossmanLarson [t]
     where
-    gl f1 f2 = linear perCoproductTerm $ deshuffle f1
+    grossmanLarson f1 f2 = linear perCoproductTerm $ deshuffle f1
       where
         perCoproductTerm (f11, f12) = vector f11 * graft f12 f2
+
+instance
+    ( IsTree t
+    , IsVector t
+    , Ord t
+    )
+    => CanGrossmanLarson (MS.MultiSet t)
+    where
+    grossmanLarson f1 f2 = linear MS.fromList $ grossmanLarson (MS.toList f1) (MS.toList f2)
+
+
+class (IsVector a) => CanConnesKreimer a where
+    connesKreimer :: a -> Vector (VectorScalar a) (VectorBasis a, VectorBasis a)
+
+
 
 ---------------------------------------------------------------------
 
@@ -282,7 +308,29 @@ instance
     )
     => HasSyntacticTree [t]
     where
-    syn [t] = case children t of
+    syn [t] = case branches t of
         [] -> Leaf [t]
-        _ -> Node graftOp [syn (children t), Leaf [buildTree (root t) []]]
+        _ -> Node graftOp [syn (branches t), Leaf [buildTree (root t) []]]
     syn ts = Node concatOp $ map (syn . (: [])) ts
+
+{- |
+  Construct a syntactic tree of a multiset of trees.
+
+Examples:
+
+>>> f = nonplanar [PT 1 [PT 2 [], PT 3 []], PT 4 []] :: MS.MultiSet (Tree Integer)
+>>> syn f
+concat(graft(concat(fromOccurList [(2,1)],fromOccurList [(3,1)]),fromOccurList [(1,1)]),fromOccurList [(4,1)])
+-}
+instance
+    ( IsVector t
+    , IsTree t
+    , Ord t
+    )
+    => HasSyntacticTree (MS.MultiSet t)
+    where
+    syn ts = case MS.toList ts of
+        [t] -> case branches t of
+            [] -> Leaf $ MS.singleton t
+            _ -> Node graftOp [syn (MS.fromList $ branches t), Leaf $ MS.singleton $ buildTree (root t) []]
+        ts' -> Node concatOp $ map (syn . MS.singleton) ts'

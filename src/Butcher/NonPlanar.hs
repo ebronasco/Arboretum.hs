@@ -25,7 +25,7 @@ import qualified Data.MultiSet as MS
 
 import Core.GradedList
 import Core.VectorSpace
-import Core.SyntacticTree
+import Core.Algebra
 import Butcher.Tree
 import Butcher.Planar
 
@@ -45,11 +45,11 @@ import Butcher.Planar
 ---------------------------------------------------------------------
 
 {- | Non-planar trees are represented as a tree with a root and a
-multiset of children which are non-planar trees themselves.
+multiset of branches which are non-planar trees themselves.
 -}
 data Tree d = T
     { nonplanarRoot :: d
-    , nonplanarChildren :: MS.MultiSet (Tree d)
+    , nonplanarBranches :: MS.MultiSet (Tree d)
     }
     deriving (Eq)
 
@@ -58,7 +58,7 @@ instance IsDecorated (Tree d) where
 
 instance (Ord d, Graded d) => IsTree (Tree d) where
     root = nonplanarRoot
-    children = MS.toAscList . nonplanarChildren
+    branches = MS.toAscList . nonplanarBranches
 
     buildTree r = T r . MS.fromList
 
@@ -77,7 +77,7 @@ instance (Eq d, Ord d, Graded d) => IsVector (Tree d) where
 
 {- |
   Order on decorations induces an order on trees where we first
-  compare the root decorations and then the children according to
+  compare the root decorations and then the branches according to
   their order.
 
 Example:
@@ -114,7 +114,7 @@ class Planarable t where
 
 {- |
   Choose a canonical planar representation of a non-planar forest to
-  get a planar forest or forget the order of trees and children in a
+  get a planar forest or forget the order of trees and branches in a
   forest to get a non-planar forest.
 
 Examples:
@@ -158,7 +158,7 @@ instance (Planarable a, Planarable b) => Planarable (a, b) where
 
 {- |
   Choose a canonical planar representation of a non-planar tree to get
-  a planar tree or forget the order of children in a planar tree to
+  a planar tree or forget the order of branches in a planar tree to
   get a non-planar tree.
 
 Example:
@@ -176,42 +176,13 @@ instance (Ord d) => Planarable (Tree d) where
     nonplanar (PT r xs) = T r (nonplanar xs)
     planar (T r xs) = PT r (planar xs)
 
-instance
-    ( IsTree t
-    , IsVector t
-    , Ord t
-    )
-    => CanGraft (MS.MultiSet t)
-    where
-    graft f1 f2 = linear MS.fromList $ graft (MS.toList f1) (MS.toList f2)
+instance (Ord t, IsVector t, IsTree t) => CanConnesKreimer (MS.MultiSet t) where
+    connesKreimer ms = case (MS.toList ms) of
+        []  -> vector (MS.empty, MS.empty)
+        [t] -> vector (MS.singleton t, MS.empty) + (linear perTerm $ connesKreimer $ MS.fromList $ branches t)
+          where
+            perTerm (f1, f2) = (f1, MS.singleton $ buildTree c $ MS.toList f2)
+            c = root t
+        f  -> morphism (\s -> connesKreimer (MS.singleton s)) $ vector f
 
-instance
-    ( IsTree t
-    , IsVector t
-    , Ord t
-    )
-    => CanGrossmanLarson (MS.MultiSet t)
-    where
-    gl f1 f2 = linear MS.fromList $ gl (MS.toList f1) (MS.toList f2)
 
-{- |
-  Construct a syntactic tree of a multiset of trees.
-
-Examples:
-
->>> f = nonplanar [PT 1 [PT 2 [], PT 3 []], PT 4 []] :: MS.MultiSet (Tree Integer)
->>> syn f
-concat(graft(concat(fromOccurList [(2,1)],fromOccurList [(3,1)]),fromOccurList [(1,1)]),fromOccurList [(4,1)])
--}
-instance
-    ( IsVector t
-    , IsTree t
-    , Ord t
-    )
-    => HasSyntacticTree (MS.MultiSet t)
-    where
-    syn ts = case MS.toList ts of
-        [t] -> case children t of
-            [] -> Leaf $ MS.singleton t
-            _ -> Node graftOp [syn (MS.fromList $ children t), Leaf $ MS.singleton $ buildTree (root t) []]
-        ts' -> Node concatOp $ map (syn . MS.singleton) ts'

@@ -52,7 +52,7 @@ expGL gen start =
         foldr1 (++) $
             map (terms . (\(k, x) -> V.scale (1 / (fromInteger (product [1 .. k]))) x)) $
                 zip (1 : [1 ..] :: [Integer]) $
-                    iterate (bilinear gl gen) start
+                    iterate (bilinear grossmanLarson gen) start
 
 -- Runge-Kutta methods
 
@@ -65,14 +65,14 @@ rkCoeff
     -> LA.Vector LA.R
     -> t
     -> LA.R
-rkCoeff aij bi t = (<.>) bi $ product $ (v1 :) $ map (rkInternalCoeff aij) $ children t
+rkCoeff aij bi t = (<.>) bi $ product $ (v1 :) $ map (rkInternalCoeff aij) $ branches t
 
 rkInternalCoeff
     :: (IsTree t)
     => LA.Matrix LA.R
     -> t
     -> LA.Vector R
-rkInternalCoeff aij t = (#>) aij $ product $ (v1 :) $ map (rkInternalCoeff aij) $ children t
+rkInternalCoeff aij t = (#>) aij $ product $ (v1 :) $ map (rkInternalCoeff aij) $ branches t
 
 rkbseries
     :: ( IsTree t
