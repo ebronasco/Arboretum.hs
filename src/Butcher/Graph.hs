@@ -19,14 +19,8 @@ an example, the @IntegerGraph@ type is defined as an instance of
 here.
 -}
 module Butcher.Graph (
-    GraphEdge,
-    EndPoint,
-    edge,
-    source,
-    target,
     Graph,
     Vertex,
-    Edge,
     singleton,
     edges,
     vertices,
@@ -62,7 +56,7 @@ import Core.GradedList (
  )
 import Core.VectorSpace (
     Vector,
-    vectorFromNonDecList,
+    vectorFromList,
     (*^),
  )
 
@@ -73,70 +67,30 @@ import Core.VectorSpace (
 ----------------------------------------------------------------------
 
 {- |
-  To define a graph, we need to define a graph edge first. A graph
-  edge must be an instance of the @GraphEdge@ typeclass.
--}
-class GraphEdge e where
-    {- | The @EndPoint@ type family is used to define the type of
-    the vertices of the graph.
-    -}
-    type EndPoint e
-
-    -- | Every edge must have a source @EndPoint@, ...
-    source :: e -> EndPoint e
-
-    -- | ... a target @EndPoint@, ...
-    target :: e -> EndPoint e
-
-    {- | ... and a way to build the edge from source, target, and
-    possibly some additional information @a@.
-    -}
-    edge :: a -> EndPoint e -> EndPoint e -> e
-
--- | A naive instance of the @GraphEdge@ typeclass.
-instance GraphEdge (a, a) where
-    type EndPoint (a, a) = a
-    edge _ = (,)
-    source (x, _) = x
-    target (_, y) = y
-
-{- |
   A graph @g@ must have an instance of the @Graph@ typeclass with
   the edge type @Edge g@ being an instance of the @GraphEdge@
   typeclass and the vertex type @Vertex g@ being the @EndPoint@ of
   @Edge g@.
--}
-class
-    ( GraphEdge (Edge g)
-    , Vertex g ~ EndPoint (Edge g)
-    ) =>
-    Graph g
-    where
-    -- | The type of the edges of the graph.
-    type Edge g
 
+-}
+class Graph g where
     -- | The type of the vertices of the graph.
     type Vertex g
-
-    {- | Note that the type of the vertices is defined as the
-    @EndPoint@ of the edges by default.
-    -}
-    type Vertex g = EndPoint (Edge g)
 
     -- | A graph with a single vertex and no edges.
     singleton :: Vertex g -> g
 
     -- | The set of edges of the graph.
-    edges :: g -> MS.MultiSet (Edge g)
+    edges :: g -> MS.MultiSet (Vertex g, Vertex g)
 
     -- | The set of vertices of the graph.
     vertices :: g -> MS.MultiSet (Vertex g)
 
     -- | Add a graph to another graph.
-    addGraph :: (Graph g0, Edge g ~ Edge g0) => g0 -> g -> g
+    addGraph :: (Graph g0, Vertex g ~ Vertex g0) => g0 -> g -> g
 
     -- | Add an edge to a graph.
-    addEdge :: Edge g -> g -> g
+    addEdge :: (Vertex g, Vertex g) -> g -> g
 
 {- |
   Check if a vertex is in a graph.
@@ -188,7 +142,7 @@ IntegerGraph(V=[1,2,3,4], E=[(1,2),(2,3)])
 IntegerGraph(V=[1,2,3], E=[(1,2),(2,3),(3,2)])
 -}
 instance Graph IntegerGraph where
-    type Edge IntegerGraph = (Integer, Integer)
+    type Vertex IntegerGraph = Integer
 
     singleton v = IG (MS.singleton v) MS.empty
 
@@ -236,7 +190,7 @@ instance (Graded g) => Graded (Rooted g) where
     grading (R _ g) = grading g
 
 instance (Graph g) => Graph (Rooted g) where
-    type Edge (Rooted g) = Edge g
+    type Vertex (Rooted g) = Vertex g
     singleton v = R v $ singleton v
     edges (R _ g) = edges g
     vertices (R _ g) = vertices g
@@ -289,13 +243,13 @@ graftGraph
        , Graded a2
        , RootedGraph a1
        , Graph a2
-       , Edge a1 ~ Edge a2
+       , Vertex a1 ~ Vertex a2
        )
     => a1
     -> a2
     -> Vector Integer a2
 graftGraph rg1 g2 =
-    vectorFromNonDecList $
+    vectorFromList $
         map ((1 *^) . graftGraphTo rg1 g2) $
             MS.toList $
                 vertices g2
@@ -312,15 +266,13 @@ IntegerGraph(V=[1,2,3,4,5], E=[(1,5),(2,1),(3,2),(5,4)])
 graftGraphTo
     :: ( RootedGraph a1
        , Graph a2
-       , Edge a1 ~ Edge a2
+       , Vertex a1 ~ Vertex a2
        )
     => a1
     -> a2
     -> Vertex a2
     -> a2
-graftGraphTo rg1 g2 v = addGraph rg1 $ addEdge new_edge g2
-  where
-    new_edge = edge () (root rg1) v
+graftGraphTo rg1 g2 v = addGraph rg1 $ addEdge (root rg1, v) g2
 
 {- |
   Get the first vertex of a list of vertices and remove it from the

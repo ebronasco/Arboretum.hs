@@ -1,4 +1,5 @@
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 {- |
 Module      : Output
@@ -22,6 +23,11 @@ module Core.Output (
 ) where
 
 import Data.List (intercalate)
+import qualified Data.MultiSet as MS
+import System.Directory (copyFile)
+import System.Process.Typed
+import Text.Printf
+
 import Core.GradedList (
     Graded,
     grading,
@@ -30,14 +36,13 @@ import Core.VectorSpace (
     ScalarProduct,
     Sum (Zero),
     Vector (..),
+    IsVector (..),
     lengthV,
     toListS,
     toListV,
     pattern (:*^),
  )
-import System.Directory (copyFile)
-import System.Process.Typed
-import Text.Printf
+
 
 {- |
   To be displayed in a pdf using LaTeX, a type must be an
@@ -138,6 +143,31 @@ instance
     texifyDebug i j os
         | null os = "1"
         | otherwise = intercalate " \\cdot " $ map (texifyD i j) os
+    texifyParentheses x =
+        if length x > 1
+            then ("(", ")")
+            else ("", "")
+
+-- | MultiSets also represent products.
+instance
+    ( Texifiable a
+    , Eq a
+    )
+    => Texifiable (MS.MultiSet a)
+    where
+    texifyID _ = "Prod"
+    texify os
+        | null os = "1"
+        | otherwise = intercalate " \\cdot " $ map termTex $ MS.toOccurList os
+          where
+            termTex (x, 1) = texifyP x
+            termTex (x, n) = "{" ++ texifyP x ++ "}^{" ++ show n ++ "}"
+    texifyDebug i j os
+        | null os = "1"
+        | otherwise = intercalate " \\cdot " $ map termTex $ MS.toOccurList os
+          where
+            termTex (x, 1) = texifyD i j x
+            termTex (x, n) = "{" ++ texifyD i j x ++ "}^{" ++ show n ++ "}"
     texifyParentheses x =
         if length x > 1
             then ("(", ")")
@@ -265,32 +295,26 @@ printPdf str = do
 
 -- | Generate a TeX string from a type and display it in a pdf viewer.
 display
-    :: ( Num k
-       , Eq k
-       , Eq a
-       , Graded a
-       , Texifiable k
-       , Texifiable a
+    :: ( IsVector v
+       , Texifiable (VectorScalar v)
+       , Texifiable (VectorBasis v)
        )
-    => Vector k a
+    => v
     -> IO ()
-display v = printPdf $ " $ " ++ texify v ++ " $ "
+display v = printPdf $ " $ " ++ texify (vector v) ++ " $ "
 
 {- | Generate a TeX string with debug information from a type and
 display it in a pdf viewer.
 -}
 displayDebug
-    :: ( Num k
-       , Eq k
-       , Eq a
-       , Graded a
-       , Texifiable k
-       , Texifiable a
+    :: ( IsVector v
+       , Texifiable (VectorScalar v)
+       , Texifiable (VectorBasis v)
        )
     => Integer
     -> Integer
-    -> Vector k a
+    -> v
     -> IO ()
 displayDebug startLevel endLevel v =
     printPdf $
-        " $ " ++ texifyDebug startLevel endLevel v ++ " $ "
+        " $ " ++ texifyDebug startLevel endLevel (vector v) ++ " $ "

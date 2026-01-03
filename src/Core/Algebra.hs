@@ -38,7 +38,7 @@ import Core.GradedList
 
 ---------------------------------------------------------------------
 
-class (Foldable f, IsVector v) => HasMorphism f func a v | func -> a v where
+class (Foldable f, IsVector v, VectorScalar v ~ k) => HasMorphism f k func a v | func -> a v where
     morphism' :: func -> Vector k (f a) -> Vector k (VectorBasis v)
 
 instance {-# OVERLAPABLE #-} ( IsVector v
@@ -48,7 +48,7 @@ instance {-# OVERLAPABLE #-} ( IsVector v
                    , Functor f
                    , Foldable f
                    , Eq (f a)
-                   ) => HasMorphism f (a -> v) a v
+                   ) => HasMorphism f k (a -> v) a v
     where
     morphism' = morphism
 
@@ -59,7 +59,7 @@ instance {-# OVERLAPPABLE #-} ( IsVector v
                    , Functor f
                    , Foldable f
                    , Eq (f a)
-                   ) => HasMorphism f (GradedFunc a v) a v
+                   ) => HasMorphism f k (GradedFunc a v) a v
     where
     morphism' = morphismGraded
 
@@ -70,7 +70,7 @@ instance {-# OVERLAPPABLE #-} ( IsVector v
                    , Functor f
                    , Foldable f
                    , Eq (f a)
-                   ) => HasMorphism f (NonDecFunc a v) a v
+                   ) => HasMorphism f k (NonDecFunc a v) a v
     where
     morphism' = morphismNonDec
 
