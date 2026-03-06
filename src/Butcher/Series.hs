@@ -3,40 +3,38 @@
 
 {- |
 Module      : ButcherSeries
-Description : Butcher and Lie-Butcher series over classical, decorated, aromatic, exotic forests
+Description : (EXPERIMENTAL) Butcher and Lie-Butcher series over classical, decorated, and aromatic forests
 Copyright   : (c) Chalmers University of Technology and Gothenburg University, 2025
 License     : BSD-3
 Maintainer  : Eugen Bronasco (ebronasco@gmail.com)
 Stability   : experimental
 
-Implementation Butcher and Lie-Butcher series over classical, decorated, aromatic, exotic forests
+(EXPERIMENTAL) Implementation of Butcher and Lie-Butcher series over classical, decorated, and aromatic forests
 -}
 module Butcher.Series (
-    bseries,
     expGL,
+    bSeries,
+    lbSeries,
     rkCoeff,
-    rkbseries,
+    rkBSeries,
 ) where
 
-import Numeric.LinearAlgebra as LA
-import Core.GradedList
-import Core.VectorSpace as V
 import Butcher.Tree
+import Core.GradedList
+import Core.VectorSpace
+import qualified Data.MultiSet as MS
+import qualified Numeric.LinearAlgebra as LA
 
-bseries
-    :: ( IsTree t
-       , IsVector t
-       , Eq (Decoration t)
-       , Graded (Decoration t)
-       , Fractional (VectorScalar t)
-       )
-    => V.Vector (VectorScalar t) [t]
-    -> ([t] -> VectorScalar t)
-    -> V.Vector (VectorScalar t) [t]
-bseries gen coeff = renormalize (\_ x -> coeff x) $ expGL gen $ V.vector []
+{- |
+  Consider an ODE $dy/dt = f(y)$ and let $f(y)$ be expressed using a linear combination of
+  trees $v$. Let $\phi \circ y$ be the exact solution composed with a test function $\phi$,
+  then,
+  \[ \phi \circ y = \exp^{GL} (v) [\phi] , \]
+  where $\exp^{GL}$ is the Grossman-Larson exponential and the square brackets denote the
+  application of the corresponding differential operator to the test function $\phi$.
 
--- Exact solution
-
+  The function @expGL@ implements the exponential $\exp^{GL}$.
+-}
 expGL
     :: ( IsTree t
        , IsVector t
@@ -44,37 +42,79 @@ expGL
        , Graded (Decoration t)
        , Fractional (VectorScalar t)
        )
-    => V.Vector (VectorScalar t) [t]
-    -> V.Vector (VectorScalar t) [t]
-    -> V.Vector (VectorScalar t) [t]
+    => Vector (VectorScalar t) [t]
+    -> Vector (VectorScalar t) [t]
+    -> Vector (VectorScalar t) [t]
 expGL gen start =
     vectorFromNonDecList $
         foldr1 (++) $
-            map (terms . (\(k, x) -> V.scale (1 / (fromInteger (product [1 .. k]))) x)) $
+            map (terms . (\(k, x) -> scale (factDiv k) x)) $
                 zip (1 : [1 ..] :: [Integer]) $
                     iterate (bilinear grossmanLarson gen) start
+  where
+    factDiv k = 1 / fromInteger (product [1 .. k])
 
--- Runge-Kutta methods
+{- |
+  Construct a Lie-Butcher series over ordered forests. The function @lbSeries@ takes a
+  non-decreasing list of forests and a function that assigns a coefficient to each forest,
+  and returns the corresponding Lie-Butcher series as a vector.
+-}
+lbSeries
+    :: ( IsTree t
+       , IsVector t
+       , Eq (Decoration t)
+       , Graded (Decoration t)
+       )
+    => [[t]]
+    -> ([t] -> VectorScalar t)
+    -> Vector (VectorScalar t) [t]
+lbSeries forests coeff = vectorFromNonDecList $ map (\f -> coeff f *^ f) forests
 
-v1 :: LA.Vector LA.R
-v1 = LA.vector $ take 1 [1, 1 ..]
+{- |
+  Construct a Butcher series over non-ordered forests. The function @bSeries@ takes a
+  non-decreasing list of forests and a function that assigns a coefficient to each forest,
+  and returns the corresponding Butcher series as a vector.
+-}
+bSeries
+    :: ( IsTree t
+       , IsVector t
+       , Eq (Decoration t)
+       , Graded (Decoration t)
+       )
+    => [MS.MultiSet t]
+    -> (MS.MultiSet t -> VectorScalar t)
+    -> Vector (VectorScalar t) (MS.MultiSet t)
+bSeries forests coeff = vectorFromNonDecList $ map (\f -> coeff f *^ f) forests
 
+---------------------------------------------------------------------
+
+-- * Runge-Kutta methods and B-series
+
+---------------------------------------------------------------------
+
+{- |
+  Compute the Runge-Kutta coefficient for a given tree. The function @rkCoeff@
+  takes the number of stages @s@, the matrix of coefficients @aij@,
+  the vector of weights @bi@, and a tree @t@, and returns the corresponding
+  Runge-Kutta coefficient as a real number.
+-}
 rkCoeff
     :: (IsTree t)
-    => LA.Matrix LA.R
+    => Int
+    -> LA.Matrix LA.R
     -> LA.Vector LA.R
     -> t
     -> LA.R
-rkCoeff aij bi t = (<.>) bi $ product $ (v1 :) $ map (rkInternalCoeff aij) $ branches t
+rkCoeff s aij bi t = (LA.<.>) bi $ product $ (v1s :) $ map rkInternalCoeff $ branches t
+  where
+    rkInternalCoeff t' = (LA.#>) aij $ product $ (v1s :) $ map rkInternalCoeff $ branches t'
+    v1s = LA.vector $ take s [1, 1 ..]
 
-rkInternalCoeff
-    :: (IsTree t)
-    => LA.Matrix LA.R
-    -> t
-    -> LA.Vector R
-rkInternalCoeff aij t = (#>) aij $ product $ (v1 :) $ map (rkInternalCoeff aij) $ branches t
-
-rkbseries
+{- |
+  Construct a Butcher series over non-ordered forests listed in @forests@
+  of a Runge-Kutta method with @s@ stages and coefficients @bi@ and @aij@.
+-}
+rkBSeries
     :: ( IsTree t
        , IsVector t
        , Eq (Decoration t)
@@ -82,8 +122,9 @@ rkbseries
        , VectorScalar t ~ LA.R
        , Fractional (VectorScalar t)
        )
-    => V.Vector (VectorScalar t) [t]
+    => [MS.MultiSet t]
+    -> Int
     -> LA.Matrix LA.R
     -> LA.Vector LA.R
-    -> V.Vector (VectorScalar t) [t]
-rkbseries gen aij bi = bseries gen $ product . map (rkCoeff aij bi)
+    -> Vector (VectorScalar t) (MS.MultiSet t)
+rkBSeries forests s aij bi = bSeries forests $ product . MS.map (rkCoeff s aij bi)

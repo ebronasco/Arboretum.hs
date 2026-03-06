@@ -1,22 +1,19 @@
-{-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 {- |
 Module      : Algebra
-Description : 
+Description :
 Copyright   : (c) University of Geneva, 2024
 License     : BSD-3
 Maintainer  : Eugen Bronasco (ebronasco@gmail.com)
 Stability   : experimental
-
 -}
 module Core.Algebra (
-    HasMorphism (..),
     CanDeshuffle (..),
     shuffle,
     deconcatenate,
@@ -25,54 +22,26 @@ module Core.Algebra (
     morphismNonDec,
 ) where
 
-import qualified Data.MultiSet as MS
-import Data.List (inits, tails)
-
-import Core.VectorSpace
 import Core.GradedList
+import Core.VectorSpace
+import Data.List (inits, tails)
+import qualified Data.MultiSet as MS
 
+{- $setup
+>>> :set -XTypeFamilies
+>>> :{
+instance IsVector Char where
+    type VectorScalar Char = Integer
+    type VectorBasis Char = Char
+    vector = vector . (1 *^)
+:}
+-}
 
 ---------------------------------------------------------------------
 
 -- * Algebra functions
 
 ---------------------------------------------------------------------
-
-class (Foldable f, IsVector v, VectorScalar v ~ k) => HasMorphism f k func a v | func -> a v where
-    morphism' :: func -> Vector k (f a) -> Vector k (VectorBasis v)
-
-instance {-# OVERLAPABLE #-} ( IsVector v
-                   , VectorScalar v ~ k
-                   , VectorBasis v ~ b
-                   , Monoid b
-                   , Functor f
-                   , Foldable f
-                   , Eq (f a)
-                   ) => HasMorphism f k (a -> v) a v
-    where
-    morphism' = morphism
-
-instance {-# OVERLAPPABLE #-} ( IsVector v
-                   , VectorScalar v ~ k
-                   , VectorBasis v ~ b
-                   , Monoid b
-                   , Functor f
-                   , Foldable f
-                   , Eq (f a)
-                   ) => HasMorphism f k (GradedFunc a v) a v
-    where
-    morphism' = morphismGraded
-
-instance {-# OVERLAPPABLE #-} ( IsVector v
-                   , VectorScalar v ~ k
-                   , VectorBasis v ~ b
-                   , Monoid b
-                   , Functor f
-                   , Foldable f
-                   , Eq (f a)
-                   ) => HasMorphism f k (NonDecFunc a v) a v
-    where
-    morphism' = morphismNonDec
 
 {- |
   Take a function @f@ that maps basis elements to basis elements and
@@ -135,10 +104,10 @@ morphismGraded
        , VectorScalar v ~ k
        , VectorBasis v ~ b
        )
-    => GradedFunc a v
+    => (a -> v)
     -> Vector k (f a)
     -> Vector k b
-morphismGraded (GradedFunc f) = linearGraded $ GradedFunc $ product . fmap (vector . f)
+morphismGraded f = linearGraded $ product . fmap (vector . f)
 
 {- |
   Take a function @f@ that maps basis elements to basis elements and
@@ -169,13 +138,10 @@ morphismNonDec
        , VectorScalar v ~ k
        , VectorBasis v ~ b
        )
-    => NonDecFunc a v
+    => (a -> v)
     -> Vector k (f a)
     -> Vector k b
-morphismNonDec (NonDecFunc f) = linearNonDec $ NonDecFunc $ product . fmap (vector . f)
-
-
-
+morphismNonDec f = linearNonDec $ product . fmap (vector . f)
 
 ---------------------------------------------------------------------
 
@@ -186,36 +152,30 @@ morphismNonDec (NonDecFunc f) = linearNonDec $ NonDecFunc $ product . fmap (vect
 class (IsVector a) => CanDeshuffle a where
     deshuffle :: a -> Vector (VectorScalar a) (a, a)
 
-{-
-class (Foldable f) => HasSingleton f where
-    singleton :: a -> f a
-
-instance HasSingleton [] where
-    singleton a = [a]
-
-instance HasSingleton MS.MultiSet where
-    singleton a = MS.singleton a
--}
-
 {- |
-  Takes a product of basis elements and returns a tensor product of
-  the corresponding basis vectors.
+  Deshuffle coproduct for lists and multisets.
 
 Examples:
 
 >>> deshuffle "xyz"
 (1 *^ ("","xyz") + 1 *^ ("x","yz") + 1 *^ ("z","xy") + 1 *^ ("y","xz") + 1 *^ ("xz","y") + 1 *^ ("xy","z") + 1 *^ ("yz","x") + 1 *^ ("xyz",""))_3
 -}
-instance (IsVector a, Graded a) => CanDeshuffle [a]
-    where
+instance (IsVector a, Graded a) => CanDeshuffle [a] where
     deshuffle = morphism (\b -> 1 *^ (mempty, [b]) +: 1 *^ ([b], mempty) +: Zero) . vector
 
-instance (IsVector a, Graded a, Ord a) => CanDeshuffle (MS.MultiSet a)
-    where
-    deshuffle = (linear fromList') . deshuffle . MS.toList
+instance (IsVector a, Graded a, Ord a) => CanDeshuffle (MS.MultiSet a) where
+    deshuffle = linear fromList' . deshuffle . MS.toList
       where
         fromList' (l1, l2) = 1 *^ (MS.fromList l1, MS.fromList l2)
 
+{- |
+  Shuffle product of lists.
+
+Examples:
+
+>>> shuffle "xy" "uv"
+(1 *^ "xyuv" + 1 *^ "xuyv" + 1 *^ "xuvy" + 1 *^ "uxyv" + 1 *^ "uxvy" + 1 *^ "uvxy")_4
+-}
 shuffle
     :: ( IsVector v
        , Graded v
@@ -227,12 +187,18 @@ shuffle l1@(x1 : xs1) l2@(x2 : xs2) =
     vector [x1] * shuffle xs1 l2
         + vector [x2] * shuffle l1 xs2
 
+{- |
+ - Deconcatenation coproduct for lists.
+
+Examples:
+
+>>> deconcatenate "xyz"
+(1 *^ ("","xyz") + 1 *^ ("x","yz") + 1 *^ ("xy","z") + 1 *^ ("xyz",""))_3
+-}
 deconcatenate
-    :: ( IsVector v 
-       , Graded v 
+    :: ( IsVector v
+       , Graded v
        )
     => [v] -> Vector (VectorScalar v) ([v], [v])
 deconcatenate [] = vector ([], [])
 deconcatenate l = vectorFromList $ map (1 *^) $ zip (inits l) (tails l)
-
-

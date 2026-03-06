@@ -5,7 +5,7 @@ cabal-version: 2.2
 -- see: https://github.com/sol/hpack
 
 name:           arboretum
-version:        0.1.0.0
+version:        0.2.0.0
 synopsis:       Symbolic computation in algebras of graphs.
 description:    Please see the README on GitHub at <https://github.com/ebronasco/arboretum.hs#readme>
 category:       Symbolic Computation, Operads, Algebra, Graphs

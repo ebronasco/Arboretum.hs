@@ -2,8 +2,9 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
+
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 {- |
 Module      : RootedTree
@@ -21,13 +22,13 @@ module Butcher.NonPlanar (
     Planarable (..),
 ) where
 
-import qualified Data.MultiSet as MS
-
-import Core.GradedList
-import Core.VectorSpace
-import Core.Algebra
-import Butcher.Tree
 import Butcher.Planar
+import Butcher.Tree
+import Core.Algebra
+import Core.GradedList
+import Core.Output
+import Core.VectorSpace
+import qualified Data.MultiSet as MS
 
 {- $setup
   Non-Planar Integer Tree From Brackets
@@ -35,8 +36,13 @@ import Butcher.Planar
 
   Non-Planar Integer Forest From Brackets
 >>> npiffb str = fromBrackets str :: MS.MultiSet (Tree Integer)
--}
 
+  Integer Tree From Brackets
+>>> itfb str = fromBrackets str :: PlanarTree Integer
+
+  Integer Forest From Brackets
+>>> iffb str = fromBrackets str :: [PlanarTree Integer]
+-}
 
 ---------------------------------------------------------------------
 
@@ -56,18 +62,26 @@ data Tree d = T
 instance IsDecorated (Tree d) where
     type Decoration (Tree d) = d
 
+{- |
+  @Tree@ is an instance of @IsTree@ and inherits all the relevant
+  functions defined in @Tree@ module.
+
+  For more examples see instance of @IsTree (PlanarTree d)@ in @Planar@ module.
+-}
 instance (Ord d, Graded d) => IsTree (Tree d) where
     root = nonplanarRoot
     branches = MS.toAscList . nonplanarBranches
-
     buildTree r = T r . MS.fromList
 
 instance (Ord d, Graded d) => HasBracketNotation (Tree d) where
     toBracketsWith = treeToBracketsWith
     fromBracketsWith = treeFromBracketsWith
 
+instance (Show d, Ord d, Graded d) => Texifiable (Tree d) where
+    texify = treeTexify
+
 instance (Show d, Ord d, Graded d) => Show (Tree d) where
-    show = toBrackets 
+    show = toBrackets
 
 instance (Eq d, Ord d, Graded d) => IsVector (Tree d) where
     type VectorScalar (Tree d) = Integer
@@ -99,7 +113,6 @@ instance (Ord d) => Ord (Tree d) where
 instance (Ord d, Graded d) => Graded (Tree d) where
     grading = grading . planar
 
-
 ---------------------------------------------------------------------
 
 -- * Relate non-planar forests to planar forests
@@ -127,7 +140,7 @@ Examples:
 True
 -}
 instance (Ord t, Planarable t) => Planarable (MS.MultiSet t) where
-    type Planar (MS.MultiSet t) =  [Planar t]
+    type Planar (MS.MultiSet t) = [Planar t]
 
     nonplanar = MS.fromList . map nonplanar
     planar = map planar . MS.toList
@@ -177,12 +190,10 @@ instance (Ord d) => Planarable (Tree d) where
     planar (T r xs) = PT r (planar xs)
 
 instance (Ord t, IsVector t, IsTree t) => CanConnesKreimer (MS.MultiSet t) where
-    connesKreimer ms = case (MS.toList ms) of
-        []  -> vector (MS.empty, MS.empty)
-        [t] -> vector (MS.singleton t, MS.empty) + (linear perTerm $ connesKreimer $ MS.fromList $ branches t)
+    connesKreimer ms = case MS.toList ms of
+        [] -> vector (MS.empty, MS.empty)
+        [t] -> vector (MS.singleton t, MS.empty) + linear perTerm (connesKreimer $ MS.fromList $ branches t)
           where
             perTerm (f1, f2) = (f1, MS.singleton $ buildTree c $ MS.toList f2)
             c = root t
-        f  -> morphism (\s -> connesKreimer (MS.singleton s)) $ vector f
-
-
+        f -> morphism (connesKreimer . MS.singleton) $ vector f

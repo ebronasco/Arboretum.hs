@@ -1,5 +1,5 @@
-{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE PatternSynonyms #-}
 
 {- |
 Module      : Output
@@ -22,27 +22,26 @@ module Core.Output (
     displayDebug,
 ) where
 
-import Data.List (intercalate)
-import qualified Data.MultiSet as MS
-import System.Directory (copyFile)
-import System.Process.Typed
-import Text.Printf
-
 import Core.GradedList (
     Graded,
     grading,
  )
 import Core.VectorSpace (
+    IsVector (..),
     ScalarProduct,
     Sum (Zero),
     Vector (..),
-    IsVector (..),
     lengthV,
     toListS,
     toListV,
     pattern (:*^),
  )
-
+import Data.List (intercalate)
+import qualified Data.MultiSet as MS
+import System.Directory (copyFile)
+import System.Info (os)
+import System.Process.Typed
+import Text.Printf
 
 {- |
   To be displayed in a pdf using LaTeX, a type must be an
@@ -137,12 +136,12 @@ instance
     => Texifiable [a]
     where
     texifyID _ = "Prod"
-    texify os
-        | null os = "1"
-        | otherwise = intercalate " \\cdot " $ map texifyP os
-    texifyDebug i j os
-        | null os = "1"
-        | otherwise = intercalate " \\cdot " $ map (texifyD i j) os
+    texify ops
+        | null ops = "1"
+        | otherwise = intercalate " \\cdot " $ map texifyP ops
+    texifyDebug i j ops
+        | null ops = "1"
+        | otherwise = intercalate " \\cdot " $ map (texifyD i j) ops
     texifyParentheses x =
         if length x > 1
             then ("(", ")")
@@ -156,18 +155,12 @@ instance
     => Texifiable (MS.MultiSet a)
     where
     texifyID _ = "Prod"
-    texify os
-        | null os = "1"
-        | otherwise = intercalate " \\cdot " $ map termTex $ MS.toOccurList os
-          where
-            termTex (x, 1) = texifyP x
-            termTex (x, n) = "{" ++ texifyP x ++ "}^{" ++ show n ++ "}"
-    texifyDebug i j os
-        | null os = "1"
-        | otherwise = intercalate " \\cdot " $ map termTex $ MS.toOccurList os
-          where
-            termTex (x, 1) = texifyD i j x
-            termTex (x, n) = "{" ++ texifyD i j x ++ "}^{" ++ show n ++ "}"
+    texify ops
+        | null ops = "1"
+        | otherwise = intercalate " \\cdot " $ map texifyP $ MS.toList ops
+    texifyDebug i j ops
+        | null ops = "1"
+        | otherwise = intercalate " \\cdot " $ map (texifyD i j) $ MS.toList ops
     texifyParentheses x =
         if length x > 1
             then ("(", ")")
@@ -272,24 +265,38 @@ printPdf str = do
 
     runProcess_ $
         setStdout nullStream $
-            setWorkingDir "texput" $
-                proc "pdflatex" ["tmp.tex"]
+            setStderr nullStream $
+                setWorkingDir "texput" $
+                    proc "pdflatex" ["tmp.tex"]
 
     runProcess_ $
         setStdout nullStream $
-            setWorkingDir "texput" $
-                proc "pythontex" ["tmp.tex"]
+            setStderr nullStream $
+                setWorkingDir "texput" $
+                    proc "pythontex" ["tmp.tex"]
 
     runProcess_ $
         setStdout nullStream $
-            setWorkingDir "texput" $
-                proc "pdflatex" ["tmp.tex"]
+            setStderr nullStream $
+                setWorkingDir "texput" $
+                    proc "pdflatex" ["tmp.tex"]
 
     copyFile "texput/tmp.pdf" "output.pdf"
     copyFile "texput/tmp.tex" "output.tex"
 
-    runProcess_ $
-        shell "open output.pdf > /dev/null &"
+    putStrLn "\n===>>> Output written to output.pdf and output.tex"
+
+    case os of
+        "mingw32" ->
+            runProcess_ $
+                shell "start output.pdf > /dev/null &"
+        "darwin" ->
+            runProcess_ $
+                shell "open output.pdf > /dev/null &"
+        "linux" ->
+            runProcess_ $
+                shell "xdg-open output.pdf > /dev/null &"
+        _ -> putStrLn " (!!!) Unsupported OS. Please open output.pdf manually."
 
     return ()
 

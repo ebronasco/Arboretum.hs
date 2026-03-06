@@ -1,6 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -29,18 +28,11 @@ module Core.SyntacticTree (
 ) where
 
 import Control.Monad.State
-import Data.List (intercalate, permutations)
-import Data.Maybe (fromJust)
 import Core.GradedList
 import Core.Output
 import Core.VectorSpace
-
-{- $setup
->>> l1 = Leaf [PT 1 []]
->>> l2 = Leaf [PT 2 []]
->>> l3 = Leaf [PT 3 []]
->>> l4 = Leaf [PT 4 []]
--}
+import Data.List (intercalate, permutations)
+import Data.Maybe (fromJust)
 
 {- |
   An operation is a function that takes a list of operands and
@@ -86,7 +78,7 @@ instance (Show a) => Texifiable (SyntacticTree a) where
     texify t = "\\forest{" ++ brackets t ++ "}"
       where
         brackets (Node op as) =
-            (wrap $ tex op)
+            wrap (tex op)
                 ++ ( case as of
                         [] -> ""
                         _ -> "[" ++ intercalate "," (map brackets as) ++ "]"
@@ -109,15 +101,7 @@ instance (IsVector a, Graded a) => IsVector (SyntacticTree a) where
   the list @ops@ is different from the number of operands in the
   syntactic tree @y@.
 
-Examples:
-
->>> st = Node graftOp [l1, Node graftOp [l2, l1]]
->>> compose l1 [l3, l4] st
-Just graft([3],graft([2],[4]))
->>> compose l1 [l3] st
-Nothing
->>> compose l1 [l3, l4, l4] st
-Nothing
+  See @IsTree (PlanarTree d)@ instance in @Planar@ module for examples.
 -}
 compose
     :: ( Eq a
@@ -152,15 +136,7 @@ compose x ops y = checkStateEmpty $ runState (compose' y) ops
   The same as @compose@ but we sum over all permutations of the list
   of syntactic trees and return the result as a vector.
 
-Examples:
-
->>> st = Node graftOp [l1, Node graftOp [l2, l1]]
->>> symmetricCompose l1 [l3, l4] st
-(1 *^ graft([3],graft([2],[4])) + 1 *^ graft([4],graft([2],[3])))_3
->>> symmetricCompose l1 [l3] st
-_0
->>> symmetricCompose l1 [l3, l4, l4] st
-_0
+  See @IsTree (PlanarTree d)@ instance in @Planar@ module for examples.
 -}
 symmetricCompose
     :: ( IsVector a
@@ -186,14 +162,7 @@ class (IsVector a) => HasSyntacticTree a where
 {- |
   Evaluate a syntactic tree.
 
-Examples:
-
->>> st = Node graftOp [l1, Node graftOp [l2, l1]]
->>> v = symmetricCompose l1 [l3, l4] st
->>> eval st
-(1 *^ [1[2[1]]] + 1 *^ [1[1,2]])_3
->>> linearGraded eval v
-(1 *^ [4[2[3]]] + 1 *^ [4[3,2]] + 1 *^ [3[2[4]]] + 1 *^ [3[4,2]])_3
+  See @IsTree (PlanarTree d)@ instance in @Planar@ module for examples.
 -}
 eval
     :: ( IsVector a
@@ -213,18 +182,7 @@ eval (Node op as) = linear (func op) $ product $ map (linear (: []) . eval) as
   the number of occurrences of the subexpression @x@ in @obj@, the
   function returns a zero vector.
 
-Examples:
-
->>> expr1 = [PT 1 [PT 2 [], PT 1 []]]
->>> expr2 = [PT 3 [PT 3 []]]
->>> substitute [PT 2 []] [expr2] expr1
-(1 *^ [1[3[3],1]])_4
->>> substitute [PT 1 []] [expr2,expr2] expr1
-(2 *^ [3[3[2,3[3]]]] + 2 *^ [3[2,3[3[3]]]] + 2 *^ [3[3[3],3[2]]] + 2 *^ [3[2,3[3],3]])_5
->>> substitute [PT 1 []] [expr2,expr2,expr2] expr1
-_0
->>> substitute [PT 1 []] [] expr1
-_0
+  See @IsTree (PlanarTree d)@ instance in @Planar@ module for examples.
 -}
 substitute
     :: ( HasSyntacticTree a

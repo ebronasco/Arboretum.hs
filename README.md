@@ -6,32 +6,43 @@
 
 This package provides a flexible and extensible framework for working with algebras of graphs, including the implementation of decorated trees, aromatic forests, and operations such as grafting and substitution. It also supports symbolic computation in graded vector spaces. In addition, the package can generate LaTeX code and corresponding PDF output to visualize decorated aromatic forests and other elements of vector spaces, facilitating the interpretation of computation results.
 
-The manual can be found in the **manual** directory.
-
-## Features
-
-- Abstract framework for defining algebras of graphs and forests
-- Support for graded vector spaces
-- Pre-Lie and pre-Lie-Rinehart algebra operations
-- Implementation of decorated aromatic trees and forests
-- Symbolic operations including grafting and substitution
-- PDF export for graphical representation of tree structures
-
 ## Motivation
 
 Many modern mathematical frameworks use trees and forests as a foundational combinatorial structure. From the Butcher group in numerical analysis to the branched rough paths and regularity structures in stochastic analysis, trees encode the composition of operations, hierarchical dependencies, and renormalization procedures. Arboretum offers a unified platform for prototyping and computing in these contexts.
 
 ## Getting Started
 
-### Installation using Stack
+Prerequisites: stack.
 
-    git clone https://github.com/ebronasco/arboretum.hs.git
-    cd arboretum.hs
-    stack build
+```bash
+git clone https://github.com/ebronasco/arboretum.hs.git
+cd arboretum.hs
+stack build
+```
 
-### Documentation and Example Usage
+## Documentation and examples
 
-Check the manual in the **manual** directory.
+The manual can be found in the **manual** directory.
+
+The reference documentation is found in **docs** directory. To read it open the **index.html** file in a web browser.
+
+### Examples
+
+| Structure | Example |
+|---|---|
+| Concatenation–Deshuffle Hopf algebra | [`ConcatDeshuffle.hs`](examples/ConcatDeshuffle.hs) |
+| Shuffle–Deconcatenation Hopf algebra | [`ShuffleDeconcat.hs`](examples/ShuffleDeconcat.hs) |
+| Grossman–Larson Hopf algebra over planar forests | [`PlanarGrossmanLarson.hs`](examples/PlanarGrossmanLarson.hs) |
+| Connes–Kreimer Hopf algebra over planar forests | [`PlanarConnesKreimer.hs`](examples/PlanarConnesKreimer.hs) |
+| Cosubstitution of planar forests | [`Cosubstitution.hs`](examples/Cosubstitution.hs) |
+| Lie–Butcher series of the exact solution | [`LieButcherExact.hs`](examples/LieButcherExact.hs) |
+| Grossman–Larson Hopf algebra over non-planar forests | [`NonplanarGrossmanLarson.hs`](examples/NonplanarGrossmanLarson.hs) |
+| Connes-Kreimer Hopf algebra over non-planar forests | [`NonplanarConnesKreimer.hs`](examples/NonplanarConnesKreimer.hs) |
+| Butcher series of the exact solution | [`ButcherExact.hs`](examples/ButcherExact.hs) |
+| Butcher series of Runge-Kutta methods | [`RungeKutta.hs`](examples/RungeKutta.hs) |
+| Divergence, grafting, Grossman-Larson, and substitution of aromatic forests | [`AromaticForests.hs`](examples/AromaticForests.hs) |
+| Construction and grafting of arbitrary graphs | [`Graph.hs`](examples/Graph.hs) |
+
 
 ## References
 

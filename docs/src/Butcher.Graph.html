@@ -1,0 +1,631 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span class="hs-pragma">{-# LANGUAGE FlexibleContexts #-}</span><span>
+</span><span id="line-2"></span><span class="hs-pragma">{-# LANGUAGE FlexibleInstances #-}</span><span>
+</span><span id="line-3"></span><span class="hs-pragma">{-# LANGUAGE TypeFamilies #-}</span><span>
+</span><span id="line-4"></span><span class="hs-pragma">{-# LANGUAGE TypeOperators #-}</span><span>
+</span><span id="line-5"></span><span class="hs-pragma">{-# LANGUAGE UndecidableInstances #-}</span><span>
+</span><span id="line-6"></span><span>
+</span><span id="line-7"></span><span class="annot"><span class="hs-comment">{- |
+Module      : Graph
+Description : General graphs, rooted graphs, and grafting of graphs.
+Copyright   : (c) University of Geneva, 2024
+License     : BSD-3
+Maintainer  : Eugen Bronasco (ebronasco@gmail.com)
+Stability   : experimental
+
+Implementation of the general Graph and RootedGraph typeclasses. As
+an example, the @IntegerGraph@ type is defined as an instance of
+@Graph@. The data @Rooted@ is defined as a map from @Graph@ to
+@RootedGraph@. The @graftGraph@ and @graftGraphTo@ functions are also defined
+here.
+-}</span></span><span>
+</span><span id="line-21"></span><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">Butcher.Graph</span><span> </span><span class="hs-special">(</span><span>
+</span><span id="line-22"></span><span>    </span><span class="annot"><a href="Butcher.Graph.html#Graph"><span class="hs-identifier">Graph</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-23"></span><span>    </span><span class="annot"><a href="Butcher.Graph.html#Vertex"><span class="hs-identifier">Vertex</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-24"></span><span>    </span><span class="annot"><a href="Butcher.Graph.html#singleton"><span class="hs-identifier">singleton</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-25"></span><span>    </span><span class="annot"><a href="Butcher.Graph.html#edges"><span class="hs-identifier">edges</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-26"></span><span>    </span><span class="annot"><a href="Butcher.Graph.html#vertices"><span class="hs-identifier">vertices</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-27"></span><span>    </span><span class="annot"><a href="Butcher.Graph.html#addGraph"><span class="hs-identifier">addGraph</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-28"></span><span>    </span><span class="annot"><a href="Butcher.Graph.html#addEdge"><span class="hs-identifier">addEdge</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-29"></span><span>    </span><span class="annot"><a href="Butcher.Graph.html#IntegerGraph"><span class="hs-identifier">IntegerGraph</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-30"></span><span>    </span><span class="annot"><a href="Butcher.Graph.html#integerGraph"><span class="hs-identifier">integerGraph</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-31"></span><span>    </span><span class="annot"><a href="Butcher.Graph.html#RootedGraph"><span class="hs-identifier">RootedGraph</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-32"></span><span>    </span><span class="annot"><a href="Butcher.Graph.html#root"><span class="hs-identifier">root</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-33"></span><span>    </span><span class="annot"><a href="Butcher.Graph.html#Rooted"><span class="hs-identifier">Rooted</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-34"></span><span>    </span><span class="annot"><a href="Butcher.Graph.html#rooted"><span class="hs-identifier">rooted</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-35"></span><span>    </span><span class="annot"><a href="Butcher.Graph.html#graftGraph"><span class="hs-identifier">graftGraph</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-36"></span><span>    </span><span class="annot"><a href="Butcher.Graph.html#graftGraphTo"><span class="hs-identifier">graftGraphTo</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-37"></span><span>    </span><span class="annot"><a href="Butcher.Graph.html#getVertex"><span class="hs-identifier">getVertex</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-38"></span><span class="hs-special">)</span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-39"></span><span>
+</span><span id="line-40"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Control.Monad.State</span></span><span>
+</span><span id="line-41"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><a href="Core.GradedList.html"><span class="hs-identifier">Core.GradedList</span></a></span><span> </span><span class="hs-special">(</span><span>
+</span><span id="line-42"></span><span>    </span><span class="annot"><a href="Core.GradedList.html#Graded"><span class="hs-identifier">Graded</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-43"></span><span>    </span><span class="annot"><a href="Core.GradedList.html#grading"><span class="hs-identifier">grading</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-44"></span><span> </span><span class="hs-special">)</span><span>
+</span><span id="line-45"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><a href="Core.VectorSpace.html"><span class="hs-identifier">Core.VectorSpace</span></a></span><span> </span><span class="hs-special">(</span><span>
+</span><span id="line-46"></span><span>    </span><span class="annot"><a href="Core.VectorSpace.html#Vector"><span class="hs-identifier">Vector</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-47"></span><span>    </span><span class="annot"><a href="Core.VectorSpace.html#vectorFromList"><span class="hs-identifier">vectorFromList</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-48"></span><span>    </span><span class="annot"><a href="Core.VectorSpace.html#%2A%5E"><span class="hs-operator">(*^)</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-49"></span><span> </span><span class="hs-special">)</span><span>
+</span><span id="line-50"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><span class="hs-identifier">Data.List</span></span><span> </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">L</span></span><span> </span><span class="hs-special">(</span><span>
+</span><span id="line-51"></span><span>    </span><span class="annot"><span class="hs-identifier">init</span></span><span class="hs-special">,</span><span>
+</span><span id="line-52"></span><span> </span><span class="hs-special">)</span><span>
+</span><span id="line-53"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><span class="hs-identifier">Data.MultiSet</span></span><span> </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">MS</span></span><span> </span><span class="hs-special">(</span><span>
+</span><span id="line-54"></span><span>    </span><span class="annot"><span class="hs-identifier">MultiSet</span></span><span class="hs-special">,</span><span>
+</span><span id="line-55"></span><span>    </span><span class="annot"><span class="hs-identifier">empty</span></span><span class="hs-special">,</span><span>
+</span><span id="line-56"></span><span>    </span><span class="annot"><span class="hs-identifier">fromList</span></span><span class="hs-special">,</span><span>
+</span><span id="line-57"></span><span>    </span><span class="annot"><span class="hs-identifier">insert</span></span><span class="hs-special">,</span><span>
+</span><span id="line-58"></span><span>    </span><span class="annot"><span class="hs-identifier">singleton</span></span><span class="hs-special">,</span><span>
+</span><span id="line-59"></span><span>    </span><span class="annot"><span class="hs-identifier">toList</span></span><span class="hs-special">,</span><span>
+</span><span id="line-60"></span><span>    </span><span class="annot"><span class="hs-identifier">union</span></span><span class="hs-special">,</span><span>
+</span><span id="line-61"></span><span> </span><span class="hs-special">)</span><span>
+</span><span id="line-62"></span><span>
+</span><span id="line-63"></span><span class="hs-comment">----------------------------------------------------------------------</span><span>
+</span><span id="line-64"></span><span>
+</span><span id="line-65"></span><span class="annot"><span class="hs-comment">-- * Graphs</span></span><span>
+</span><span id="line-66"></span><span>
+</span><span id="line-67"></span><span class="hs-comment">----------------------------------------------------------------------</span><span>
+</span><span id="line-68"></span><span>
+</span><span id="line-69"></span><span class="annot"><span class="hs-comment">{- |
+  A graph @g@ must have an instance of the @Graph@ typeclass with
+  the edge type @Edge g@ being an instance of the @GraphEdge@
+  typeclass and the vertex type @Vertex g@ being the @EndPoint@ of
+  @Edge g@.
+-}</span></span><span>
+</span><span id="line-75"></span><span class="hs-keyword">class</span><span> </span><span id="Graph"><span class="annot"><a href="Butcher.Graph.html#Graph"><span class="hs-identifier hs-var">Graph</span></a></span></span><span> </span><span id="local-6989586621679087074"><span class="annot"><a href="#local-6989586621679087074"><span class="hs-identifier hs-type">g</span></a></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-76"></span><span>    </span><span class="hs-comment">-- | The type of the vertices of the graph.</span><span>
+</span><span id="line-77"></span><span>    </span><span class="hs-keyword">type</span><span> </span><span id="Vertex"><span class="annot"><a href="Butcher.Graph.html#Vertex"><span class="hs-identifier hs-var">Vertex</span></a></span></span><span> </span><span id="local-6989586621679087074"><span class="annot"><a href="#local-6989586621679087074"><span class="hs-identifier hs-type">g</span></a></span></span><span>
+</span><span id="line-78"></span><span>
+</span><span id="line-79"></span><span>    </span><span class="hs-comment">-- | A graph with a single vertex and no edges.</span><span>
+</span><span id="line-80"></span><span>    </span><span id="singleton"><span class="annot"><a href="Butcher.Graph.html#singleton"><span class="hs-identifier hs-type">singleton</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="Butcher.Graph.html#Vertex"><span class="hs-identifier hs-type">Vertex</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087074"><span class="hs-identifier hs-type">g</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679087074"><span class="hs-identifier hs-type">g</span></a></span><span>
+</span><span id="line-81"></span><span>
+</span><span id="line-82"></span><span>    </span><span class="hs-comment">-- | The set of edges of the graph.</span><span>
+</span><span id="line-83"></span><span>    </span><span id="edges"><span class="annot"><a href="Butcher.Graph.html#edges"><span class="hs-identifier hs-type">edges</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="#local-6989586621679087074"><span class="hs-identifier hs-type">g</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">MS.MultiSet</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Butcher.Graph.html#Vertex"><span class="hs-identifier hs-type">Vertex</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087074"><span class="hs-identifier hs-type">g</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Butcher.Graph.html#Vertex"><span class="hs-identifier hs-type">Vertex</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087074"><span class="hs-identifier hs-type">g</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-84"></span><span>
+</span><span id="line-85"></span><span>    </span><span class="hs-comment">-- | The set of vertices of the graph.</span><span>
+</span><span id="line-86"></span><span>    </span><span id="vertices"><span class="annot"><a href="Butcher.Graph.html#vertices"><span class="hs-identifier hs-type">vertices</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="#local-6989586621679087074"><span class="hs-identifier hs-type">g</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">MS.MultiSet</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Butcher.Graph.html#Vertex"><span class="hs-identifier hs-type">Vertex</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087074"><span class="hs-identifier hs-type">g</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-87"></span><span>
+</span><span id="line-88"></span><span>    </span><span class="hs-comment">-- | Add a graph to another graph.</span><span>
+</span><span id="line-89"></span><span>    </span><span id="addGraph"><span class="annot"><a href="Butcher.Graph.html#addGraph"><span class="hs-identifier hs-type">addGraph</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span id="local-6989586621679087077"><span class="hs-special">(</span><span class="annot"><a href="Butcher.Graph.html#Graph"><span class="hs-identifier hs-type">Graph</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087077"><span class="hs-identifier hs-type">g0</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Butcher.Graph.html#Vertex"><span class="hs-identifier hs-type">Vertex</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087074"><span class="hs-identifier hs-type">g</span></a></span><span> </span><span class="annot"><span class="hs-operator hs-type">~</span></span><span> </span><span class="annot"><a href="Butcher.Graph.html#Vertex"><span class="hs-identifier hs-type">Vertex</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087077"><span class="hs-identifier hs-type">g0</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679087077"><span class="hs-identifier hs-type">g0</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679087074"><span class="hs-identifier hs-type">g</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679087074"><span class="hs-identifier hs-type">g</span></a></span></span><span>
+</span><span id="line-90"></span><span>
+</span><span id="line-91"></span><span>    </span><span class="hs-comment">-- | Add an edge to a graph.</span><span>
+</span><span id="line-92"></span><span>    </span><span id="addEdge"><span class="annot"><a href="Butcher.Graph.html#addEdge"><span class="hs-identifier hs-type">addEdge</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Butcher.Graph.html#Vertex"><span class="hs-identifier hs-type">Vertex</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087074"><span class="hs-identifier hs-type">g</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Butcher.Graph.html#Vertex"><span class="hs-identifier hs-type">Vertex</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087074"><span class="hs-identifier hs-type">g</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679087074"><span class="hs-identifier hs-type">g</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679087074"><span class="hs-identifier hs-type">g</span></a></span><span>
+</span><span id="line-93"></span><span>
+</span><span id="line-94"></span><span class="annot"><span class="hs-comment">{- |
+  Check if a vertex is in a graph.
+
+Example:
+
+&gt;&gt;&gt; vertexOf 1 (integerGraph [1, 2, 3] [(1, 2), (2, 3)])
+True
+&gt;&gt;&gt; vertexOf 4 (integerGraph [1, 2, 3] [(1, 2), (2, 3)])
+False
+-}</span></span><span>
+</span><span id="line-104"></span><span id="local-6989586621679087065"><span id="local-6989586621679087066"><span class="annot"><a href="Butcher.Graph.html#vertexOf"><span class="hs-identifier hs-type">vertexOf</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Eq</span></span><span> </span><span class="annot"><a href="#local-6989586621679087065"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Butcher.Graph.html#Graph"><span class="hs-identifier hs-type">Graph</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087066"><span class="hs-identifier hs-type">g</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Butcher.Graph.html#Vertex"><span class="hs-identifier hs-type">Vertex</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087066"><span class="hs-identifier hs-type">g</span></a></span><span> </span><span class="annot"><span class="hs-operator hs-type">~</span></span><span> </span><span class="annot"><a href="#local-6989586621679087065"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679087065"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679087066"><span class="hs-identifier hs-type">g</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span></span></span><span>
+</span><span id="line-105"></span><span id="vertexOf"><span class="annot"><span class="annottext">vertexOf :: forall a g. (Eq a, Graph g, Vertex g ~ a) =&gt; a -&gt; g -&gt; Bool
+</span><a href="Butcher.Graph.html#vertexOf"><span class="hs-identifier hs-var hs-var">vertexOf</span></a></span></span><span> </span><span id="local-6989586621679087189"><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679087189"><span class="hs-identifier hs-var">v</span></a></span></span><span> </span><span id="local-6989586621679087190"><span class="annot"><span class="annottext">g
+</span><a href="#local-6989586621679087190"><span class="hs-identifier hs-var">g</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679087189"><span class="hs-identifier hs-var">v</span></a></span><span> </span><span class="annot"><span class="annottext">a -&gt; MultiSet a -&gt; Bool
+forall a. Eq a =&gt; a -&gt; MultiSet a -&gt; Bool
+forall (t :: * -&gt; *) a. (Foldable t, Eq a) =&gt; a -&gt; t a -&gt; Bool
+</span><span class="hs-operator hs-var">`elem`</span></span><span> </span><span class="annot"><span class="annottext">g -&gt; MultiSet (Vertex g)
+forall g. Graph g =&gt; g -&gt; MultiSet (Vertex g)
+</span><a href="Butcher.Graph.html#vertices"><span class="hs-identifier hs-var">vertices</span></a></span><span> </span><span class="annot"><span class="annottext">g
+</span><a href="#local-6989586621679087190"><span class="hs-identifier hs-var">g</span></a></span><span>
+</span><span id="line-106"></span><span>
+</span><span id="line-107"></span><span class="annot"><span class="hs-comment">{- |
+  Naive implementation of a graph given by a multiset of vertices
+and a multiset of edges.
+-}</span></span><span>
+</span><span id="line-111"></span><span class="hs-keyword">data</span><span> </span><span id="IntegerGraph"><span class="annot"><a href="Butcher.Graph.html#IntegerGraph"><span class="hs-identifier hs-var">IntegerGraph</span></a></span></span><span>
+</span><span id="line-112"></span><span>    </span><span class="hs-glyph">=</span><span> </span><span id="IG"><span class="annot"><a href="Butcher.Graph.html#IG"><span class="hs-identifier hs-var">IG</span></a></span></span><span>
+</span><span id="line-113"></span><span>        </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">MS.MultiSet</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Integer</span></span><span class="hs-special">)</span><span>
+</span><span id="line-114"></span><span>        </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">MS.MultiSet</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Integer</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Integer</span></span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-115"></span><span>
+</span><span id="line-116"></span><span class="annot"><span class="hs-comment">{- |
+  A constructor of the @IntegerGraph@ type.
+
+Example:
+
+&gt;&gt;&gt; integerGraph [1, 2, 3] [(1, 2), (2, 3)]
+IntegerGraph(V=[1,2,3], E=[(1,2),(2,3)])
+-}</span></span><span>
+</span><span id="line-124"></span><span class="annot"><a href="Butcher.Graph.html#integerGraph"><span class="hs-identifier hs-type">integerGraph</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">[</span><span class="annot"><span class="hs-identifier hs-type">Integer</span></span><span class="hs-special">]</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">[</span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Integer</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Integer</span></span><span class="hs-special">)</span><span class="hs-special">]</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Butcher.Graph.html#IntegerGraph"><span class="hs-identifier hs-type">IntegerGraph</span></a></span><span>
+</span><span id="line-125"></span><span id="integerGraph"><span class="annot"><span class="annottext">integerGraph :: [Integer] -&gt; [(Integer, Integer)] -&gt; IntegerGraph
+</span><a href="Butcher.Graph.html#integerGraph"><span class="hs-identifier hs-var hs-var">integerGraph</span></a></span></span><span> </span><span id="local-6989586621679087193"><span class="annot"><span class="annottext">[Integer]
+</span><a href="#local-6989586621679087193"><span class="hs-identifier hs-var">vs</span></a></span></span><span> </span><span id="local-6989586621679087194"><span class="annot"><span class="annottext">[(Integer, Integer)]
+</span><a href="#local-6989586621679087194"><span class="hs-identifier hs-var">es</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">MultiSet Integer -&gt; MultiSet (Integer, Integer) -&gt; IntegerGraph
+</span><a href="Butcher.Graph.html#IG"><span class="hs-identifier hs-var">IG</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">[Integer] -&gt; MultiSet Integer
+forall a. Ord a =&gt; [a] -&gt; MultiSet a
+</span><span class="hs-identifier hs-var">MS.fromList</span></span><span> </span><span class="annot"><span class="annottext">[Integer]
+</span><a href="#local-6989586621679087193"><span class="hs-identifier hs-var">vs</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">[(Integer, Integer)] -&gt; MultiSet (Integer, Integer)
+forall a. Ord a =&gt; [a] -&gt; MultiSet a
+</span><span class="hs-identifier hs-var">MS.fromList</span></span><span> </span><span class="annot"><span class="annottext">[(Integer, Integer)]
+</span><a href="#local-6989586621679087194"><span class="hs-identifier hs-var">es</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-126"></span><span>
+</span><span id="line-127"></span><span class="annot"><span class="hs-comment">{- |
+  The @IntegerGraph@ type is an instance of the @Graph@ typeclass.
+
+Example:
+
+&gt;&gt;&gt; singleton 1 :: IntegerGraph
+IntegerGraph(V=[1], E=[])
+&gt;&gt;&gt; edges $ integerGraph [1, 2, 3] [(1, 2), (2, 3)]
+fromOccurList [((1,2),1),((2,3),1)]
+&gt;&gt;&gt; vertices $ integerGraph [1, 2, 3] [(1, 2), (2, 3)]
+fromOccurList [(1,1),(2,1),(3,1)]
+&gt;&gt;&gt; addGraph (singleton 4 :: IntegerGraph) $ integerGraph [1, 2, 3] [(1, 2), (2, 3)]
+IntegerGraph(V=[1,2,3,4], E=[(1,2),(2,3)])
+&gt;&gt;&gt; addEdge (3, 2) $ integerGraph [1, 2, 3] [(1, 2), (2, 3)]
+IntegerGraph(V=[1,2,3], E=[(1,2),(2,3),(3,2)])
+-}</span></span><span>
+</span><span id="line-143"></span><span class="hs-keyword">instance</span><span> </span><span class="annot"><a href="Butcher.Graph.html#Graph"><span class="hs-identifier hs-type">Graph</span></a></span><span> </span><span class="annot"><a href="Butcher.Graph.html#IntegerGraph"><span class="hs-identifier hs-type">IntegerGraph</span></a></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-144"></span><span>    </span><span class="hs-keyword">type</span><span> </span><span id="Vertex"><span class="annot"><a href="Butcher.Graph.html#Vertex"><span class="hs-identifier hs-var">Vertex</span></a></span></span><span> </span><span class="annot"><a href="Butcher.Graph.html#IntegerGraph"><span class="hs-identifier hs-type">IntegerGraph</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Integer</span></span><span>
+</span><span id="line-145"></span><span>
+</span><span id="line-146"></span><span>    </span><span id="local-6989586621679087202"><span class="annot"><span class="annottext">singleton :: Vertex IntegerGraph -&gt; IntegerGraph
+</span><a href="Butcher.Graph.html#singleton"><span class="hs-identifier hs-var hs-var hs-var hs-var">singleton</span></a></span></span><span> </span><span id="local-6989586621679087203"><span class="annot"><span class="annottext">Vertex IntegerGraph
+</span><a href="#local-6989586621679087203"><span class="hs-identifier hs-var">v</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">MultiSet Integer -&gt; MultiSet (Integer, Integer) -&gt; IntegerGraph
+</span><a href="Butcher.Graph.html#IG"><span class="hs-identifier hs-var">IG</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Integer -&gt; MultiSet Integer
+forall a. a -&gt; MultiSet a
+</span><span class="hs-identifier hs-var">MS.singleton</span></span><span> </span><span class="annot"><span class="annottext">Integer
+Vertex IntegerGraph
+</span><a href="#local-6989586621679087203"><span class="hs-identifier hs-var">v</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">MultiSet (Integer, Integer)
+forall a. MultiSet a
+</span><span class="hs-identifier hs-var">MS.empty</span></span><span>
+</span><span id="line-147"></span><span>
+</span><span id="line-148"></span><span>    </span><span id="local-6989586621679087204"><span class="annot"><span class="annottext">edges :: IntegerGraph -&gt; MultiSet (Vertex IntegerGraph, Vertex IntegerGraph)
+</span><a href="Butcher.Graph.html#edges"><span class="hs-identifier hs-var hs-var hs-var hs-var">edges</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Butcher.Graph.html#IG"><span class="hs-identifier hs-type">IG</span></a></span><span> </span><span class="annot"><span class="annottext">MultiSet Integer
+</span><span class="hs-identifier">_</span></span><span> </span><span id="local-6989586621679087205"><span class="annot"><span class="annottext">MultiSet (Integer, Integer)
+</span><a href="#local-6989586621679087205"><span class="hs-identifier hs-var">es</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">MultiSet (Integer, Integer)
+MultiSet (Vertex IntegerGraph, Vertex IntegerGraph)
+</span><a href="#local-6989586621679087205"><span class="hs-identifier hs-var">es</span></a></span><span>
+</span><span id="line-149"></span><span>
+</span><span id="line-150"></span><span>    </span><span id="local-6989586621679087206"><span class="annot"><span class="annottext">vertices :: IntegerGraph -&gt; MultiSet (Vertex IntegerGraph)
+</span><a href="Butcher.Graph.html#vertices"><span class="hs-identifier hs-var hs-var hs-var hs-var">vertices</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Butcher.Graph.html#IG"><span class="hs-identifier hs-type">IG</span></a></span><span> </span><span id="local-6989586621679087207"><span class="annot"><span class="annottext">MultiSet Integer
+</span><a href="#local-6989586621679087207"><span class="hs-identifier hs-var">vs</span></a></span></span><span> </span><span class="annot"><span class="annottext">MultiSet (Integer, Integer)
+</span><span class="hs-identifier">_</span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">MultiSet Integer
+MultiSet (Vertex IntegerGraph)
+</span><a href="#local-6989586621679087207"><span class="hs-identifier hs-var">vs</span></a></span><span>
+</span><span id="line-151"></span><span>
+</span><span id="line-152"></span><span>    </span><span id="local-6989586621679087217"><span class="annot"><span class="annottext">addGraph :: forall g0.
+(Graph g0, Vertex IntegerGraph ~ Vertex g0) =&gt;
+g0 -&gt; IntegerGraph -&gt; IntegerGraph
+</span><a href="Butcher.Graph.html#addGraph"><span class="hs-identifier hs-var hs-var hs-var hs-var">addGraph</span></a></span></span><span> </span><span id="local-6989586621679087218"><span class="annot"><span class="annottext">g0
+</span><a href="#local-6989586621679087218"><span class="hs-identifier hs-var">g</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Butcher.Graph.html#IG"><span class="hs-identifier hs-type">IG</span></a></span><span> </span><span id="local-6989586621679087219"><span class="annot"><span class="annottext">MultiSet Integer
+</span><a href="#local-6989586621679087219"><span class="hs-identifier hs-var">vs</span></a></span></span><span> </span><span id="local-6989586621679087220"><span class="annot"><span class="annottext">MultiSet (Integer, Integer)
+</span><a href="#local-6989586621679087220"><span class="hs-identifier hs-var">es</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-153"></span><span>        </span><span class="annot"><span class="annottext">MultiSet Integer -&gt; MultiSet (Integer, Integer) -&gt; IntegerGraph
+</span><a href="Butcher.Graph.html#IG"><span class="hs-identifier hs-var">IG</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">g0 -&gt; MultiSet (Vertex g0)
+forall g. Graph g =&gt; g -&gt; MultiSet (Vertex g)
+</span><a href="Butcher.Graph.html#vertices"><span class="hs-identifier hs-var">vertices</span></a></span><span> </span><span class="annot"><span class="annottext">g0
+</span><a href="#local-6989586621679087218"><span class="hs-identifier hs-var">g</span></a></span><span> </span><span class="annot"><span class="annottext">MultiSet Integer -&gt; MultiSet Integer -&gt; MultiSet Integer
+forall a. Ord a =&gt; MultiSet a -&gt; MultiSet a -&gt; MultiSet a
+</span><span class="hs-operator hs-var">`MS.union`</span></span><span> </span><span class="annot"><span class="annottext">MultiSet Integer
+</span><a href="#local-6989586621679087219"><span class="hs-identifier hs-var">vs</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">g0 -&gt; MultiSet (Vertex g0, Vertex g0)
+forall g. Graph g =&gt; g -&gt; MultiSet (Vertex g, Vertex g)
+</span><a href="Butcher.Graph.html#edges"><span class="hs-identifier hs-var">edges</span></a></span><span> </span><span class="annot"><span class="annottext">g0
+</span><a href="#local-6989586621679087218"><span class="hs-identifier hs-var">g</span></a></span><span> </span><span class="annot"><span class="annottext">MultiSet (Integer, Integer)
+-&gt; MultiSet (Integer, Integer) -&gt; MultiSet (Integer, Integer)
+forall a. Ord a =&gt; MultiSet a -&gt; MultiSet a -&gt; MultiSet a
+</span><span class="hs-operator hs-var">`MS.union`</span></span><span> </span><span class="annot"><span class="annottext">MultiSet (Integer, Integer)
+</span><a href="#local-6989586621679087220"><span class="hs-identifier hs-var">es</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-154"></span><span>
+</span><span id="line-155"></span><span>    </span><span id="local-6989586621679087222"><span class="annot"><span class="annottext">addEdge :: (Vertex IntegerGraph, Vertex IntegerGraph)
+-&gt; IntegerGraph -&gt; IntegerGraph
+</span><a href="Butcher.Graph.html#addEdge"><span class="hs-identifier hs-var hs-var hs-var hs-var">addEdge</span></a></span></span><span> </span><span id="local-6989586621679087223"><span class="annot"><span class="annottext">(Vertex IntegerGraph, Vertex IntegerGraph)
+</span><a href="#local-6989586621679087223"><span class="hs-identifier hs-var">e</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Butcher.Graph.html#IG"><span class="hs-identifier hs-type">IG</span></a></span><span> </span><span id="local-6989586621679087224"><span class="annot"><span class="annottext">MultiSet Integer
+</span><a href="#local-6989586621679087224"><span class="hs-identifier hs-var">vs</span></a></span></span><span> </span><span id="local-6989586621679087225"><span class="annot"><span class="annottext">MultiSet (Integer, Integer)
+</span><a href="#local-6989586621679087225"><span class="hs-identifier hs-var">es</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-156"></span><span>        </span><span class="annot"><span class="annottext">MultiSet Integer -&gt; MultiSet (Integer, Integer) -&gt; IntegerGraph
+</span><a href="Butcher.Graph.html#IG"><span class="hs-identifier hs-var">IG</span></a></span><span> </span><span class="annot"><span class="annottext">MultiSet Integer
+</span><a href="#local-6989586621679087224"><span class="hs-identifier hs-var">vs</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">(Integer, Integer)
+(Vertex IntegerGraph, Vertex IntegerGraph)
+</span><a href="#local-6989586621679087223"><span class="hs-identifier hs-var">e</span></a></span><span> </span><span class="annot"><span class="annottext">(Integer, Integer)
+-&gt; MultiSet (Integer, Integer) -&gt; MultiSet (Integer, Integer)
+forall a. Ord a =&gt; a -&gt; MultiSet a -&gt; MultiSet a
+</span><span class="hs-operator hs-var">`MS.insert`</span></span><span> </span><span class="annot"><span class="annottext">MultiSet (Integer, Integer)
+</span><a href="#local-6989586621679087225"><span class="hs-identifier hs-var">es</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-157"></span><span>
+</span><span id="line-158"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679087227"><span id="local-6989586621679087232"><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="Butcher.Graph.html#IntegerGraph"><span class="hs-identifier hs-type">IntegerGraph</span></a></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-159"></span><span>    </span><span id="local-6989586621679087245"><span class="annot"><span class="annottext">show :: IntegerGraph -&gt; String
+</span><a href="#local-6989586621679087245"><span class="hs-identifier hs-var hs-var hs-var hs-var">show</span></a></span></span><span> </span><span id="local-6989586621679087247"><span class="annot"><span class="annottext">IntegerGraph
+</span><a href="#local-6989586621679087247"><span class="hs-identifier hs-var">g</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;IntegerGraph(V=&quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; ShowS
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679087248"><span class="hs-identifier hs-var">vs</span></a></span><span> </span><span class="annot"><span class="annottext">String -&gt; ShowS
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;, E=&quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; ShowS
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679087249"><span class="hs-identifier hs-var">es</span></a></span><span> </span><span class="annot"><span class="annottext">String -&gt; ShowS
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;)&quot;</span></span><span>
+</span><span id="line-160"></span><span>      </span><span class="hs-keyword">where</span><span>
+</span><span id="line-161"></span><span>        </span><span id="local-6989586621679087248"><span class="annot"><span class="annottext">vs :: String
+</span><a href="#local-6989586621679087248"><span class="hs-identifier hs-var hs-var">vs</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">[Integer] -&gt; String
+forall a. Show a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">show</span></span><span> </span><span class="annot"><span class="annottext">([Integer] -&gt; String) -&gt; [Integer] -&gt; String
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">MultiSet Integer -&gt; [Integer]
+forall a. MultiSet a -&gt; [a]
+</span><span class="hs-identifier hs-var">MS.toList</span></span><span> </span><span class="annot"><span class="annottext">(MultiSet Integer -&gt; [Integer]) -&gt; MultiSet Integer -&gt; [Integer]
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">IntegerGraph -&gt; MultiSet (Vertex IntegerGraph)
+forall g. Graph g =&gt; g -&gt; MultiSet (Vertex g)
+</span><a href="Butcher.Graph.html#vertices"><span class="hs-identifier hs-var">vertices</span></a></span><span> </span><span class="annot"><span class="annottext">IntegerGraph
+</span><a href="#local-6989586621679087247"><span class="hs-identifier hs-var">g</span></a></span><span>
+</span><span id="line-162"></span><span>        </span><span id="local-6989586621679087249"><span class="annot"><span class="annottext">es :: String
+</span><a href="#local-6989586621679087249"><span class="hs-identifier hs-var hs-var">es</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">[(Integer, Integer)] -&gt; String
+forall a. Show a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">show</span></span><span> </span><span class="annot"><span class="annottext">([(Integer, Integer)] -&gt; String) -&gt; [(Integer, Integer)] -&gt; String
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">MultiSet (Integer, Integer) -&gt; [(Integer, Integer)]
+forall a. MultiSet a -&gt; [a]
+</span><span class="hs-identifier hs-var">MS.toList</span></span><span> </span><span class="annot"><span class="annottext">(MultiSet (Integer, Integer) -&gt; [(Integer, Integer)])
+-&gt; MultiSet (Integer, Integer) -&gt; [(Integer, Integer)]
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">IntegerGraph -&gt; MultiSet (Vertex IntegerGraph, Vertex IntegerGraph)
+forall g. Graph g =&gt; g -&gt; MultiSet (Vertex g, Vertex g)
+</span><a href="Butcher.Graph.html#edges"><span class="hs-identifier hs-var">edges</span></a></span><span> </span><span class="annot"><span class="annottext">IntegerGraph
+</span><a href="#local-6989586621679087247"><span class="hs-identifier hs-var">g</span></a></span><span>
+</span><span id="line-163"></span><span>
+</span><span id="line-164"></span><span class="hs-comment">----------------------------------------------------------------------</span><span>
+</span><span id="line-165"></span><span>
+</span><span id="line-166"></span><span class="annot"><span class="hs-comment">-- * Rooted graphs</span></span><span>
+</span><span id="line-167"></span><span>
+</span><span id="line-168"></span><span class="hs-comment">----------------------------------------------------------------------</span><span>
+</span><span id="line-169"></span><span>
+</span><span id="line-170"></span><span class="annot"><span class="hs-comment">{- |
+  A typeclass for rooted graphs which have a distinguished vertex
+called the root.
+-}</span></span><span>
+</span><span id="line-174"></span><span class="hs-keyword">class</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Butcher.Graph.html#Graph"><span class="hs-identifier hs-type">Graph</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087093"><span class="hs-identifier hs-type">g</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span id="RootedGraph"><span class="annot"><a href="Butcher.Graph.html#RootedGraph"><span class="hs-identifier hs-var">RootedGraph</span></a></span></span><span> </span><span id="local-6989586621679087093"><span class="annot"><a href="#local-6989586621679087093"><span class="hs-identifier hs-type">g</span></a></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-175"></span><span>    </span><span id="root"><span class="annot"><a href="Butcher.Graph.html#root"><span class="hs-identifier hs-type">root</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="#local-6989586621679087093"><span class="hs-identifier hs-type">g</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Butcher.Graph.html#Vertex"><span class="hs-identifier hs-type">Vertex</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087093"><span class="hs-identifier hs-type">g</span></a></span><span>
+</span><span id="line-176"></span><span>
+</span><span id="line-177"></span><span class="annot"><span class="hs-comment">-- | A data type for rooted graphs.</span></span><span>
+</span><span id="line-178"></span><span class="hs-keyword">data</span><span> </span><span id="Rooted"><span class="annot"><a href="Butcher.Graph.html#Rooted"><span class="hs-identifier hs-var">Rooted</span></a></span></span><span> </span><span id="local-6989586621679087109"><span class="annot"><a href="#local-6989586621679087109"><span class="hs-identifier hs-type">g</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span id="R"><span class="annot"><a href="Butcher.Graph.html#R"><span class="hs-identifier hs-var">R</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Butcher.Graph.html#Vertex"><span class="hs-identifier hs-type">Vertex</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087109"><span class="hs-identifier hs-type">g</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><a href="#local-6989586621679087109"><span class="hs-identifier hs-type">g</span></a></span><span>
+</span><span id="line-179"></span><span>
+</span><span id="line-180"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679087097"><span id="local-6989586621679087255"><span id="local-6989586621679087260"><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679087097"><span class="hs-identifier hs-type">g</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Butcher.Graph.html#Vertex"><span class="hs-identifier hs-type">Vertex</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087097"><span class="hs-identifier hs-type">g</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Butcher.Graph.html#Rooted"><span class="hs-identifier hs-type">Rooted</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087097"><span class="hs-identifier hs-type">g</span></a></span><span class="hs-special">)</span></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-181"></span><span>    </span><span id="local-6989586621679087266"><span class="annot"><span class="annottext">show :: Rooted g -&gt; String
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var">show</span></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Butcher.Graph.html#R"><span class="hs-identifier hs-type">R</span></a></span><span> </span><span id="local-6989586621679087267"><span class="annot"><span class="annottext">Vertex g
+</span><a href="#local-6989586621679087267"><span class="hs-identifier hs-var">r</span></a></span></span><span> </span><span id="local-6989586621679087268"><span class="annot"><span class="annottext">g
+</span><a href="#local-6989586621679087268"><span class="hs-identifier hs-var">g</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;Rooted&quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; ShowS
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679087269"><span class="hs-identifier hs-var">trimmedShowG</span></a></span><span> </span><span class="annot"><span class="annottext">String -&gt; ShowS
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;, R=&quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; ShowS
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">Vertex g -&gt; String
+forall a. Show a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">show</span></span><span> </span><span class="annot"><span class="annottext">Vertex g
+</span><a href="#local-6989586621679087267"><span class="hs-identifier hs-var">r</span></a></span><span> </span><span class="annot"><span class="annottext">String -&gt; ShowS
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;)&quot;</span></span><span>
+</span><span id="line-182"></span><span>      </span><span class="hs-keyword">where</span><span>
+</span><span id="line-183"></span><span>        </span><span id="local-6989586621679087269"><span class="annot"><span class="annottext">trimmedShowG :: String
+</span><a href="#local-6989586621679087269"><span class="hs-identifier hs-var hs-var">trimmedShowG</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">ShowS
+forall a. HasCallStack =&gt; [a] -&gt; [a]
+</span><span class="hs-identifier hs-var">L.init</span></span><span> </span><span class="annot"><span class="annottext">ShowS -&gt; ShowS
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">g -&gt; String
+forall a. Show a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">show</span></span><span> </span><span class="annot"><span class="annottext">g
+</span><a href="#local-6989586621679087268"><span class="hs-identifier hs-var">g</span></a></span><span>
+</span><span id="line-184"></span><span>
+</span><span id="line-185"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679087102"><span id="local-6989586621679087274"><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Eq</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Butcher.Graph.html#Vertex"><span class="hs-identifier hs-type">Vertex</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087102"><span class="hs-identifier hs-type">g</span></a></span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Eq</span></span><span> </span><span class="annot"><a href="#local-6989586621679087102"><span class="hs-identifier hs-type">g</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Eq</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Butcher.Graph.html#Rooted"><span class="hs-identifier hs-type">Rooted</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087102"><span class="hs-identifier hs-type">g</span></a></span><span class="hs-special">)</span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-186"></span><span>    </span><span class="hs-special">(</span><span class="annot"><a href="Butcher.Graph.html#R"><span class="hs-identifier hs-type">R</span></a></span><span> </span><span id="local-6989586621679087280"><span class="annot"><span class="annottext">Vertex g
+</span><a href="#local-6989586621679087280"><span class="hs-identifier hs-var">r1</span></a></span></span><span> </span><span id="local-6989586621679087281"><span class="annot"><span class="annottext">g
+</span><a href="#local-6989586621679087281"><span class="hs-identifier hs-var">g1</span></a></span></span><span class="hs-special">)</span><span> </span><span id="local-6989586621679087282"><span class="annot"><span class="annottext">== :: Rooted g -&gt; Rooted g -&gt; Bool
+</span><span class="hs-operator hs-var hs-var hs-var hs-var">==</span></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Butcher.Graph.html#R"><span class="hs-identifier hs-type">R</span></a></span><span> </span><span id="local-6989586621679087283"><span class="annot"><span class="annottext">Vertex g
+</span><a href="#local-6989586621679087283"><span class="hs-identifier hs-var">r2</span></a></span></span><span> </span><span id="local-6989586621679087284"><span class="annot"><span class="annottext">g
+</span><a href="#local-6989586621679087284"><span class="hs-identifier hs-var">g2</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Vertex g
+</span><a href="#local-6989586621679087280"><span class="hs-identifier hs-var">r1</span></a></span><span> </span><span class="annot"><span class="annottext">Vertex g -&gt; Vertex g -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">==</span></span><span> </span><span class="annot"><span class="annottext">Vertex g
+</span><a href="#local-6989586621679087283"><span class="hs-identifier hs-var">r2</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Bool -&gt; Bool -&gt; Bool
+</span><span class="hs-operator hs-var">&amp;&amp;</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">g
+</span><a href="#local-6989586621679087281"><span class="hs-identifier hs-var">g1</span></a></span><span> </span><span class="annot"><span class="annottext">g -&gt; g -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">==</span></span><span> </span><span class="annot"><span class="annottext">g
+</span><a href="#local-6989586621679087284"><span class="hs-identifier hs-var">g2</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-187"></span><span>
+</span><span id="line-188"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679087106"><span class="hs-special">(</span><span class="annot"><a href="Core.GradedList.html#Graded"><span class="hs-identifier hs-type">Graded</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087106"><span class="hs-identifier hs-type">g</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="Core.GradedList.html#Graded"><span class="hs-identifier hs-type">Graded</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Butcher.Graph.html#Rooted"><span class="hs-identifier hs-type">Rooted</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087106"><span class="hs-identifier hs-type">g</span></a></span><span class="hs-special">)</span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-189"></span><span>    </span><span id="local-6989586621679087291"><span class="annot"><span class="annottext">grading :: Rooted g -&gt; Integer
+</span><a href="Core.GradedList.html#grading"><span class="hs-identifier hs-var hs-var hs-var hs-var">grading</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Butcher.Graph.html#R"><span class="hs-identifier hs-type">R</span></a></span><span> </span><span class="annot"><span class="annottext">Vertex g
+</span><span class="hs-identifier">_</span></span><span> </span><span id="local-6989586621679087292"><span class="annot"><span class="annottext">g
+</span><a href="#local-6989586621679087292"><span class="hs-identifier hs-var">g</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">g -&gt; Integer
+forall t. Graded t =&gt; t -&gt; Integer
+</span><a href="Core.GradedList.html#grading"><span class="hs-identifier hs-var">grading</span></a></span><span> </span><span class="annot"><span class="annottext">g
+</span><a href="#local-6989586621679087292"><span class="hs-identifier hs-var">g</span></a></span><span>
+</span><span id="line-190"></span><span>
+</span><span id="line-191"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679087108"><span class="hs-special">(</span><span class="annot"><a href="Butcher.Graph.html#Graph"><span class="hs-identifier hs-type">Graph</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087108"><span class="hs-identifier hs-type">g</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="Butcher.Graph.html#Graph"><span class="hs-identifier hs-type">Graph</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Butcher.Graph.html#Rooted"><span class="hs-identifier hs-type">Rooted</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087108"><span class="hs-identifier hs-type">g</span></a></span><span class="hs-special">)</span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-192"></span><span>    </span><span class="hs-keyword">type</span><span> </span><span id="Vertex"><span class="annot"><a href="Butcher.Graph.html#Vertex"><span class="hs-identifier hs-var">Vertex</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Butcher.Graph.html#Rooted"><span class="hs-identifier hs-type">Rooted</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087108"><span class="hs-identifier hs-type">g</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><a href="Butcher.Graph.html#Vertex"><span class="hs-identifier hs-type">Vertex</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087108"><span class="hs-identifier hs-type">g</span></a></span><span>
+</span><span id="line-193"></span><span>    </span><span id="local-6989586621679087301"><span class="annot"><span class="annottext">singleton :: Vertex (Rooted g) -&gt; Rooted g
+</span><a href="Butcher.Graph.html#singleton"><span class="hs-identifier hs-var hs-var hs-var hs-var">singleton</span></a></span></span><span> </span><span id="local-6989586621679087302"><span class="annot"><span class="annottext">Vertex (Rooted g)
+</span><a href="#local-6989586621679087302"><span class="hs-identifier hs-var">v</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Vertex g -&gt; g -&gt; Rooted g
+forall g. Vertex g -&gt; g -&gt; Rooted g
+</span><a href="Butcher.Graph.html#R"><span class="hs-identifier hs-var">R</span></a></span><span> </span><span class="annot"><span class="annottext">Vertex g
+Vertex (Rooted g)
+</span><a href="#local-6989586621679087302"><span class="hs-identifier hs-var">v</span></a></span><span> </span><span class="annot"><span class="annottext">(g -&gt; Rooted g) -&gt; g -&gt; Rooted g
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Vertex g -&gt; g
+forall g. Graph g =&gt; Vertex g -&gt; g
+</span><a href="Butcher.Graph.html#singleton"><span class="hs-identifier hs-var">singleton</span></a></span><span> </span><span class="annot"><span class="annottext">Vertex g
+Vertex (Rooted g)
+</span><a href="#local-6989586621679087302"><span class="hs-identifier hs-var">v</span></a></span><span>
+</span><span id="line-194"></span><span>    </span><span id="local-6989586621679087304"><span class="annot"><span class="annottext">edges :: Rooted g -&gt; MultiSet (Vertex (Rooted g), Vertex (Rooted g))
+</span><a href="Butcher.Graph.html#edges"><span class="hs-identifier hs-var hs-var hs-var hs-var">edges</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Butcher.Graph.html#R"><span class="hs-identifier hs-type">R</span></a></span><span> </span><span class="annot"><span class="annottext">Vertex g
+</span><span class="hs-identifier">_</span></span><span> </span><span id="local-6989586621679087305"><span class="annot"><span class="annottext">g
+</span><a href="#local-6989586621679087305"><span class="hs-identifier hs-var">g</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">g -&gt; MultiSet (Vertex g, Vertex g)
+forall g. Graph g =&gt; g -&gt; MultiSet (Vertex g, Vertex g)
+</span><a href="Butcher.Graph.html#edges"><span class="hs-identifier hs-var">edges</span></a></span><span> </span><span class="annot"><span class="annottext">g
+</span><a href="#local-6989586621679087305"><span class="hs-identifier hs-var">g</span></a></span><span>
+</span><span id="line-195"></span><span>    </span><span id="local-6989586621679087307"><span class="annot"><span class="annottext">vertices :: Rooted g -&gt; MultiSet (Vertex (Rooted g))
+</span><a href="Butcher.Graph.html#vertices"><span class="hs-identifier hs-var hs-var hs-var hs-var">vertices</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Butcher.Graph.html#R"><span class="hs-identifier hs-type">R</span></a></span><span> </span><span class="annot"><span class="annottext">Vertex g
+</span><span class="hs-identifier">_</span></span><span> </span><span id="local-6989586621679087308"><span class="annot"><span class="annottext">g
+</span><a href="#local-6989586621679087308"><span class="hs-identifier hs-var">g</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">g -&gt; MultiSet (Vertex g)
+forall g. Graph g =&gt; g -&gt; MultiSet (Vertex g)
+</span><a href="Butcher.Graph.html#vertices"><span class="hs-identifier hs-var">vertices</span></a></span><span> </span><span class="annot"><span class="annottext">g
+</span><a href="#local-6989586621679087308"><span class="hs-identifier hs-var">g</span></a></span><span>
+</span><span id="line-196"></span><span>    </span><span id="local-6989586621679087318"><span class="annot"><span class="annottext">addGraph :: forall g0.
+(Graph g0, Vertex (Rooted g) ~ Vertex g0) =&gt;
+g0 -&gt; Rooted g -&gt; Rooted g
+</span><a href="Butcher.Graph.html#addGraph"><span class="hs-identifier hs-var hs-var hs-var hs-var">addGraph</span></a></span></span><span> </span><span id="local-6989586621679087319"><span class="annot"><span class="annottext">g0
+</span><a href="#local-6989586621679087319"><span class="hs-identifier hs-var">g0</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Butcher.Graph.html#R"><span class="hs-identifier hs-type">R</span></a></span><span> </span><span id="local-6989586621679087320"><span class="annot"><span class="annottext">Vertex g
+</span><a href="#local-6989586621679087320"><span class="hs-identifier hs-var">r</span></a></span></span><span> </span><span id="local-6989586621679087321"><span class="annot"><span class="annottext">g
+</span><a href="#local-6989586621679087321"><span class="hs-identifier hs-var">g</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Vertex g -&gt; g -&gt; Rooted g
+forall g. Vertex g -&gt; g -&gt; Rooted g
+</span><a href="Butcher.Graph.html#R"><span class="hs-identifier hs-var">R</span></a></span><span> </span><span class="annot"><span class="annottext">Vertex g
+</span><a href="#local-6989586621679087320"><span class="hs-identifier hs-var">r</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">g0 -&gt; g -&gt; g
+forall g0. (Graph g0, Vertex g ~ Vertex g0) =&gt; g0 -&gt; g -&gt; g
+forall g g0.
+(Graph g, Graph g0, Vertex g ~ Vertex g0) =&gt;
+g0 -&gt; g -&gt; g
+</span><a href="Butcher.Graph.html#addGraph"><span class="hs-identifier hs-var">addGraph</span></a></span><span> </span><span class="annot"><span class="annottext">g0
+</span><a href="#local-6989586621679087319"><span class="hs-identifier hs-var">g0</span></a></span><span> </span><span class="annot"><span class="annottext">g
+</span><a href="#local-6989586621679087321"><span class="hs-identifier hs-var">g</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-197"></span><span>    </span><span id="local-6989586621679087323"><span class="annot"><span class="annottext">addEdge :: (Vertex (Rooted g), Vertex (Rooted g)) -&gt; Rooted g -&gt; Rooted g
+</span><a href="Butcher.Graph.html#addEdge"><span class="hs-identifier hs-var hs-var hs-var hs-var">addEdge</span></a></span></span><span> </span><span id="local-6989586621679087324"><span class="annot"><span class="annottext">(Vertex (Rooted g), Vertex (Rooted g))
+</span><a href="#local-6989586621679087324"><span class="hs-identifier hs-var">e</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Butcher.Graph.html#R"><span class="hs-identifier hs-type">R</span></a></span><span> </span><span id="local-6989586621679087325"><span class="annot"><span class="annottext">Vertex g
+</span><a href="#local-6989586621679087325"><span class="hs-identifier hs-var">r</span></a></span></span><span> </span><span id="local-6989586621679087326"><span class="annot"><span class="annottext">g
+</span><a href="#local-6989586621679087326"><span class="hs-identifier hs-var">g</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Vertex g -&gt; g -&gt; Rooted g
+forall g. Vertex g -&gt; g -&gt; Rooted g
+</span><a href="Butcher.Graph.html#R"><span class="hs-identifier hs-var">R</span></a></span><span> </span><span class="annot"><span class="annottext">Vertex g
+</span><a href="#local-6989586621679087325"><span class="hs-identifier hs-var">r</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">(Vertex g, Vertex g) -&gt; g -&gt; g
+forall g. Graph g =&gt; (Vertex g, Vertex g) -&gt; g -&gt; g
+</span><a href="Butcher.Graph.html#addEdge"><span class="hs-identifier hs-var">addEdge</span></a></span><span> </span><span class="annot"><span class="annottext">(Vertex g, Vertex g)
+(Vertex (Rooted g), Vertex (Rooted g))
+</span><a href="#local-6989586621679087324"><span class="hs-identifier hs-var">e</span></a></span><span> </span><span class="annot"><span class="annottext">g
+</span><a href="#local-6989586621679087326"><span class="hs-identifier hs-var">g</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-198"></span><span>
+</span><span id="line-199"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679087112"><span class="hs-special">(</span><span class="annot"><a href="Butcher.Graph.html#Graph"><span class="hs-identifier hs-type">Graph</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087112"><span class="hs-identifier hs-type">g</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="Butcher.Graph.html#RootedGraph"><span class="hs-identifier hs-type">RootedGraph</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Butcher.Graph.html#Rooted"><span class="hs-identifier hs-type">Rooted</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087112"><span class="hs-identifier hs-type">g</span></a></span><span class="hs-special">)</span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-200"></span><span>    </span><span id="local-6989586621679087333"><span class="annot"><span class="annottext">root :: Rooted g -&gt; Vertex (Rooted g)
+</span><a href="Butcher.Graph.html#root"><span class="hs-identifier hs-var hs-var hs-var hs-var">root</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Butcher.Graph.html#R"><span class="hs-identifier hs-type">R</span></a></span><span> </span><span id="local-6989586621679087334"><span class="annot"><span class="annottext">Vertex g
+</span><a href="#local-6989586621679087334"><span class="hs-identifier hs-var">r</span></a></span></span><span> </span><span class="annot"><span class="annottext">g
+</span><span class="hs-identifier">_</span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Vertex g
+Vertex (Rooted g)
+</span><a href="#local-6989586621679087334"><span class="hs-identifier hs-var">r</span></a></span><span>
+</span><span id="line-201"></span><span>
+</span><span id="line-202"></span><span class="annot"><span class="hs-comment">{- |
+  A constructor for the @Rooted@ type which checks if the root
+  vertex is in the graph.
+
+Example:
+
+&gt;&gt;&gt; rooted (integerGraph [1, 2, 3] [(1, 2), (2, 3)]) 1
+RootedIntegerGraph(V=[1,2,3], E=[(1,2),(2,3)], R=1)
+-}</span></span><span>
+</span><span id="line-211"></span><span id="local-6989586621679087113"><span class="annot"><a href="Butcher.Graph.html#rooted"><span class="hs-identifier hs-type">rooted</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Butcher.Graph.html#Graph"><span class="hs-identifier hs-type">Graph</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087113"><span class="hs-identifier hs-type">g</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Eq</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Butcher.Graph.html#Vertex"><span class="hs-identifier hs-type">Vertex</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087113"><span class="hs-identifier hs-type">g</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679087113"><span class="hs-identifier hs-type">g</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Butcher.Graph.html#Vertex"><span class="hs-identifier hs-type">Vertex</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087113"><span class="hs-identifier hs-type">g</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Butcher.Graph.html#Rooted"><span class="hs-identifier hs-type">Rooted</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087113"><span class="hs-identifier hs-type">g</span></a></span></span><span>
+</span><span id="line-212"></span><span id="rooted"><span class="annot"><span class="annottext">rooted :: forall g. (Graph g, Eq (Vertex g)) =&gt; g -&gt; Vertex g -&gt; Rooted g
+</span><a href="Butcher.Graph.html#rooted"><span class="hs-identifier hs-var hs-var">rooted</span></a></span></span><span> </span><span id="local-6989586621679087342"><span class="annot"><span class="annottext">g
+</span><a href="#local-6989586621679087342"><span class="hs-identifier hs-var">g</span></a></span></span><span> </span><span id="local-6989586621679087343"><span class="annot"><span class="annottext">Vertex g
+</span><a href="#local-6989586621679087343"><span class="hs-identifier hs-var">r</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-213"></span><span>    </span><span class="hs-keyword">if</span><span> </span><span class="annot"><span class="annottext">Vertex g
+</span><a href="#local-6989586621679087343"><span class="hs-identifier hs-var">r</span></a></span><span> </span><span class="annot"><span class="annottext">Vertex g -&gt; g -&gt; Bool
+forall a g. (Eq a, Graph g, Vertex g ~ a) =&gt; a -&gt; g -&gt; Bool
+</span><a href="Butcher.Graph.html#vertexOf"><span class="hs-operator hs-var">`vertexOf`</span></a></span><span> </span><span class="annot"><span class="annottext">g
+</span><a href="#local-6989586621679087342"><span class="hs-identifier hs-var">g</span></a></span><span>
+</span><span id="line-214"></span><span>        </span><span class="hs-keyword">then</span><span> </span><span class="annot"><span class="annottext">Vertex g -&gt; g -&gt; Rooted g
+forall g. Vertex g -&gt; g -&gt; Rooted g
+</span><a href="Butcher.Graph.html#R"><span class="hs-identifier hs-var">R</span></a></span><span> </span><span class="annot"><span class="annottext">Vertex g
+</span><a href="#local-6989586621679087343"><span class="hs-identifier hs-var">r</span></a></span><span> </span><span class="annot"><span class="annottext">g
+</span><a href="#local-6989586621679087342"><span class="hs-identifier hs-var">g</span></a></span><span>
+</span><span id="line-215"></span><span>        </span><span class="hs-keyword">else</span><span> </span><span class="annot"><span class="annottext">String -&gt; Rooted g
+forall a. HasCallStack =&gt; String -&gt; a
+</span><span class="hs-identifier hs-var">error</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;Root vertex not in graph&quot;</span></span><span>
+</span><span id="line-216"></span><span>
+</span><span id="line-217"></span><span class="hs-comment">----------------------------------------------------------------------</span><span>
+</span><span id="line-218"></span><span>
+</span><span id="line-219"></span><span class="annot"><span class="hs-comment">-- * Grafting</span></span><span>
+</span><span id="line-220"></span><span>
+</span><span id="line-221"></span><span class="hs-comment">----------------------------------------------------------------------</span><span>
+</span><span id="line-222"></span><span>
+</span><span id="line-223"></span><span class="annot"><span class="hs-comment">-- | Two integer graphs are equal if their vertices and edges are equal.</span></span><span>
+</span><span id="line-224"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679087347"><span class="annot"><span class="hs-identifier hs-type">Eq</span></span><span> </span><span class="annot"><a href="Butcher.Graph.html#IntegerGraph"><span class="hs-identifier hs-type">IntegerGraph</span></a></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-225"></span><span>    </span><span id="local-6989586621679087361"><span class="annot"><span class="annottext">IntegerGraph
+</span><a href="#local-6989586621679087361"><span class="hs-identifier hs-var">g1</span></a></span></span><span> </span><span id="local-6989586621679087362"><span class="annot"><span class="annottext">== :: IntegerGraph -&gt; IntegerGraph -&gt; Bool
+</span><span class="hs-operator hs-var hs-var hs-var hs-var">==</span></span></span><span> </span><span id="local-6989586621679087363"><span class="annot"><span class="annottext">IntegerGraph
+</span><a href="#local-6989586621679087363"><span class="hs-identifier hs-var">g2</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">IntegerGraph -&gt; MultiSet (Vertex IntegerGraph)
+forall g. Graph g =&gt; g -&gt; MultiSet (Vertex g)
+</span><a href="Butcher.Graph.html#vertices"><span class="hs-identifier hs-var">vertices</span></a></span><span> </span><span class="annot"><span class="annottext">IntegerGraph
+</span><a href="#local-6989586621679087361"><span class="hs-identifier hs-var">g1</span></a></span><span> </span><span class="annot"><span class="annottext">MultiSet Integer -&gt; MultiSet Integer -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">==</span></span><span> </span><span class="annot"><span class="annottext">IntegerGraph -&gt; MultiSet (Vertex IntegerGraph)
+forall g. Graph g =&gt; g -&gt; MultiSet (Vertex g)
+</span><a href="Butcher.Graph.html#vertices"><span class="hs-identifier hs-var">vertices</span></a></span><span> </span><span class="annot"><span class="annottext">IntegerGraph
+</span><a href="#local-6989586621679087363"><span class="hs-identifier hs-var">g2</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Bool -&gt; Bool -&gt; Bool
+</span><span class="hs-operator hs-var">&amp;&amp;</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">IntegerGraph -&gt; MultiSet (Vertex IntegerGraph, Vertex IntegerGraph)
+forall g. Graph g =&gt; g -&gt; MultiSet (Vertex g, Vertex g)
+</span><a href="Butcher.Graph.html#edges"><span class="hs-identifier hs-var">edges</span></a></span><span> </span><span class="annot"><span class="annottext">IntegerGraph
+</span><a href="#local-6989586621679087361"><span class="hs-identifier hs-var">g1</span></a></span><span> </span><span class="annot"><span class="annottext">MultiSet (Integer, Integer) -&gt; MultiSet (Integer, Integer) -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">==</span></span><span> </span><span class="annot"><span class="annottext">IntegerGraph -&gt; MultiSet (Vertex IntegerGraph, Vertex IntegerGraph)
+forall g. Graph g =&gt; g -&gt; MultiSet (Vertex g, Vertex g)
+</span><a href="Butcher.Graph.html#edges"><span class="hs-identifier hs-var">edges</span></a></span><span> </span><span class="annot"><span class="annottext">IntegerGraph
+</span><a href="#local-6989586621679087363"><span class="hs-identifier hs-var">g2</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-226"></span><span>
+</span><span id="line-227"></span><span class="annot"><span class="hs-comment">-- | The grading of an integer graph is the number of its vertices.</span></span><span>
+</span><span id="line-228"></span><span class="hs-keyword">instance</span><span> </span><span class="annot"><a href="Core.GradedList.html#Graded"><span class="hs-identifier hs-type">Graded</span></a></span><span> </span><span class="annot"><a href="Butcher.Graph.html#IntegerGraph"><span class="hs-identifier hs-type">IntegerGraph</span></a></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-229"></span><span>    </span><span id="local-6989586621679087370"><span class="annot"><span class="annottext">grading :: IntegerGraph -&gt; Integer
+</span><a href="Core.GradedList.html#grading"><span class="hs-identifier hs-var hs-var hs-var hs-var">grading</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Int -&gt; Integer
+forall a. Integral a =&gt; a -&gt; Integer
+</span><span class="hs-identifier hs-var">toInteger</span></span><span> </span><span class="annot"><span class="annottext">(Int -&gt; Integer)
+-&gt; (IntegerGraph -&gt; Int) -&gt; IntegerGraph -&gt; Integer
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">MultiSet Integer -&gt; Int
+forall a. MultiSet a -&gt; Int
+forall (t :: * -&gt; *) a. Foldable t =&gt; t a -&gt; Int
+</span><span class="hs-identifier hs-var">length</span></span><span> </span><span class="annot"><span class="annottext">(MultiSet Integer -&gt; Int)
+-&gt; (IntegerGraph -&gt; MultiSet Integer) -&gt; IntegerGraph -&gt; Int
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">IntegerGraph -&gt; MultiSet Integer
+IntegerGraph -&gt; MultiSet (Vertex IntegerGraph)
+forall g. Graph g =&gt; g -&gt; MultiSet (Vertex g)
+</span><a href="Butcher.Graph.html#vertices"><span class="hs-identifier hs-var">vertices</span></a></span><span>
+</span><span id="line-230"></span><span>
+</span><span id="line-231"></span><span class="annot"><span class="hs-comment">{- |
+  Grafing of two graphs.
+
+Example:
+
+&gt;&gt;&gt; g1 = integerGraph [1, 2, 3] [(2, 1), (3, 2)]
+&gt;&gt;&gt; graftGraph (rooted g1 1) (integerGraph [4, 5] [(5, 4)])
+(1 *^ IntegerGraph(V=[1,2,3,4,5], E=[(1,4),(2,1),(3,2),(5,4)]) + 1 *^ IntegerGraph(V=[1,2,3,4,5], E=[(1,5),(2,1),(3,2),(5,4)]))_5
+-}</span></span><span>
+</span><span id="line-240"></span><span id="local-6989586621679087125"><span id="local-6989586621679087126"><span class="annot"><a href="Butcher.Graph.html#graftGraph"><span class="hs-identifier hs-type">graftGraph</span></a></span><span>
+</span><span id="line-241"></span><span>    </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Eq</span></span><span> </span><span class="annot"><a href="#local-6989586621679087125"><span class="hs-identifier hs-type">a2</span></a></span><span>
+</span><span id="line-242"></span><span>       </span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Core.GradedList.html#Graded"><span class="hs-identifier hs-type">Graded</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087125"><span class="hs-identifier hs-type">a2</span></a></span><span>
+</span><span id="line-243"></span><span>       </span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Butcher.Graph.html#RootedGraph"><span class="hs-identifier hs-type">RootedGraph</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087126"><span class="hs-identifier hs-type">a1</span></a></span><span>
+</span><span id="line-244"></span><span>       </span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Butcher.Graph.html#Graph"><span class="hs-identifier hs-type">Graph</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087125"><span class="hs-identifier hs-type">a2</span></a></span><span>
+</span><span id="line-245"></span><span>       </span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Butcher.Graph.html#Vertex"><span class="hs-identifier hs-type">Vertex</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087126"><span class="hs-identifier hs-type">a1</span></a></span><span> </span><span class="annot"><span class="hs-operator hs-type">~</span></span><span> </span><span class="annot"><a href="Butcher.Graph.html#Vertex"><span class="hs-identifier hs-type">Vertex</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087125"><span class="hs-identifier hs-type">a2</span></a></span><span>
+</span><span id="line-246"></span><span>       </span><span class="hs-special">)</span><span>
+</span><span id="line-247"></span><span>    </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679087126"><span class="hs-identifier hs-type">a1</span></a></span><span>
+</span><span id="line-248"></span><span>    </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679087125"><span class="hs-identifier hs-type">a2</span></a></span><span>
+</span><span id="line-249"></span><span>    </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Core.VectorSpace.html#Vector"><span class="hs-identifier hs-type">Vector</span></a></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Integer</span></span><span> </span><span class="annot"><a href="#local-6989586621679087125"><span class="hs-identifier hs-type">a2</span></a></span></span></span><span>
+</span><span id="line-250"></span><span id="graftGraph"><span class="annot"><span class="annottext">graftGraph :: forall a2 a1.
+(Eq a2, Graded a2, RootedGraph a1, Graph a2,
+ Vertex a1 ~ Vertex a2) =&gt;
+a1 -&gt; a2 -&gt; Vector Integer a2
+</span><a href="Butcher.Graph.html#graftGraph"><span class="hs-identifier hs-var hs-var">graftGraph</span></a></span></span><span> </span><span id="local-6989586621679087390"><span class="annot"><span class="annottext">a1
+</span><a href="#local-6989586621679087390"><span class="hs-identifier hs-var">rg1</span></a></span></span><span> </span><span id="local-6989586621679087391"><span class="annot"><span class="annottext">a2
+</span><a href="#local-6989586621679087391"><span class="hs-identifier hs-var">g2</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-251"></span><span>    </span><span class="annot"><span class="annottext">[ScalarProduct Integer a2] -&gt; Vector Integer a2
+forall k a.
+(Num k, Eq k, Eq a, Graded a) =&gt;
+[ScalarProduct k a] -&gt; Vector k a
+</span><a href="Core.VectorSpace.html#vectorFromList"><span class="hs-identifier hs-var">vectorFromList</span></a></span><span> </span><span class="annot"><span class="annottext">([ScalarProduct Integer a2] -&gt; Vector Integer a2)
+-&gt; [ScalarProduct Integer a2] -&gt; Vector Integer a2
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span>
+</span><span id="line-252"></span><span>        </span><span class="annot"><span class="annottext">(Vertex a2 -&gt; ScalarProduct Integer a2)
+-&gt; [Vertex a2] -&gt; [ScalarProduct Integer a2]
+forall a b. (a -&gt; b) -&gt; [a] -&gt; [b]
+</span><span class="hs-identifier hs-var">map</span></span><span> </span><span class="hs-special">(</span><span class="hs-special">(</span><span class="annot"><span class="annottext">Integer
+</span><span class="hs-number">1</span></span><span> </span><span class="annot"><span class="annottext">Integer -&gt; a2 -&gt; ScalarProduct Integer a2
+forall k a. Num k =&gt; k -&gt; a -&gt; ScalarProduct k a
+</span><a href="Core.VectorSpace.html#%2A%5E"><span class="hs-operator hs-var">*^</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(a2 -&gt; ScalarProduct Integer a2)
+-&gt; (Vertex a2 -&gt; a2) -&gt; Vertex a2 -&gt; ScalarProduct Integer a2
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">a1 -&gt; a2 -&gt; Vertex a2 -&gt; a2
+forall a1 a2.
+(RootedGraph a1, Graph a2, Vertex a1 ~ Vertex a2) =&gt;
+a1 -&gt; a2 -&gt; Vertex a2 -&gt; a2
+</span><a href="Butcher.Graph.html#graftGraphTo"><span class="hs-identifier hs-var">graftGraphTo</span></a></span><span> </span><span class="annot"><span class="annottext">a1
+</span><a href="#local-6989586621679087390"><span class="hs-identifier hs-var">rg1</span></a></span><span> </span><span class="annot"><span class="annottext">a2
+</span><a href="#local-6989586621679087391"><span class="hs-identifier hs-var">g2</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">([Vertex a2] -&gt; [ScalarProduct Integer a2])
+-&gt; [Vertex a2] -&gt; [ScalarProduct Integer a2]
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span>
+</span><span id="line-253"></span><span>            </span><span class="annot"><span class="annottext">MultiSet (Vertex a2) -&gt; [Vertex a2]
+forall a. MultiSet a -&gt; [a]
+</span><span class="hs-identifier hs-var">MS.toList</span></span><span> </span><span class="annot"><span class="annottext">(MultiSet (Vertex a2) -&gt; [Vertex a2])
+-&gt; MultiSet (Vertex a2) -&gt; [Vertex a2]
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span>
+</span><span id="line-254"></span><span>                </span><span class="annot"><span class="annottext">a2 -&gt; MultiSet (Vertex a2)
+forall g. Graph g =&gt; g -&gt; MultiSet (Vertex g)
+</span><a href="Butcher.Graph.html#vertices"><span class="hs-identifier hs-var">vertices</span></a></span><span> </span><span class="annot"><span class="annottext">a2
+</span><a href="#local-6989586621679087391"><span class="hs-identifier hs-var">g2</span></a></span><span>
+</span><span id="line-255"></span><span>
+</span><span id="line-256"></span><span class="annot"><span class="hs-comment">{- |
+  Grafing of a rooted graph to a graph at a given vertex.
+
+Example:
+
+&gt;&gt;&gt; g1 = integerGraph [1, 2, 3] [(2, 1), (3, 2)]
+&gt;&gt;&gt; graftGraphTo (rooted g1 1) (integerGraph [4, 5] [(5, 4)]) 5
+IntegerGraph(V=[1,2,3,4,5], E=[(1,5),(2,1),(3,2),(5,4)])
+-}</span></span><span>
+</span><span id="line-265"></span><span id="local-6989586621679087137"><span id="local-6989586621679087138"><span class="annot"><a href="Butcher.Graph.html#graftGraphTo"><span class="hs-identifier hs-type">graftGraphTo</span></a></span><span>
+</span><span id="line-266"></span><span>    </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span> </span><span class="annot"><a href="Butcher.Graph.html#RootedGraph"><span class="hs-identifier hs-type">RootedGraph</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087137"><span class="hs-identifier hs-type">a1</span></a></span><span>
+</span><span id="line-267"></span><span>       </span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Butcher.Graph.html#Graph"><span class="hs-identifier hs-type">Graph</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087138"><span class="hs-identifier hs-type">a2</span></a></span><span>
+</span><span id="line-268"></span><span>       </span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Butcher.Graph.html#Vertex"><span class="hs-identifier hs-type">Vertex</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087137"><span class="hs-identifier hs-type">a1</span></a></span><span> </span><span class="annot"><span class="hs-operator hs-type">~</span></span><span> </span><span class="annot"><a href="Butcher.Graph.html#Vertex"><span class="hs-identifier hs-type">Vertex</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087138"><span class="hs-identifier hs-type">a2</span></a></span><span>
+</span><span id="line-269"></span><span>       </span><span class="hs-special">)</span><span>
+</span><span id="line-270"></span><span>    </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679087137"><span class="hs-identifier hs-type">a1</span></a></span><span>
+</span><span id="line-271"></span><span>    </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679087138"><span class="hs-identifier hs-type">a2</span></a></span><span>
+</span><span id="line-272"></span><span>    </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Butcher.Graph.html#Vertex"><span class="hs-identifier hs-type">Vertex</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679087138"><span class="hs-identifier hs-type">a2</span></a></span><span>
+</span><span id="line-273"></span><span>    </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679087138"><span class="hs-identifier hs-type">a2</span></a></span></span></span><span>
+</span><span id="line-274"></span><span id="graftGraphTo"><span class="annot"><span class="annottext">graftGraphTo :: forall a1 a2.
+(RootedGraph a1, Graph a2, Vertex a1 ~ Vertex a2) =&gt;
+a1 -&gt; a2 -&gt; Vertex a2 -&gt; a2
+</span><a href="Butcher.Graph.html#graftGraphTo"><span class="hs-identifier hs-var hs-var">graftGraphTo</span></a></span></span><span> </span><span id="local-6989586621679087403"><span class="annot"><span class="annottext">a1
+</span><a href="#local-6989586621679087403"><span class="hs-identifier hs-var">rg1</span></a></span></span><span> </span><span id="local-6989586621679087404"><span class="annot"><span class="annottext">a2
+</span><a href="#local-6989586621679087404"><span class="hs-identifier hs-var">g2</span></a></span></span><span> </span><span id="local-6989586621679087405"><span class="annot"><span class="annottext">Vertex a2
+</span><a href="#local-6989586621679087405"><span class="hs-identifier hs-var">v</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">a1 -&gt; a2 -&gt; a2
+forall g0. (Graph g0, Vertex a2 ~ Vertex g0) =&gt; g0 -&gt; a2 -&gt; a2
+forall g g0.
+(Graph g, Graph g0, Vertex g ~ Vertex g0) =&gt;
+g0 -&gt; g -&gt; g
+</span><a href="Butcher.Graph.html#addGraph"><span class="hs-identifier hs-var">addGraph</span></a></span><span> </span><span class="annot"><span class="annottext">a1
+</span><a href="#local-6989586621679087403"><span class="hs-identifier hs-var">rg1</span></a></span><span> </span><span class="annot"><span class="annottext">(a2 -&gt; a2) -&gt; a2 -&gt; a2
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">(Vertex a2, Vertex a2) -&gt; a2 -&gt; a2
+forall g. Graph g =&gt; (Vertex g, Vertex g) -&gt; g -&gt; g
+</span><a href="Butcher.Graph.html#addEdge"><span class="hs-identifier hs-var">addEdge</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">a1 -&gt; Vertex a1
+forall g. RootedGraph g =&gt; g -&gt; Vertex g
+</span><a href="Butcher.Graph.html#root"><span class="hs-identifier hs-var">root</span></a></span><span> </span><span class="annot"><span class="annottext">a1
+</span><a href="#local-6989586621679087403"><span class="hs-identifier hs-var">rg1</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Vertex a2
+</span><a href="#local-6989586621679087405"><span class="hs-identifier hs-var">v</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">a2
+</span><a href="#local-6989586621679087404"><span class="hs-identifier hs-var">g2</span></a></span><span>
+</span><span id="line-275"></span><span>
+</span><span id="line-276"></span><span class="annot"><span class="hs-comment">{- |
+  Get the first vertex of a list of vertices and remove it from the
+  list. This function is used to build graphs from a list of vertices
+  using the @State@ monad.
+
+  In practice, it is used to build graphs with unique vertices that
+  are collected from a list of vertices.
+
+Example:
+
+&gt;&gt;&gt; runState getVertex [1, 2, 3]
+(1,[2,3])
+&gt;&gt;&gt; evalState (do {v1 &lt;- getVertex; v2 &lt;- getVertex; return (integerGraph [v1, v2] [(v2, v1)])}) [1, 2, 3]
+IntegerGraph(V=[1,2], E=[(2,1)])
+-}</span></span><span>
+</span><span id="line-291"></span><span id="local-6989586621679087141"><span class="annot"><a href="Butcher.Graph.html#getVertex"><span class="hs-identifier hs-type">getVertex</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">State</span></span><span> </span><span class="hs-special">[</span><span class="annot"><a href="#local-6989586621679087141"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">]</span><span> </span><span class="annot"><a href="#local-6989586621679087141"><span class="hs-identifier hs-type">a</span></a></span></span><span>
+</span><span id="line-292"></span><span id="getVertex"><span class="annot"><span class="annottext">getVertex :: forall a. State [a] a
+</span><a href="Butcher.Graph.html#getVertex"><span class="hs-identifier hs-var hs-var">getVertex</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">([a] -&gt; (a, [a])) -&gt; StateT [a] Identity a
+forall a. ([a] -&gt; (a, [a])) -&gt; StateT [a] Identity a
+forall s (m :: * -&gt; *) a. MonadState s m =&gt; (s -&gt; (a, s)) -&gt; m a
+</span><span class="hs-identifier hs-var">state</span></span><span> </span><span class="annot"><span class="annottext">(([a] -&gt; (a, [a])) -&gt; StateT [a] Identity a)
+-&gt; ([a] -&gt; (a, [a])) -&gt; StateT [a] Identity a
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="hs-glyph">\</span><span id="local-6989586621679087415"><span class="annot"><span class="annottext">[a]
+</span><a href="#local-6989586621679087415"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">[a] -&gt; a
+forall a. HasCallStack =&gt; [a] -&gt; a
+</span><span class="hs-identifier hs-var">head</span></span><span> </span><span class="annot"><span class="annottext">[a]
+</span><a href="#local-6989586621679087415"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">[a] -&gt; [a]
+forall a. HasCallStack =&gt; [a] -&gt; [a]
+</span><span class="hs-identifier hs-var">tail</span></span><span> </span><span class="annot"><span class="annottext">[a]
+</span><a href="#local-6989586621679087415"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-293"></span></pre></body></html>

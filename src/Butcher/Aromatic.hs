@@ -24,19 +24,18 @@ module Butcher.Aromatic (
     unmark,
 ) where
 
+import Butcher.NonPlanar
+import Butcher.Planar
+import Butcher.Tree
 import Control.Monad.State (evalState, get, put)
+import Core.Algebra
+import Core.GradedList
+import Core.Output
+import Core.SyntacticTree
+import Core.VectorSpace
 import Data.Bifunctor (bimap, second)
 import qualified Data.List as L
 import qualified Data.MultiSet as MS
-
-import Core.GradedList
-import Core.Output
-import Core.VectorSpace
-import Core.Algebra
-import Core.SyntacticTree
-import Butcher.Tree
-import Butcher.Planar
-import Butcher.NonPlanar
 
 {- $setup
   Integer Forest From Brackets
@@ -398,6 +397,19 @@ instance
 
 -- ** Mark
 
+{- |
+  We note that a cycle is obtained as a trace of marked tree which
+  replaces the @Mark@ by an incoming edge from the root. A marked tree
+  is obtained from a decorated tree by adding a special @Mark@ decoration
+  to the set of decorations.
+
+  Let @a@ be the set of decorations of a tree, then @Marked a@ is the
+  same set with an additional element @Mark@.
+
+  See Fløystad, G., Manchon, D., & Munthe-Kaas, H. Z. (2021).
+    The universal pre-Lie–Rinehart algebras of aromatic trees.
+    https://doi.org/10.1007/978-3-030-78346-4_9
+-}
 data Marked a = Marked a | Mark deriving (Eq)
 
 instance (Show a) => Show (Marked a) where
@@ -418,6 +430,16 @@ instance (Texifiable a) => Texifiable (Marked a) where
     texify (Marked a) = texify a
     texify Mark = "x"
 
+{- |
+  We use @Markable@ typeclass to benefit from polymorphic functions
+  for marking and unmarking trees and related structures. Marking a
+  tree is the operation of replacing the decorations in @a@ by
+  the corresponding decorations in @Marked a@.
+
+  Note, that this does NOT add the special vertex @Mark@ to
+  the tree. In particular, if a tree has the special vertex, then it
+  cannot be unmarked.
+-}
 class Markable a where
     type Marked' a
 

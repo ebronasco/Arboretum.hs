@@ -38,6 +38,15 @@ module Butcher.Graph (
 ) where
 
 import Control.Monad.State
+import Core.GradedList (
+    Graded,
+    grading,
+ )
+import Core.VectorSpace (
+    Vector,
+    vectorFromList,
+    (*^),
+ )
 import qualified Data.List as L (
     init,
  )
@@ -49,15 +58,6 @@ import qualified Data.MultiSet as MS (
     singleton,
     toList,
     union,
- )
-import Core.GradedList (
-    Graded,
-    grading,
- )
-import Core.VectorSpace (
-    Vector,
-    vectorFromList,
-    (*^),
  )
 
 ----------------------------------------------------------------------
@@ -71,7 +71,6 @@ import Core.VectorSpace (
   the edge type @Edge g@ being an instance of the @GraphEdge@
   typeclass and the vertex type @Vertex g@ being the @EndPoint@ of
   @Edge g@.
-
 -}
 class Graph g where
     -- | The type of the vertices of the graph.
