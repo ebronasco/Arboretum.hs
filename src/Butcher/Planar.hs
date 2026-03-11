@@ -2,7 +2,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
-
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 {- |
@@ -53,6 +52,14 @@ import Core.VectorSpace
 
 {- $setup
 >>> :set -XLambdaCase
+>>> :set -XTypeFamilies
+
+>>> :{
+instance (Eq d, Graded d) => IsVector (PlanarTree d) where
+    type VectorScalar (PlanarTree d) = Integer
+    type VectorBasis (PlanarTree d) = PlanarTree d
+    vector = vector . (1 *^)
+:}
 
 >>> import Control.Monad.State
 >>> import Core.SyntacticTree
@@ -190,12 +197,13 @@ instance (Show d, Graded d) => Show (PlanarTree d) where
 instance (Show d, Graded d) => Texifiable (PlanarTree d) where
     texify = T.treeTexify
 
--- | Planar trees are vectors with integer coefficients.
+{- | Planar trees are vectors with integer coefficients.
 instance (Eq d, Graded d) => IsVector (PlanarTree d) where
     type VectorScalar (PlanarTree d) = Integer
     type VectorBasis (PlanarTree d) = PlanarTree d
 
     vector = vector . (1 *^)
+-}
 
 {- |
   Grading of a planar tree is the sum of gradings of the nodes.

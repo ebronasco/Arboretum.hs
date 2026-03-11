@@ -38,6 +38,15 @@ import qualified Data.List as L
 import qualified Data.MultiSet as MS
 
 {- $setup
+>>> :set -XTypeFamilies
+
+>>> :{
+instance (Eq d, Graded d) => IsVector (PlanarTree d) where
+    type VectorScalar (PlanarTree d) = Integer
+    type VectorBasis (PlanarTree d) = PlanarTree d
+    vector = vector . (1 *^)
+:}
+
   Integer Forest From Brackets
 >>> iffb str = fromBrackets str :: [PlanarTree Integer]
 

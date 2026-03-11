@@ -28,19 +28,28 @@ The reference documentation is found in **docs** directory. To read it open the 
 
 ### Examples
 
-| Structure | Example |
+To run the examples, open a termian in the root directory of the project and execute:
+
+```bash
+stack repl
+```
+to start the interactive environment, then load the desired example file using:
+
+```haskell
+:l examples/ExampleFileName.hs
+:main
+```
+to load the example file and run the `main` function, replacing `ExampleFileName` with the name of the example you want to run.
+
+| Example description | Example file |
 |---|---|
 | Concatenation–Deshuffle Hopf algebra | [`ConcatDeshuffle.hs`](examples/ConcatDeshuffle.hs) |
 | Shuffle–Deconcatenation Hopf algebra | [`ShuffleDeconcat.hs`](examples/ShuffleDeconcat.hs) |
 | Grossman–Larson Hopf algebra over planar forests | [`PlanarGrossmanLarson.hs`](examples/PlanarGrossmanLarson.hs) |
 | Connes–Kreimer Hopf algebra over planar forests | [`PlanarConnesKreimer.hs`](examples/PlanarConnesKreimer.hs) |
 | Cosubstitution of planar forests | [`Cosubstitution.hs`](examples/Cosubstitution.hs) |
-| Lie–Butcher series of the exact solution | [`LieButcherExact.hs`](examples/LieButcherExact.hs) |
 | Grossman–Larson Hopf algebra over non-planar forests | [`NonplanarGrossmanLarson.hs`](examples/NonplanarGrossmanLarson.hs) |
 | Connes-Kreimer Hopf algebra over non-planar forests | [`NonplanarConnesKreimer.hs`](examples/NonplanarConnesKreimer.hs) |
-| Butcher series of the exact solution | [`ButcherExact.hs`](examples/ButcherExact.hs) |
-| Butcher series of Runge-Kutta methods | [`RungeKutta.hs`](examples/RungeKutta.hs) |
-| Divergence, grafting, Grossman-Larson, and substitution of aromatic forests | [`AromaticForests.hs`](examples/AromaticForests.hs) |
 | Construction and grafting of arbitrary graphs | [`Graph.hs`](examples/Graph.hs) |
 
 

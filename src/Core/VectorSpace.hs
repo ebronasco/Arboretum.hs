@@ -20,6 +20,8 @@ the vector spaces of graphs.
 -}
 module Core.VectorSpace (
     ScalarProduct,
+    scalar,
+    basisElement,
     pattern (:*^),
     (*^),
     scaleSP,
@@ -40,9 +42,13 @@ module Core.VectorSpace (
     bilinear,
     bilinearGraded,
     bilinearNonDec,
+    linear2,
+    linear2Graded,
+    linear2NonDec,
     renormalize,
     scale,
     rescale,
+    changeScalars,
     functional,
     lengthV,
     takeWhileV,
@@ -112,6 +118,13 @@ instance (Num k, Eq k, Eq a, Graded a, Arbitrary k, Arbitrary a) => Arbitrary (V
 instance IsVector Char where
     type VectorScalar Char = Integer
     type VectorBasis Char = Char
+    vector = vector . (1 *^)
+:}
+
+>>> :{
+instance IsVector Integer where
+    type VectorScalar Integer = Integer
+    type VectorBasis Integer = Integer
     vector = vector . (1 *^)
 :}
 
@@ -1012,6 +1025,127 @@ bilinearNonDec f ps1 ps2 =
     wrapRight = (1 *^) . ([],) . (: [])
 
 {- |
+  Takes a tuple of two functions and extends it to a linear
+  map.
+
+Examples:
+
+>>> f1 a = 1 *^ (a ++ "1")
+>>> f2 a = 1 *^ (a ++ "2")
+>>> v = vector $ 1 *^ ("x", "x") +: 1 *^ ("y", "y") +: 1 *^ ("z", "z") +: 1 *^ ("w", "w") +: Zero
+>>> linear2 (f1, f2) v
+(1 *^ ("x1","x2") + 1 *^ ("y1","y2") + 1 *^ ("z1","z2") + 1 *^ ("w1","w2"))_4
+-}
+linear2
+    :: ( IsVector v1
+       , IsVector v2
+       , IsVector c
+       , IsVector d
+       , Eq a
+       , Eq b
+       , Eq c
+       , Eq d
+       , Graded a
+       , Graded b
+       , Graded c
+       , Graded d
+       , VectorScalar c ~ k
+       , VectorScalar d ~ k
+       , VectorScalar v1 ~ k
+       , VectorScalar v2 ~ k
+       , VectorBasis v1 ~ c
+       , VectorBasis v2 ~ d
+       )
+    => (a -> v1, b -> v2)
+    -> Vector k (a, b)
+    -> Vector k (c, d)
+linear2 (f1, f2) = linear perTerm
+  where
+    perTerm (x, y) = bilinear (,) (vector $ f1 x) (vector $ f2 y)
+
+{- |
+  Takes a tuple of two functions and extends it to a linear
+  map.
+
+!!! The functions must preserve the grading.
+
+Examples:
+
+>>> f1 a = 1 *^ (a + 1) :: ScalarProduct Integer Integer
+>>> f2 a = 1 *^ (a + 2) :: ScalarProduct Integer Integer
+>>> v = vector $ 1 *^ (1, 1) +: 1 *^ (2, 2) +: 1 *^ (3, 3) +: 1 *^ (4, 4) +: Zero
+>>> linear2Graded (f1, f2) v
+(1 *^ (2,3) + 1 *^ (3,4) + 1 *^ (4,5) + 1 *^ (5,6))_2
+-}
+linear2Graded
+    :: ( IsVector v1
+       , IsVector v2
+       , IsVector c
+       , IsVector d
+       , Eq a
+       , Eq b
+       , Eq c
+       , Eq d
+       , Graded a
+       , Graded b
+       , Graded c
+       , Graded d
+       , VectorScalar v1 ~ k
+       , VectorScalar v2 ~ k
+       , VectorScalar c ~ k
+       , VectorScalar d ~ k
+       , VectorBasis v1 ~ c
+       , VectorBasis v2 ~ d
+       )
+    => (a -> v1, b -> v2)
+    -> Vector k (a, b)
+    -> Vector k (c, d)
+linear2Graded (f1, f2) = linearGraded perTerm
+  where
+    perTerm (x, y) = bilinearGraded (,) (vector $ f1 x) (vector $ f2 y)
+
+{- |
+  Takes a tuple of two functions and extends it to a linear
+  map.
+
+!!! The functions must be nnon-decreasing with respect to the grading.
+
+Examples:
+
+>>> f1 a = 1 *^ (a + 1) :: ScalarProduct Integer Integer
+>>> f2 a = 1 *^ (a + 2) :: ScalarProduct Integer Integer
+>>> v = vector $ 1 *^ (1, 1) +: 1 *^ (2, 2) +: 1 *^ (3, 3) +: 1 *^ (4, 4) +: Zero
+>>> linear2NonDec (f1, f2) v
+(1 *^ (2,3) + 1 *^ (3,4) + 1 *^ (4,5) + 1 *^ (5,6))_2
+-}
+linear2NonDec
+    :: ( IsVector v1
+       , IsVector v2
+       , IsVector c
+       , IsVector d
+       , Eq a
+       , Eq b
+       , Eq c
+       , Eq d
+       , Graded a
+       , Graded b
+       , Graded c
+       , Graded d
+       , VectorScalar v1 ~ k
+       , VectorScalar v2 ~ k
+       , VectorScalar c ~ k
+       , VectorScalar d ~ k
+       , VectorBasis v1 ~ c
+       , VectorBasis v2 ~ d
+       )
+    => (a -> v1, b -> v2)
+    -> Vector k (a, b)
+    -> Vector k (c, d)
+linear2NonDec (f1, f2) = linearNonDec perTerm
+  where
+    perTerm (x, y) = bilinearNonDec (,) (vector $ f1 x) (vector $ f2 y)
+
+{- |
   Change the coefficients in a vector using a function @f@ that takes
   the scalar and the basis element of a term and returns a new scalar.
 
@@ -1056,16 +1190,36 @@ scale
 scale s = renormalize (\s0 _ -> s * s0)
 
 {- |
+  Scale a vector by a scalar.
+
+Examples:
+
+>>> v = vectorFromList [1 *^ "x", 2 *^ "xy", 3 *^ "xyz"]
+>>> rescale length v
+(1 *^ "x")_1 + (4 *^ "xy")_2 + (9 *^ "xyz")_3
+-}
+rescale
+    :: ( Num k
+       , Eq k
+       , Eq a
+       , Graded a
+       )
+    => (a -> k)
+    -> Vector k a
+    -> Vector k a
+rescale f = renormalize (\s0 a -> s0 * f a)
+
+{- |
   Change the scalar of a vector.
 
 Examples:
 
 >>> f s = s + 1
 >>> v = vector $ (1 *^ 'x') +: (2 *^ 'y') +: (3 *^ 'z') +: (4 *^ 'w') +: Zero
->>> rescale f v
+>>> changeScalars f v
 (2 *^ 'x' + 3 *^ 'y' + 4 *^ 'z' + 5 *^ 'w')_1
 -}
-rescale
+changeScalars
     :: ( Num k1
        , Eq k1
        , Num k2
@@ -1076,7 +1230,7 @@ rescale
     => (k1 -> k2)
     -> Vector k1 a
     -> Vector k2 a
-rescale f = renormalize (\s _ -> f s)
+changeScalars f = renormalize (\s _ -> f s)
 
 {- |
   Extends a function @f@ that maps basis elements to scalars to a

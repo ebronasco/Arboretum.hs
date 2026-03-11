@@ -19,7 +19,9 @@ module Core.Output (
     texifyDebug,
     texifyID,
     display,
+    displayShow,
     displayDebug,
+    waitForEnter,
 ) where
 
 import Core.GradedList (
@@ -233,10 +235,11 @@ instance
     where
     texifyID _ = "PowSer"
     texify v =
-        intercalate " + " $
-            map texify $
-                filter (/= Zero) $
-                    toListV v
+        if null vlist
+            then "0"
+            else intercalate " + " $ map texify vlist
+      where
+        vlist = filter (/= Zero) $ toListV v
     texifyDebug i j v =
         intercalate " + " $
             map (texifyD i j) $
@@ -310,6 +313,13 @@ display
     -> IO ()
 display v = printPdf $ " $ " ++ texify (vector v) ++ " $ "
 
+-- | Display an expression using @show@ in a pdf viewer.
+displayShow
+    :: (Show v)
+    => v
+    -> IO ()
+displayShow v = printPdf $ " $ " ++ show v ++ " $ "
+
 {- | Generate a TeX string with debug information from a type and
 display it in a pdf viewer.
 -}
@@ -325,3 +335,13 @@ displayDebug
 displayDebug startLevel endLevel v =
     printPdf $
         " $ " ++ texifyDebug startLevel endLevel (vector v) ++ " $ "
+
+{- |
+  Simple IO to wait for user confirmation before displaying the next
+  output. Useful for debugging
+-}
+waitForEnter :: IO ()
+waitForEnter = do
+    putStrLn "Press Enter to continue..."
+    _ <- getLine
+    return ()

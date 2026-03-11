@@ -1,4 +1,5 @@
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -17,6 +18,8 @@ module Core.Algebra (
     CanDeshuffle (..),
     shuffle,
     deconcatenate,
+    antipode,
+    antipodeWith,
     morphism,
     morphismGraded,
     morphismNonDec,
@@ -149,6 +152,7 @@ morphismNonDec f = linearNonDec $ product . fmap (vector . f)
 
 ---------------------------------------------------------------------
 
+-- | @a@ is assumed to be the basis element.
 class (IsVector a) => CanDeshuffle a where
     deshuffle :: a -> Vector (VectorScalar a) (a, a)
 
@@ -202,3 +206,49 @@ deconcatenate
     => [v] -> Vector (VectorScalar v) ([v], [v])
 deconcatenate [] = vector ([], [])
 deconcatenate l = vectorFromList $ map (1 *^) $ zip (inits l) (tails l)
+
+{- |
+  Antipode of the Concatenate-Deshuffle and Shuffle-Deconcatenate Hopf algebras.
+
+Examples:
+
+>>> a = "xyz"
+>>> antipode a
+(-1 *^ "zyx")_3
+-}
+antipode
+    :: ( IsVector v
+       , Graded v
+       )
+    => [v] -> Vector (VectorScalar v) [v]
+antipode v = vector $ fromInteger (-1) ^ length v *^ reverse v
+
+{- |
+  Antipode of a combinatorial HOpf algebra defined by a unit, a product, and a
+  coproduct. It implements the recursive formula for an antipode of a connected
+  graded bialgebra. It is highly inefficient and should be used only for
+  exploratory purposes.
+
+Examples:
+
+>>> a = "xyz"
+>>> concat x y = vector $ 1 *^ (x ++ y)
+>>> antipodeWith [] concat deshuffle "xyz"
+(-1 *^ "zyx")_3
+-}
+antipodeWith
+    :: (Graded a, IsVector a, VectorBasis a ~ a)
+    => a
+    -> (a -> a -> Vector (VectorScalar a) a)
+    -> (a -> Vector (VectorScalar a) (a, a))
+    -> a
+    -> Vector (VectorScalar a) a
+antipodeWith unit prod coprod b =
+    if unit == b
+        then vector unit
+        else
+            scale (fromInteger (-1)) $
+                linear (uncurry prod) $
+                    linear2 (antipodeWith unit prod coprod, id) $
+                        filterV ((unit /=) . snd . basisElement) $
+                            coprod b

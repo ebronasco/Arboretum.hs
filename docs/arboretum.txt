@@ -96,6 +96,8 @@ module Core.VectorSpace
 -- | A scalar product is defined to be a pair of a scalar (<tt>Num</tt>)
 --   and a basis element.
 data ScalarProduct k a
+scalar :: ScalarProduct k a -> k
+basisElement :: ScalarProduct k a -> a
 pattern (:*^) :: k -> a -> ScalarProduct k a
 (*^) :: Num k => k -> a -> ScalarProduct k a
 infix 7 *^
@@ -327,6 +329,58 @@ bilinearGraded :: (IsVector v, Eq a, Eq b, Graded a, Graded b, VectorScalar v ~ 
 --   </pre>
 bilinearNonDec :: (IsVector v, Eq a, Eq b, Graded a, Graded b, VectorScalar v ~ k, VectorBasis v ~ c) => (a -> b -> v) -> Vector k a -> Vector k b -> Vector k c
 
+-- | Takes a tuple of two functions and extends it to a linear map.
+--   
+--   Examples:
+--   
+--   <pre>
+--   &gt;&gt;&gt; f1 a = 1 *^ (a ++ "1")
+--   
+--   &gt;&gt;&gt; f2 a = 1 *^ (a ++ "2")
+--   
+--   &gt;&gt;&gt; v = vector $ 1 *^ ("x", "x") +: 1 *^ ("y", "y") +: 1 *^ ("z", "z") +: 1 *^ ("w", "w") +: Zero
+--   
+--   &gt;&gt;&gt; linear2 (f1, f2) v
+--   (1 *^ ("x1","x2") + 1 *^ ("y1","y2") + 1 *^ ("z1","z2") + 1 *^ ("w1","w2"))_4
+--   </pre>
+linear2 :: (IsVector v1, IsVector v2, IsVector c, IsVector d, Eq a, Eq b, Eq c, Eq d, Graded a, Graded b, Graded c, Graded d, VectorScalar c ~ k, VectorScalar d ~ k, VectorScalar v1 ~ k, VectorScalar v2 ~ k, VectorBasis v1 ~ c, VectorBasis v2 ~ d) => (a -> v1, b -> v2) -> Vector k (a, b) -> Vector k (c, d)
+
+-- | Takes a tuple of two functions and extends it to a linear map.
+--   
+--   !!! The functions must preserve the grading.
+--   
+--   Examples:
+--   
+--   <pre>
+--   &gt;&gt;&gt; f1 a = 1 *^ (a + 1) :: ScalarProduct Integer Integer
+--   
+--   &gt;&gt;&gt; f2 a = 1 *^ (a + 2) :: ScalarProduct Integer Integer
+--   
+--   &gt;&gt;&gt; v = vector $ 1 *^ (1, 1) +: 1 *^ (2, 2) +: 1 *^ (3, 3) +: 1 *^ (4, 4) +: Zero
+--   
+--   &gt;&gt;&gt; linear2Graded (f1, f2) v
+--   (1 *^ (2,3) + 1 *^ (3,4) + 1 *^ (4,5) + 1 *^ (5,6))_2
+--   </pre>
+linear2Graded :: (IsVector v1, IsVector v2, IsVector c, IsVector d, Eq a, Eq b, Eq c, Eq d, Graded a, Graded b, Graded c, Graded d, VectorScalar v1 ~ k, VectorScalar v2 ~ k, VectorScalar c ~ k, VectorScalar d ~ k, VectorBasis v1 ~ c, VectorBasis v2 ~ d) => (a -> v1, b -> v2) -> Vector k (a, b) -> Vector k (c, d)
+
+-- | Takes a tuple of two functions and extends it to a linear map.
+--   
+--   !!! The functions must be nnon-decreasing with respect to the grading.
+--   
+--   Examples:
+--   
+--   <pre>
+--   &gt;&gt;&gt; f1 a = 1 *^ (a + 1) :: ScalarProduct Integer Integer
+--   
+--   &gt;&gt;&gt; f2 a = 1 *^ (a + 2) :: ScalarProduct Integer Integer
+--   
+--   &gt;&gt;&gt; v = vector $ 1 *^ (1, 1) +: 1 *^ (2, 2) +: 1 *^ (3, 3) +: 1 *^ (4, 4) +: Zero
+--   
+--   &gt;&gt;&gt; linear2NonDec (f1, f2) v
+--   (1 *^ (2,3) + 1 *^ (3,4) + 1 *^ (4,5) + 1 *^ (5,6))_2
+--   </pre>
+linear2NonDec :: (IsVector v1, IsVector v2, IsVector c, IsVector d, Eq a, Eq b, Eq c, Eq d, Graded a, Graded b, Graded c, Graded d, VectorScalar v1 ~ k, VectorScalar v2 ~ k, VectorScalar c ~ k, VectorScalar d ~ k, VectorBasis v1 ~ c, VectorBasis v2 ~ d) => (a -> v1, b -> v2) -> Vector k (a, b) -> Vector k (c, d)
+
 -- | Change the coefficients in a vector using a function <tt>f</tt> that
 --   takes the scalar and the basis element of a term and returns a new
 --   scalar.
@@ -355,6 +409,18 @@ renormalize :: (Num k2, Eq k2, Eq a, Graded a) => (k1 -> a -> k2) -> Vector k1 a
 --   </pre>
 scale :: (Num k, Eq k, Eq a, Graded a) => k -> Vector k a -> Vector k a
 
+-- | Scale a vector by a scalar.
+--   
+--   Examples:
+--   
+--   <pre>
+--   &gt;&gt;&gt; v = vectorFromList [1 *^ "x", 2 *^ "xy", 3 *^ "xyz"]
+--   
+--   &gt;&gt;&gt; rescale length v
+--   (1 *^ "x")_1 + (4 *^ "xy")_2 + (9 *^ "xyz")_3
+--   </pre>
+rescale :: (Num k, Eq k, Eq a, Graded a) => (a -> k) -> Vector k a -> Vector k a
+
 -- | Change the scalar of a vector.
 --   
 --   Examples:
@@ -364,10 +430,10 @@ scale :: (Num k, Eq k, Eq a, Graded a) => k -> Vector k a -> Vector k a
 --   
 --   &gt;&gt;&gt; v = vector $ (1 *^ 'x') +: (2 *^ 'y') +: (3 *^ 'z') +: (4 *^ 'w') +: Zero
 --   
---   &gt;&gt;&gt; rescale f v
+--   &gt;&gt;&gt; changeScalars f v
 --   (2 *^ 'x' + 3 *^ 'y' + 4 *^ 'z' + 5 *^ 'w')_1
 --   </pre>
-rescale :: (Num k1, Eq k1, Num k2, Eq k2, Eq a, Graded a) => (k1 -> k2) -> Vector k1 a -> Vector k2 a
+changeScalars :: (Num k1, Eq k1, Num k2, Eq k2, Eq a, Graded a) => (k1 -> k2) -> Vector k1 a -> Vector k2 a
 
 -- | Extends a function <tt>f</tt> that maps basis elements to scalars to a
 --   linear functional.
@@ -665,9 +731,16 @@ texifyID :: Texifiable a => a -> String
 -- | Generate a TeX string from a type and display it in a pdf viewer.
 display :: (IsVector v, Texifiable (VectorScalar v), Texifiable (VectorBasis v)) => v -> IO ()
 
+-- | Display an expression using <tt>show</tt> in a pdf viewer.
+displayShow :: Show v => v -> IO ()
+
 -- | Generate a TeX string with debug information from a type and display
 --   it in a pdf viewer.
 displayDebug :: (IsVector v, Texifiable (VectorScalar v), Texifiable (VectorBasis v)) => Integer -> Integer -> v -> IO ()
+
+-- | Simple IO to wait for user confirmation before displaying the next
+--   output. Useful for debugging
+waitForEnter :: IO ()
 instance Core.Output.Texifiable GHC.Types.Char
 instance Core.Output.Texifiable GHC.Num.Integer.Integer
 instance Core.Output.Texifiable GHC.Types.Int
@@ -754,6 +827,8 @@ instance GHC.Classes.Eq a => GHC.Classes.Eq (Core.SyntacticTree.Operation a)
 
 
 module Core.Algebra
+
+-- | <tt>a</tt> is assumed to be the basis element.
 class (IsVector a) => CanDeshuffle a
 deshuffle :: CanDeshuffle a => a -> Vector (VectorScalar a) (a, a)
 
@@ -778,6 +853,36 @@ shuffle :: (IsVector v, Graded v) => [v] -> [v] -> Vector (VectorScalar v) [v]
 --   (1 *^ ("","xyz") + 1 *^ ("x","yz") + 1 *^ ("xy","z") + 1 *^ ("xyz",""))_3
 --   </pre>
 deconcatenate :: (IsVector v, Graded v) => [v] -> Vector (VectorScalar v) ([v], [v])
+
+-- | Antipode of the Concatenate-Deshuffle and Shuffle-Deconcatenate Hopf
+--   algebras.
+--   
+--   Examples:
+--   
+--   <pre>
+--   &gt;&gt;&gt; a = "xyz"
+--   
+--   &gt;&gt;&gt; antipode a
+--   (-1 *^ "zyx")_3
+--   </pre>
+antipode :: (IsVector v, Graded v) => [v] -> Vector (VectorScalar v) [v]
+
+-- | Antipode of a combinatorial HOpf algebra defined by a unit, a product,
+--   and a coproduct. It implements the recursive formula for an antipode
+--   of a connected graded bialgebra. It is highly inefficient and should
+--   be used only for exploratory purposes.
+--   
+--   Examples:
+--   
+--   <pre>
+--   &gt;&gt;&gt; a = "xyz"
+--   
+--   &gt;&gt;&gt; concat x y = vector $ 1 *^ (x ++ y)
+--   
+--   &gt;&gt;&gt; antipodeWith [] concat deshuffle "xyz"
+--   (-1 *^ "zyx")_3
+--   </pre>
+antipodeWith :: (Graded a, IsVector a, VectorBasis a ~ a) => a -> (a -> a -> Vector (VectorScalar a) a) -> (a -> Vector (VectorScalar a) (a, a)) -> a -> Vector (VectorScalar a) a
 
 -- | Take a function <tt>f</tt> that maps basis elements to basis elements
 --   and extends it to a morphism of the algebra.
@@ -1143,7 +1248,6 @@ instance Core.GradedList.Graded d => Butcher.Tree.IsTree (Butcher.Planar.PlanarT
 instance Core.GradedList.Graded d => Butcher.Tree.HasBracketNotation (Butcher.Planar.PlanarTree d)
 instance (GHC.Show.Show d, Core.GradedList.Graded d) => GHC.Show.Show (Butcher.Planar.PlanarTree d)
 instance (GHC.Show.Show d, Core.GradedList.Graded d) => Core.Output.Texifiable (Butcher.Planar.PlanarTree d)
-instance (GHC.Classes.Eq d, Core.GradedList.Graded d) => Core.VectorSpace.IsVector (Butcher.Planar.PlanarTree d)
 instance Core.GradedList.Graded d => Core.GradedList.Graded (Butcher.Planar.PlanarTree d)
 instance (Butcher.Tree.IsTree t, Core.VectorSpace.IsVector t) => Butcher.Tree.CanConnesKreimer [t]
 
@@ -1173,7 +1277,6 @@ instance (GHC.Classes.Ord d, Core.GradedList.Graded d) => Butcher.Tree.IsTree (B
 instance (GHC.Classes.Ord d, Core.GradedList.Graded d) => Butcher.Tree.HasBracketNotation (Butcher.NonPlanar.Tree d)
 instance (GHC.Show.Show d, GHC.Classes.Ord d, Core.GradedList.Graded d) => Core.Output.Texifiable (Butcher.NonPlanar.Tree d)
 instance (GHC.Show.Show d, GHC.Classes.Ord d, Core.GradedList.Graded d) => GHC.Show.Show (Butcher.NonPlanar.Tree d)
-instance (GHC.Classes.Eq d, GHC.Classes.Ord d, Core.GradedList.Graded d) => Core.VectorSpace.IsVector (Butcher.NonPlanar.Tree d)
 instance GHC.Classes.Ord d => GHC.Classes.Ord (Butcher.NonPlanar.Tree d)
 instance (GHC.Classes.Ord t, Core.VectorSpace.IsVector t, Butcher.Tree.IsTree t) => Butcher.Tree.CanConnesKreimer (Data.MultiSet.MultiSet t)
 

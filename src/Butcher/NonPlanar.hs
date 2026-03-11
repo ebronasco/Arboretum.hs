@@ -3,7 +3,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
-
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 {- |
@@ -83,11 +82,13 @@ instance (Show d, Ord d, Graded d) => Texifiable (Tree d) where
 instance (Show d, Ord d, Graded d) => Show (Tree d) where
     show = toBrackets
 
+{-
 instance (Eq d, Ord d, Graded d) => IsVector (Tree d) where
     type VectorScalar (Tree d) = Integer
     type VectorBasis (Tree d) = Tree d
 
     vector = vector . (1 *^)
+-}
 
 {- |
   Order on decorations induces an order on trees where we first
