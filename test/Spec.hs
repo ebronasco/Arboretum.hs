@@ -4,10 +4,14 @@ main :: IO ()
 main =
     doctest
         [ "-isrc"
-        , "src/Symbolics.hs"
-        , "src/GradedList.hs"
-        , "src/RootedTree.hs"
-        , "src/SyntacticTree.hs"
-        , "src/AromaticTree.hs"
-        , "src/Graph.hs"
+        , "src/Core/Algebra.hs"
+        , "src/Core/VectorSpace.hs"
+        , "src/Core/GradedList.hs"
+        , "src/Core/SyntacticTree.hs"
+        , "src/Butcher/NonPlanar.hs"
+        , "src/Butcher/Planar.hs"
+        , "src/Butcher/Aromatic.hs"
+        , "src/Butcher/Graph.hs"
+        , "src/Butcher/Series.hs"
+        , "src/Butcher/Tree.hs"
         ]

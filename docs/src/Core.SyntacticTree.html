@@ -1,0 +1,643 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span class="hs-pragma">{-# LANGUAGE FlexibleContexts #-}</span><span>
+</span><span id="line-2"></span><span class="hs-pragma">{-# LANGUAGE FlexibleInstances #-}</span><span>
+</span><span id="line-3"></span><span class="hs-pragma">{-# LANGUAGE TypeFamilies #-}</span><span>
+</span><span id="line-4"></span><span class="hs-pragma">{-# LANGUAGE TypeOperators #-}</span><span>
+</span><span id="line-5"></span><span class="hs-pragma">{-# LANGUAGE UndecidableInstances #-}</span><span>
+</span><span id="line-6"></span><span>
+</span><span id="line-7"></span><span class="annot"><span class="hs-comment">{- |
+Module      : SyntacticTree
+Description : Syntactic trees and their compositions are used to implement automorphisms and are related to the concept of operads.
+Copyright   : (c) University of Geneva, 2024
+License     : BSD-3
+Maintainer  : Eugen Bronasco (ebronasco@gmail.com)
+Stability   : experimental
+
+Implementation of syntactic trees is used to represent elements of an
+algebra as expressions involving generators and operations. This
+allows us to use syntactic trees to define automorphisms and, if
+extended, homomorphisms.
+-}</span></span><span>
+</span><span id="line-20"></span><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">Core.SyntacticTree</span><span> </span><span class="hs-special">(</span><span>
+</span><span id="line-21"></span><span>    </span><span class="annot"><a href="Core.SyntacticTree.html#Operation"><span class="hs-identifier">Operation</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span>
+</span><span id="line-22"></span><span>    </span><span class="annot"><a href="Core.SyntacticTree.html#SyntacticTree"><span class="hs-identifier">SyntacticTree</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span>
+</span><span id="line-23"></span><span>    </span><span class="annot"><a href="Core.SyntacticTree.html#compose"><span class="hs-identifier">compose</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-24"></span><span>    </span><span class="annot"><a href="Core.SyntacticTree.html#symmetricCompose"><span class="hs-identifier">symmetricCompose</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-25"></span><span>    </span><span class="annot"><a href="Core.SyntacticTree.html#HasSyntacticTree"><span class="hs-identifier">HasSyntacticTree</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span>
+</span><span id="line-26"></span><span>    </span><span class="annot"><a href="Core.SyntacticTree.html#eval"><span class="hs-identifier">eval</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-27"></span><span>    </span><span class="annot"><a href="Core.SyntacticTree.html#substitute"><span class="hs-identifier">substitute</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-28"></span><span class="hs-special">)</span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-29"></span><span>
+</span><span id="line-30"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Control.Monad.State</span></span><span>
+</span><span id="line-31"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><a href="Core.GradedList.html"><span class="hs-identifier">Core.GradedList</span></a></span><span>
+</span><span id="line-32"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><a href="Core.Output.html"><span class="hs-identifier">Core.Output</span></a></span><span>
+</span><span id="line-33"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><a href="Core.VectorSpace.html"><span class="hs-identifier">Core.VectorSpace</span></a></span><span>
+</span><span id="line-34"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.List</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">intercalate</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">permutations</span></span><span class="hs-special">)</span><span>
+</span><span id="line-35"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.Maybe</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">fromJust</span></span><span class="hs-special">)</span><span>
+</span><span id="line-36"></span><span>
+</span><span id="line-37"></span><span class="annot"><span class="hs-comment">{- |
+  An operation is a function that takes a list of operands and
+  returns a vector. The value of @arity@ is the number of operands
+  accepted by the operation. The @func@ performs the actual
+  operation. The @tex@ is the LaTeX representation of the operation.
+
+!!! The name of the operation must be unique.
+-}</span></span><span>
+</span><span id="line-45"></span><span class="hs-keyword">data</span><span> </span><span id="Operation"><span class="annot"><a href="Core.SyntacticTree.html#Operation"><span class="hs-identifier hs-var">Operation</span></a></span></span><span> </span><span id="local-6989586621679085819"><span class="annot"><a href="#local-6989586621679085819"><span class="hs-identifier hs-type">a</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span id="Op"><span class="annot"><a href="Core.SyntacticTree.html#Op"><span class="hs-identifier hs-var">Op</span></a></span></span><span>
+</span><span id="line-46"></span><span>    </span><span class="hs-special">{</span><span> </span><span id="name"><span class="annot"><span class="annottext">forall a. Operation a -&gt; String
+</span><a href="Core.SyntacticTree.html#name"><span class="hs-identifier hs-var hs-var">name</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">String</span></span><span>
+</span><span id="line-47"></span><span>    </span><span class="hs-special">,</span><span> </span><span id="tex"><span class="annot"><span class="annottext">forall a. Operation a -&gt; String
+</span><a href="Core.SyntacticTree.html#tex"><span class="hs-identifier hs-var hs-var">tex</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">String</span></span><span>
+</span><span id="line-48"></span><span>    </span><span class="hs-special">,</span><span> </span><span id="arity"><span class="annot"><span class="annottext">forall a. Operation a -&gt; Int
+</span><a href="Core.SyntacticTree.html#arity"><span class="hs-identifier hs-var hs-var">arity</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Int</span></span><span>
+</span><span id="line-49"></span><span>    </span><span class="hs-special">,</span><span> </span><span id="func"><span class="annot"><span class="annottext">forall a.
+Operation a -&gt; [a] -&gt; Vector (VectorScalar a) (VectorBasis a)
+</span><a href="Core.SyntacticTree.html#func"><span class="hs-identifier hs-var hs-var">func</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">[</span><span class="annot"><a href="#local-6989586621679085819"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">]</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Core.VectorSpace.html#Vector"><span class="hs-identifier hs-type">Vector</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Core.VectorSpace.html#VectorScalar"><span class="hs-identifier hs-type">VectorScalar</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679085819"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Core.VectorSpace.html#VectorBasis"><span class="hs-identifier hs-type">VectorBasis</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679085819"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-50"></span><span>    </span><span class="hs-special">}</span><span>
+</span><span id="line-51"></span><span>
+</span><span id="line-52"></span><span class="annot"><span class="hs-comment">-- | Two operations are equal if their names are equal.</span></span><span>
+</span><span id="line-53"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679085830"><span id="local-6989586621679085943"><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Eq</span></span><span> </span><span class="annot"><a href="#local-6989586621679085830"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Eq</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Core.SyntacticTree.html#Operation"><span class="hs-identifier hs-type">Operation</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679085830"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-54"></span><span>    </span><span class="hs-special">(</span><span class="annot"><a href="Core.SyntacticTree.html#Op"><span class="hs-identifier hs-type">Op</span></a></span><span> </span><span id="local-6989586621679085951"><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679085951"><span class="hs-identifier hs-var">n1</span></a></span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-identifier">_</span></span><span> </span><span class="annot"><span class="annottext">Int
+</span><span class="hs-identifier">_</span></span><span> </span><span class="annot"><span class="annottext">[a] -&gt; Vector (VectorScalar a) (VectorBasis a)
+</span><span class="hs-identifier">_</span></span><span class="hs-special">)</span><span> </span><span id="local-6989586621679085952"><span class="annot"><span class="annottext">== :: Operation a -&gt; Operation a -&gt; Bool
+</span><span class="hs-operator hs-var hs-var hs-var hs-var">==</span></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Core.SyntacticTree.html#Op"><span class="hs-identifier hs-type">Op</span></a></span><span> </span><span id="local-6989586621679085953"><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679085953"><span class="hs-identifier hs-var">n2</span></a></span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-identifier">_</span></span><span> </span><span class="annot"><span class="annottext">Int
+</span><span class="hs-identifier">_</span></span><span> </span><span class="annot"><span class="annottext">[a] -&gt; Vector (VectorScalar a) (VectorBasis a)
+</span><span class="hs-identifier">_</span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679085951"><span class="hs-identifier hs-var">n1</span></a></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">==</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679085953"><span class="hs-identifier hs-var">n2</span></a></span><span>
+</span><span id="line-55"></span><span>
+</span><span id="line-56"></span><span class="annot"><span class="hs-comment">{- | Syntactic tree is a tree with operations at the nodes and
+operands at the leaves.
+-}</span></span><span>
+</span><span id="line-59"></span><span class="hs-keyword">data</span><span> </span><span id="SyntacticTree"><span class="annot"><a href="Core.SyntacticTree.html#SyntacticTree"><span class="hs-identifier hs-var">SyntacticTree</span></a></span></span><span> </span><span id="local-6989586621679085893"><span class="annot"><a href="#local-6989586621679085893"><span class="hs-identifier hs-type">a</span></a></span></span><span>
+</span><span id="line-60"></span><span>    </span><span class="hs-glyph">=</span><span> </span><span id="Node"><span class="annot"><a href="Core.SyntacticTree.html#Node"><span class="hs-identifier hs-var">Node</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Core.SyntacticTree.html#Operation"><span class="hs-identifier hs-type">Operation</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679085893"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">[</span><span class="annot"><a href="Core.SyntacticTree.html#SyntacticTree"><span class="hs-identifier hs-type">SyntacticTree</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679085893"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-61"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span id="Leaf"><span class="annot"><a href="Core.SyntacticTree.html#Leaf"><span class="hs-identifier hs-var">Leaf</span></a></span></span><span> </span><span class="annot"><a href="#local-6989586621679085893"><span class="hs-identifier hs-type">a</span></a></span><span>
+</span><span id="line-62"></span><span>    </span><span class="hs-keyword">deriving</span><span> </span><span class="hs-special">(</span><span id="local-6989586621679085958"><span id="local-6989586621679085964"><span class="annot"><span class="annottext">SyntacticTree a -&gt; SyntacticTree a -&gt; Bool
+(SyntacticTree a -&gt; SyntacticTree a -&gt; Bool)
+-&gt; (SyntacticTree a -&gt; SyntacticTree a -&gt; Bool)
+-&gt; Eq (SyntacticTree a)
+forall a. Eq a =&gt; SyntacticTree a -&gt; SyntacticTree a -&gt; Bool
+forall a. (a -&gt; a -&gt; Bool) -&gt; (a -&gt; a -&gt; Bool) -&gt; Eq a
+$c== :: forall a. Eq a =&gt; SyntacticTree a -&gt; SyntacticTree a -&gt; Bool
+== :: SyntacticTree a -&gt; SyntacticTree a -&gt; Bool
+$c/= :: forall a. Eq a =&gt; SyntacticTree a -&gt; SyntacticTree a -&gt; Bool
+/= :: SyntacticTree a -&gt; SyntacticTree a -&gt; Bool
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var">Eq</span></span></span></span><span class="hs-special">)</span><span>
+</span><span id="line-63"></span><span>
+</span><span id="line-64"></span><span class="annot"><span class="hs-comment">-- | Grading is the sum of gradings of the operands.</span></span><span>
+</span><span id="line-65"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679085838"><span class="hs-special">(</span><span class="annot"><a href="Core.GradedList.html#Graded"><span class="hs-identifier hs-type">Graded</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679085838"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="Core.GradedList.html#Graded"><span class="hs-identifier hs-type">Graded</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Core.SyntacticTree.html#SyntacticTree"><span class="hs-identifier hs-type">SyntacticTree</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679085838"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-66"></span><span>    </span><span id="local-6989586621679085977"><span class="annot"><span class="annottext">grading :: SyntacticTree a -&gt; Integer
+</span><a href="#local-6989586621679085977"><span class="hs-identifier hs-var hs-var hs-var hs-var">grading</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Core.SyntacticTree.html#Leaf"><span class="hs-identifier hs-type">Leaf</span></a></span><span> </span><span id="local-6989586621679085979"><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679085979"><span class="hs-identifier hs-var">a</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">a -&gt; Integer
+forall t. Graded t =&gt; t -&gt; Integer
+</span><a href="Core.GradedList.html#grading"><span class="hs-identifier hs-var">grading</span></a></span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679085979"><span class="hs-identifier hs-var">a</span></a></span><span>
+</span><span id="line-67"></span><span>    </span><span class="annot"><a href="Core.GradedList.html#grading"><span class="hs-identifier hs-var">grading</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Core.SyntacticTree.html#Node"><span class="hs-identifier hs-type">Node</span></a></span><span> </span><span class="annot"><span class="annottext">Operation a
+</span><span class="hs-identifier">_</span></span><span> </span><span id="local-6989586621679085980"><span class="annot"><span class="annottext">[SyntacticTree a]
+</span><a href="#local-6989586621679085980"><span class="hs-keyword hs-var">as</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">[Integer] -&gt; Integer
+forall a. Num a =&gt; [a] -&gt; a
+forall (t :: * -&gt; *) a. (Foldable t, Num a) =&gt; t a -&gt; a
+</span><span class="hs-identifier hs-var">sum</span></span><span> </span><span class="annot"><span class="annottext">([Integer] -&gt; Integer) -&gt; [Integer] -&gt; Integer
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">(SyntacticTree a -&gt; Integer) -&gt; [SyntacticTree a] -&gt; [Integer]
+forall a b. (a -&gt; b) -&gt; [a] -&gt; [b]
+</span><span class="hs-identifier hs-var">map</span></span><span> </span><span class="annot"><span class="annottext">SyntacticTree a -&gt; Integer
+forall t. Graded t =&gt; t -&gt; Integer
+</span><a href="Core.GradedList.html#grading"><span class="hs-identifier hs-var">grading</span></a></span><span> </span><span class="annot"><span class="annottext">[SyntacticTree a]
+</span><a href="#local-6989586621679085980"><span class="hs-keyword hs-var">as</span></a></span><span>
+</span><span id="line-68"></span><span>
+</span><span id="line-69"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679085849"><span id="local-6989586621679085984"><span id="local-6989586621679085989"><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679085849"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Core.SyntacticTree.html#SyntacticTree"><span class="hs-identifier hs-type">SyntacticTree</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679085849"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-70"></span><span>    </span><span id="local-6989586621679085994"><span class="annot"><span class="annottext">show :: SyntacticTree a -&gt; String
+</span><a href="#local-6989586621679085994"><span class="hs-identifier hs-var hs-var hs-var hs-var">show</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Core.SyntacticTree.html#Leaf"><span class="hs-identifier hs-type">Leaf</span></a></span><span> </span><span id="local-6989586621679085996"><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679085996"><span class="hs-identifier hs-var">a</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">a -&gt; String
+forall a. Show a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">show</span></span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679085996"><span class="hs-identifier hs-var">a</span></a></span><span>
+</span><span id="line-71"></span><span>    </span><span class="annot"><span class="hs-identifier hs-var">show</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Core.SyntacticTree.html#Node"><span class="hs-identifier hs-type">Node</span></a></span><span> </span><span id="local-6989586621679085997"><span class="annot"><span class="annottext">Operation a
+</span><a href="#local-6989586621679085997"><span class="hs-identifier hs-var">op</span></a></span></span><span> </span><span id="local-6989586621679085998"><span class="annot"><span class="annottext">[SyntacticTree a]
+</span><a href="#local-6989586621679085998"><span class="hs-keyword hs-var">as</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Operation a -&gt; String
+forall a. Operation a -&gt; String
+</span><a href="Core.SyntacticTree.html#name"><span class="hs-identifier hs-var">name</span></a></span><span> </span><span class="annot"><span class="annottext">Operation a
+</span><a href="#local-6989586621679085997"><span class="hs-identifier hs-var">op</span></a></span><span> </span><span class="annot"><span class="annottext">String -&gt; ShowS
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;(&quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; ShowS
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; [String] -&gt; String
+forall a. [a] -&gt; [[a]] -&gt; [a]
+</span><span class="hs-identifier hs-var">intercalate</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;,&quot;</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">(SyntacticTree a -&gt; String) -&gt; [SyntacticTree a] -&gt; [String]
+forall a b. (a -&gt; b) -&gt; [a] -&gt; [b]
+</span><span class="hs-identifier hs-var">map</span></span><span> </span><span class="annot"><span class="annottext">SyntacticTree a -&gt; String
+forall a. Show a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">show</span></span><span> </span><span class="annot"><span class="annottext">[SyntacticTree a]
+</span><a href="#local-6989586621679085998"><span class="hs-keyword hs-var">as</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">String -&gt; ShowS
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;)&quot;</span></span><span>
+</span><span id="line-72"></span><span>
+</span><span id="line-73"></span><span class="annot"><span class="hs-comment">{- | Use the representation of syntactic tree as a planar tree to
+generate LaTeX code.
+-}</span></span><span>
+</span><span id="line-76"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679085855"><span id="local-6989586621679086002"><span id="local-6989586621679086007"><span id="local-6989586621679086010"><span id="local-6989586621679086013"><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679085855"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="Core.Output.html#Texifiable"><span class="hs-identifier hs-type">Texifiable</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Core.SyntacticTree.html#SyntacticTree"><span class="hs-identifier hs-type">SyntacticTree</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679085855"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span></span></span></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-77"></span><span>    </span><span id="local-6989586621679086016"><span class="annot"><span class="annottext">texifyID :: SyntacticTree a -&gt; String
+</span><a href="#local-6989586621679086016"><span class="hs-identifier hs-var hs-var hs-var hs-var">texifyID</span></a></span></span><span> </span><span class="annot"><span class="annottext">SyntacticTree a
+</span><span class="hs-identifier">_</span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;SyntacticTree&quot;</span></span><span>
+</span><span id="line-78"></span><span>    </span><span id="local-6989586621679086019"><span class="annot"><span class="annottext">texify :: SyntacticTree a -&gt; String
+</span><a href="#local-6989586621679086019"><span class="hs-identifier hs-var hs-var hs-var hs-var">texify</span></a></span></span><span> </span><span id="local-6989586621679086021"><span class="annot"><span class="annottext">SyntacticTree a
+</span><a href="#local-6989586621679086021"><span class="hs-identifier hs-var">t</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;\\forest{&quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; ShowS
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">SyntacticTree a -&gt; String
+forall a. Show a =&gt; SyntacticTree a -&gt; String
+</span><a href="#local-6989586621679086022"><span class="hs-identifier hs-var">brackets</span></a></span><span> </span><span class="annot"><span class="annottext">SyntacticTree a
+</span><a href="#local-6989586621679086021"><span class="hs-identifier hs-var">t</span></a></span><span> </span><span class="annot"><span class="annottext">String -&gt; ShowS
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;}&quot;</span></span><span>
+</span><span id="line-79"></span><span>      </span><span class="hs-keyword">where</span><span>
+</span><span id="line-80"></span><span>        </span><span id="local-6989586621679086022"><span class="annot"><span class="annottext">brackets :: SyntacticTree a -&gt; String
+</span><a href="#local-6989586621679086022"><span class="hs-identifier hs-var hs-var">brackets</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Core.SyntacticTree.html#Node"><span class="hs-identifier hs-type">Node</span></a></span><span> </span><span id="local-6989586621679086029"><span class="annot"><span class="annottext">Operation a
+</span><a href="#local-6989586621679086029"><span class="hs-identifier hs-var">op</span></a></span></span><span> </span><span id="local-6989586621679086030"><span class="annot"><span class="annottext">[SyntacticTree a]
+</span><a href="#local-6989586621679086030"><span class="hs-keyword hs-var">as</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-81"></span><span>            </span><span class="annot"><span class="annottext">ShowS
+forall a. Show a =&gt; a -&gt; String
+</span><a href="#local-6989586621679086031"><span class="hs-identifier hs-var">wrap</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Operation a -&gt; String
+forall a. Operation a -&gt; String
+</span><a href="Core.SyntacticTree.html#tex"><span class="hs-identifier hs-var">tex</span></a></span><span> </span><span class="annot"><span class="annottext">Operation a
+</span><a href="#local-6989586621679086029"><span class="hs-identifier hs-var">op</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-82"></span><span>                </span><span class="annot"><span class="annottext">String -&gt; ShowS
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="hs-special">(</span><span> </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">[SyntacticTree a]
+</span><a href="#local-6989586621679086030"><span class="hs-keyword hs-var">as</span></a></span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-83"></span><span>                        </span><span class="hs-special">[</span><span class="hs-special">]</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;&quot;</span></span><span>
+</span><span id="line-84"></span><span>                        </span><span class="annot"><span class="annottext">[SyntacticTree a]
+</span><span class="hs-identifier">_</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;[&quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; ShowS
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; [String] -&gt; String
+forall a. [a] -&gt; [[a]] -&gt; [a]
+</span><span class="hs-identifier hs-var">intercalate</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;,&quot;</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">(SyntacticTree a -&gt; String) -&gt; [SyntacticTree a] -&gt; [String]
+forall a b. (a -&gt; b) -&gt; [a] -&gt; [b]
+</span><span class="hs-identifier hs-var">map</span></span><span> </span><span class="annot"><span class="annottext">SyntacticTree a -&gt; String
+</span><a href="#local-6989586621679086022"><span class="hs-identifier hs-var">brackets</span></a></span><span> </span><span class="annot"><span class="annottext">[SyntacticTree a]
+</span><a href="#local-6989586621679086030"><span class="hs-keyword hs-var">as</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">String -&gt; ShowS
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;]&quot;</span></span><span>
+</span><span id="line-85"></span><span>                   </span><span class="hs-special">)</span><span>
+</span><span id="line-86"></span><span>        </span><span class="annot"><a href="#local-6989586621679086022"><span class="hs-identifier hs-var">brackets</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Core.SyntacticTree.html#Leaf"><span class="hs-identifier hs-type">Leaf</span></a></span><span> </span><span id="local-6989586621679086032"><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679086032"><span class="hs-identifier hs-var">a</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">a -&gt; String
+forall a. Show a =&gt; a -&gt; String
+</span><a href="#local-6989586621679086031"><span class="hs-identifier hs-var">wrap</span></a></span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679086032"><span class="hs-identifier hs-var">a</span></a></span><span>
+</span><span id="line-87"></span><span>        </span><span id="local-6989586621679086031"><span class="annot"><span class="annottext">wrap :: a -&gt; String
+</span><a href="#local-6989586621679086031"><span class="hs-identifier hs-var hs-var">wrap</span></a></span></span><span> </span><span id="local-6989586621679086036"><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679086036"><span class="hs-identifier hs-var">r</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;i_&quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; ShowS
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">(Char -&gt; Bool) -&gt; ShowS
+forall a. (a -&gt; Bool) -&gt; [a] -&gt; [a]
+</span><span class="hs-identifier hs-var">filter</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Char -&gt; Char -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">/=</span></span><span> </span><span class="annot"><span class="annottext">Char
+</span><span class="hs-char">'&quot;'</span></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">a -&gt; String
+forall a. Show a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">show</span></span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679086036"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-88"></span><span>
+</span><span id="line-89"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679085863"><span class="hs-special">(</span><span class="annot"><a href="Core.VectorSpace.html#IsVector"><span class="hs-identifier hs-type">IsVector</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679085863"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Core.GradedList.html#Graded"><span class="hs-identifier hs-type">Graded</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679085863"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="Core.VectorSpace.html#IsVector"><span class="hs-identifier hs-type">IsVector</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Core.SyntacticTree.html#SyntacticTree"><span class="hs-identifier hs-type">SyntacticTree</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679085863"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-90"></span><span>    </span><span class="hs-keyword">type</span><span> </span><span id="VectorScalar"><span class="annot"><a href="Core.VectorSpace.html#VectorScalar"><span class="hs-identifier hs-var">VectorScalar</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Core.SyntacticTree.html#SyntacticTree"><span class="hs-identifier hs-type">SyntacticTree</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679085863"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><a href="Core.VectorSpace.html#VectorScalar"><span class="hs-identifier hs-type">VectorScalar</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679085863"><span class="hs-identifier hs-type">a</span></a></span><span>
+</span><span id="line-91"></span><span>    </span><span class="hs-keyword">type</span><span> </span><span id="VectorBasis"><span class="annot"><a href="Core.VectorSpace.html#VectorBasis"><span class="hs-identifier hs-var">VectorBasis</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Core.SyntacticTree.html#SyntacticTree"><span class="hs-identifier hs-type">SyntacticTree</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679085863"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><a href="Core.SyntacticTree.html#SyntacticTree"><span class="hs-identifier hs-type">SyntacticTree</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679085863"><span class="hs-identifier hs-type">a</span></a></span><span>
+</span><span id="line-92"></span><span>
+</span><span id="line-93"></span><span>    </span><span id="local-6989586621679086067"><span class="annot"><span class="annottext">vector :: SyntacticTree a
+-&gt; Vector
+     (VectorScalar (SyntacticTree a)) (VectorBasis (SyntacticTree a))
+</span><a href="#local-6989586621679086067"><span class="hs-identifier hs-var hs-var hs-var hs-var">vector</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">ScalarProduct (VectorScalar a) (SyntacticTree a)
+-&gt; Vector (VectorScalar a) (SyntacticTree a)
+ScalarProduct (VectorScalar a) (SyntacticTree a)
+-&gt; Vector
+     (VectorScalar (ScalarProduct (VectorScalar a) (SyntacticTree a)))
+     (VectorBasis (ScalarProduct (VectorScalar a) (SyntacticTree a)))
+forall v.
+IsVector v =&gt;
+v -&gt; Vector (VectorScalar v) (VectorBasis v)
+</span><a href="Core.VectorSpace.html#vector"><span class="hs-identifier hs-var">vector</span></a></span><span> </span><span class="annot"><span class="annottext">(ScalarProduct (VectorScalar a) (SyntacticTree a)
+ -&gt; Vector (VectorScalar a) (SyntacticTree a))
+-&gt; (SyntacticTree a
+    -&gt; ScalarProduct (VectorScalar a) (SyntacticTree a))
+-&gt; SyntacticTree a
+-&gt; Vector (VectorScalar a) (SyntacticTree a)
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">VectorScalar a
+</span><span class="hs-number">1</span></span><span> </span><span class="annot"><span class="annottext">VectorScalar a
+-&gt; SyntacticTree a
+-&gt; ScalarProduct (VectorScalar a) (SyntacticTree a)
+forall k a. Num k =&gt; k -&gt; a -&gt; ScalarProduct k a
+</span><a href="Core.VectorSpace.html#%2A%5E"><span class="hs-operator hs-var">*^</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-94"></span><span>
+</span><span id="line-95"></span><span class="annot"><span class="hs-comment">{- |
+  Replace the operands which are equal to the syntactic tree @x@ of a
+  syntactic tree @y@ with the given list of syntactic trees @ops@. The
+  operands are replaced in the order they appear.
+
+  The function returns @Nothing@ if the number of syntactic trees in
+  the list @ops@ is different from the number of operands in the
+  syntactic tree @y@.
+
+  See @IsTree (PlanarTree d)@ instance in @Planar@ module for examples.
+-}</span></span><span>
+</span><span id="line-106"></span><span id="local-6989586621679085872"><span class="annot"><a href="Core.SyntacticTree.html#compose"><span class="hs-identifier hs-type">compose</span></a></span><span>
+</span><span id="line-107"></span><span>    </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Eq</span></span><span> </span><span class="annot"><a href="#local-6989586621679085872"><span class="hs-identifier hs-type">a</span></a></span><span>
+</span><span id="line-108"></span><span>       </span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Core.GradedList.html#Graded"><span class="hs-identifier hs-type">Graded</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679085872"><span class="hs-identifier hs-type">a</span></a></span><span>
+</span><span id="line-109"></span><span>       </span><span class="hs-special">)</span><span>
+</span><span id="line-110"></span><span>    </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="Core.SyntacticTree.html#SyntacticTree"><span class="hs-identifier hs-type">SyntacticTree</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679085872"><span class="hs-identifier hs-type">a</span></a></span><span>
+</span><span id="line-111"></span><span>    </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">[</span><span class="annot"><a href="Core.SyntacticTree.html#SyntacticTree"><span class="hs-identifier hs-type">SyntacticTree</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679085872"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-112"></span><span>    </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Core.SyntacticTree.html#SyntacticTree"><span class="hs-identifier hs-type">SyntacticTree</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679085872"><span class="hs-identifier hs-type">a</span></a></span><span>
+</span><span id="line-113"></span><span>    </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Core.SyntacticTree.html#SyntacticTree"><span class="hs-identifier hs-type">SyntacticTree</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679085872"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span></span><span>
+</span><span id="line-114"></span><span id="compose"><span class="annot"><span class="annottext">compose :: forall a.
+(Eq a, Graded a) =&gt;
+SyntacticTree a
+-&gt; [SyntacticTree a] -&gt; SyntacticTree a -&gt; Maybe (SyntacticTree a)
+</span><a href="Core.SyntacticTree.html#compose"><span class="hs-identifier hs-var hs-var">compose</span></a></span></span><span> </span><span id="local-6989586621679086096"><span class="annot"><span class="annottext">SyntacticTree a
+</span><a href="#local-6989586621679086096"><span class="hs-identifier hs-var">x</span></a></span></span><span> </span><span id="local-6989586621679086097"><span class="annot"><span class="annottext">[SyntacticTree a]
+</span><a href="#local-6989586621679086097"><span class="hs-identifier hs-var">ops</span></a></span></span><span> </span><span id="local-6989586621679086098"><span class="annot"><span class="annottext">SyntacticTree a
+</span><a href="#local-6989586621679086098"><span class="hs-identifier hs-var">y</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(Maybe (SyntacticTree a), [SyntacticTree a])
+-&gt; Maybe (SyntacticTree a)
+forall {a} {a}. (Maybe a, [a]) -&gt; Maybe a
+</span><a href="#local-6989586621679086099"><span class="hs-identifier hs-var">checkStateEmpty</span></a></span><span> </span><span class="annot"><span class="annottext">((Maybe (SyntacticTree a), [SyntacticTree a])
+ -&gt; Maybe (SyntacticTree a))
+-&gt; (Maybe (SyntacticTree a), [SyntacticTree a])
+-&gt; Maybe (SyntacticTree a)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">State [SyntacticTree a] (Maybe (SyntacticTree a))
+-&gt; [SyntacticTree a]
+-&gt; (Maybe (SyntacticTree a), [SyntacticTree a])
+forall s a. State s a -&gt; s -&gt; (a, s)
+</span><span class="hs-identifier hs-var">runState</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">SyntacticTree a
+-&gt; State [SyntacticTree a] (Maybe (SyntacticTree a))
+</span><a href="#local-6989586621679086101"><span class="hs-identifier hs-var">compose'</span></a></span><span> </span><span class="annot"><span class="annottext">SyntacticTree a
+</span><a href="#local-6989586621679086098"><span class="hs-identifier hs-var">y</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">[SyntacticTree a]
+</span><a href="#local-6989586621679086097"><span class="hs-identifier hs-var">ops</span></a></span><span>
+</span><span id="line-115"></span><span>  </span><span class="hs-keyword">where</span><span>
+</span><span id="line-116"></span><span>    </span><span id="local-6989586621679086099"><span class="annot"><span class="annottext">checkStateEmpty :: (Maybe a, [a]) -&gt; Maybe a
+</span><a href="#local-6989586621679086099"><span class="hs-identifier hs-var hs-var">checkStateEmpty</span></a></span></span><span> </span><span class="hs-special">(</span><span id="local-6989586621679086102"><span class="annot"><span class="annottext">Maybe a
+</span><a href="#local-6989586621679086102"><span class="hs-identifier hs-var">res</span></a></span></span><span class="hs-special">,</span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Maybe a
+</span><a href="#local-6989586621679086102"><span class="hs-identifier hs-var">res</span></a></span><span>
+</span><span id="line-117"></span><span>    </span><span class="annot"><a href="#local-6989586621679086099"><span class="hs-identifier hs-var">checkStateEmpty</span></a></span><span> </span><span class="annot"><span class="annottext">(Maybe a, [a])
+</span><span class="hs-identifier">_</span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Maybe a
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span>
+</span><span id="line-118"></span><span>    </span><span id="local-6989586621679086101"><span class="annot"><span class="annottext">compose' :: SyntacticTree a
+-&gt; State [SyntacticTree a] (Maybe (SyntacticTree a))
+</span><a href="#local-6989586621679086101"><span class="hs-identifier hs-var hs-var">compose'</span></a></span></span><span> </span><span id="local-6989586621679086103"><span class="annot"><span class="annottext">SyntacticTree a
+</span><a href="#local-6989586621679086103"><span class="hs-identifier hs-var">y'</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-119"></span><span>        </span><span class="hs-keyword">if</span><span> </span><span class="annot"><span class="annottext">SyntacticTree a
+</span><a href="#local-6989586621679086096"><span class="hs-identifier hs-var">x</span></a></span><span> </span><span class="annot"><span class="annottext">SyntacticTree a -&gt; SyntacticTree a -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">==</span></span><span> </span><span class="annot"><span class="annottext">SyntacticTree a
+</span><a href="#local-6989586621679086103"><span class="hs-identifier hs-var">y'</span></a></span><span>
+</span><span id="line-120"></span><span>            </span><span class="hs-keyword">then</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-121"></span><span>                </span><span id="local-6989586621679086104"><span class="annot"><span class="annottext">[SyntacticTree a]
+</span><a href="#local-6989586621679086104"><span class="hs-identifier hs-var">ops'</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">StateT [SyntacticTree a] Identity [SyntacticTree a]
+forall s (m :: * -&gt; *). MonadState s m =&gt; m s
+</span><span class="hs-identifier hs-var">get</span></span><span>
+</span><span id="line-122"></span><span>                </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">[SyntacticTree a]
+</span><a href="#local-6989586621679086104"><span class="hs-identifier hs-var">ops'</span></a></span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-123"></span><span>                    </span><span class="hs-special">[</span><span class="hs-special">]</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Maybe (SyntacticTree a)
+-&gt; State [SyntacticTree a] (Maybe (SyntacticTree a))
+forall a. a -&gt; StateT [SyntacticTree a] Identity a
+forall (m :: * -&gt; *) a. Monad m =&gt; a -&gt; m a
+</span><span class="hs-identifier hs-var">return</span></span><span> </span><span class="annot"><span class="annottext">Maybe (SyntacticTree a)
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span>
+</span><span id="line-124"></span><span>                    </span><span id="local-6989586621679086106"><span class="annot"><span class="annottext">SyntacticTree a
+</span><a href="#local-6989586621679086106"><span class="hs-identifier hs-var">o</span></a></span></span><span> </span><span class="annot"><span class="hs-glyph hs-type">:</span></span><span> </span><span id="local-6989586621679086107"><span class="annot"><span class="annottext">[SyntacticTree a]
+</span><a href="#local-6989586621679086107"><span class="hs-identifier hs-var">os</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-125"></span><span>                        </span><span class="annot"><span class="annottext">[SyntacticTree a] -&gt; StateT [SyntacticTree a] Identity ()
+forall s (m :: * -&gt; *). MonadState s m =&gt; s -&gt; m ()
+</span><span class="hs-identifier hs-var">put</span></span><span> </span><span class="annot"><span class="annottext">[SyntacticTree a]
+</span><a href="#local-6989586621679086107"><span class="hs-identifier hs-var">os</span></a></span><span>
+</span><span id="line-126"></span><span>                        </span><span class="annot"><span class="annottext">Maybe (SyntacticTree a)
+-&gt; State [SyntacticTree a] (Maybe (SyntacticTree a))
+forall a. a -&gt; StateT [SyntacticTree a] Identity a
+forall (m :: * -&gt; *) a. Monad m =&gt; a -&gt; m a
+</span><span class="hs-identifier hs-var">return</span></span><span> </span><span class="annot"><span class="annottext">(Maybe (SyntacticTree a)
+ -&gt; State [SyntacticTree a] (Maybe (SyntacticTree a)))
+-&gt; Maybe (SyntacticTree a)
+-&gt; State [SyntacticTree a] (Maybe (SyntacticTree a))
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">SyntacticTree a -&gt; Maybe (SyntacticTree a)
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="annot"><span class="annottext">SyntacticTree a
+</span><a href="#local-6989586621679086106"><span class="hs-identifier hs-var">o</span></a></span><span>
+</span><span id="line-127"></span><span>            </span><span class="hs-keyword">else</span><span> </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">SyntacticTree a
+</span><a href="#local-6989586621679086103"><span class="hs-identifier hs-var">y'</span></a></span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-128"></span><span>                </span><span class="annot"><a href="Core.SyntacticTree.html#Leaf"><span class="hs-identifier hs-type">Leaf</span></a></span><span> </span><span id="local-6989586621679086109"><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679086109"><span class="hs-identifier hs-var">a</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Maybe (SyntacticTree a)
+-&gt; State [SyntacticTree a] (Maybe (SyntacticTree a))
+forall a. a -&gt; StateT [SyntacticTree a] Identity a
+forall (m :: * -&gt; *) a. Monad m =&gt; a -&gt; m a
+</span><span class="hs-identifier hs-var">return</span></span><span> </span><span class="annot"><span class="annottext">(Maybe (SyntacticTree a)
+ -&gt; State [SyntacticTree a] (Maybe (SyntacticTree a)))
+-&gt; Maybe (SyntacticTree a)
+-&gt; State [SyntacticTree a] (Maybe (SyntacticTree a))
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">SyntacticTree a -&gt; Maybe (SyntacticTree a)
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="annot"><span class="annottext">(SyntacticTree a -&gt; Maybe (SyntacticTree a))
+-&gt; SyntacticTree a -&gt; Maybe (SyntacticTree a)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">a -&gt; SyntacticTree a
+forall a. a -&gt; SyntacticTree a
+</span><a href="Core.SyntacticTree.html#Leaf"><span class="hs-identifier hs-var">Leaf</span></a></span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679086109"><span class="hs-identifier hs-var">a</span></a></span><span>
+</span><span id="line-129"></span><span>                </span><span class="annot"><a href="Core.SyntacticTree.html#Node"><span class="hs-identifier hs-type">Node</span></a></span><span> </span><span id="local-6989586621679086110"><span class="annot"><span class="annottext">Operation a
+</span><a href="#local-6989586621679086110"><span class="hs-identifier hs-var">op</span></a></span></span><span> </span><span id="local-6989586621679086111"><span class="annot"><span class="annottext">[SyntacticTree a]
+</span><a href="#local-6989586621679086111"><span class="hs-keyword hs-var">as</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-130"></span><span>                    </span><span id="local-6989586621679086112"><span class="annot"><span class="annottext">[Maybe (SyntacticTree a)]
+</span><a href="#local-6989586621679086112"><span class="hs-identifier hs-var">as'</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">(SyntacticTree a
+ -&gt; State [SyntacticTree a] (Maybe (SyntacticTree a)))
+-&gt; [SyntacticTree a]
+-&gt; StateT [SyntacticTree a] Identity [Maybe (SyntacticTree a)]
+forall (t :: * -&gt; *) (m :: * -&gt; *) a b.
+(Traversable t, Monad m) =&gt;
+(a -&gt; m b) -&gt; t a -&gt; m (t b)
+forall (m :: * -&gt; *) a b. Monad m =&gt; (a -&gt; m b) -&gt; [a] -&gt; m [b]
+</span><span class="hs-identifier hs-var">mapM</span></span><span> </span><span class="annot"><span class="annottext">SyntacticTree a
+-&gt; State [SyntacticTree a] (Maybe (SyntacticTree a))
+</span><a href="#local-6989586621679086101"><span class="hs-identifier hs-var">compose'</span></a></span><span> </span><span class="annot"><span class="annottext">[SyntacticTree a]
+</span><a href="#local-6989586621679086111"><span class="hs-keyword hs-var">as</span></a></span><span>
+</span><span id="line-131"></span><span>                    </span><span class="hs-keyword">if</span><span> </span><span class="annot"><span class="annottext">Maybe (SyntacticTree a)
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span> </span><span class="annot"><span class="annottext">Maybe (SyntacticTree a) -&gt; [Maybe (SyntacticTree a)] -&gt; Bool
+forall a. Eq a =&gt; a -&gt; [a] -&gt; Bool
+forall (t :: * -&gt; *) a. (Foldable t, Eq a) =&gt; a -&gt; t a -&gt; Bool
+</span><span class="hs-operator hs-var">`elem`</span></span><span> </span><span class="annot"><span class="annottext">[Maybe (SyntacticTree a)]
+</span><a href="#local-6989586621679086112"><span class="hs-identifier hs-var">as'</span></a></span><span>
+</span><span id="line-132"></span><span>                        </span><span class="hs-keyword">then</span><span> </span><span class="annot"><span class="annottext">Maybe (SyntacticTree a)
+-&gt; State [SyntacticTree a] (Maybe (SyntacticTree a))
+forall a. a -&gt; StateT [SyntacticTree a] Identity a
+forall (m :: * -&gt; *) a. Monad m =&gt; a -&gt; m a
+</span><span class="hs-identifier hs-var">return</span></span><span> </span><span class="annot"><span class="annottext">Maybe (SyntacticTree a)
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span>
+</span><span id="line-133"></span><span>                        </span><span class="hs-keyword">else</span><span> </span><span class="annot"><span class="annottext">Maybe (SyntacticTree a)
+-&gt; State [SyntacticTree a] (Maybe (SyntacticTree a))
+forall a. a -&gt; StateT [SyntacticTree a] Identity a
+forall (m :: * -&gt; *) a. Monad m =&gt; a -&gt; m a
+</span><span class="hs-identifier hs-var">return</span></span><span> </span><span class="annot"><span class="annottext">(Maybe (SyntacticTree a)
+ -&gt; State [SyntacticTree a] (Maybe (SyntacticTree a)))
+-&gt; Maybe (SyntacticTree a)
+-&gt; State [SyntacticTree a] (Maybe (SyntacticTree a))
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">SyntacticTree a -&gt; Maybe (SyntacticTree a)
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="annot"><span class="annottext">(SyntacticTree a -&gt; Maybe (SyntacticTree a))
+-&gt; SyntacticTree a -&gt; Maybe (SyntacticTree a)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Operation a -&gt; [SyntacticTree a] -&gt; SyntacticTree a
+forall a. Operation a -&gt; [SyntacticTree a] -&gt; SyntacticTree a
+</span><a href="Core.SyntacticTree.html#Node"><span class="hs-identifier hs-var">Node</span></a></span><span> </span><span class="annot"><span class="annottext">Operation a
+</span><a href="#local-6989586621679086110"><span class="hs-identifier hs-var">op</span></a></span><span> </span><span class="annot"><span class="annottext">([SyntacticTree a] -&gt; SyntacticTree a)
+-&gt; [SyntacticTree a] -&gt; SyntacticTree a
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">(Maybe (SyntacticTree a) -&gt; SyntacticTree a)
+-&gt; [Maybe (SyntacticTree a)] -&gt; [SyntacticTree a]
+forall a b. (a -&gt; b) -&gt; [a] -&gt; [b]
+</span><span class="hs-identifier hs-var">map</span></span><span> </span><span class="annot"><span class="annottext">Maybe (SyntacticTree a) -&gt; SyntacticTree a
+forall a. HasCallStack =&gt; Maybe a -&gt; a
+</span><span class="hs-identifier hs-var">fromJust</span></span><span> </span><span class="annot"><span class="annottext">[Maybe (SyntacticTree a)]
+</span><a href="#local-6989586621679086112"><span class="hs-identifier hs-var">as'</span></a></span><span>
+</span><span id="line-134"></span><span>
+</span><span id="line-135"></span><span class="annot"><span class="hs-comment">{- |
+  The same as @compose@ but we sum over all permutations of the list
+  of syntactic trees and return the result as a vector.
+
+  See @IsTree (PlanarTree d)@ instance in @Planar@ module for examples.
+-}</span></span><span>
+</span><span id="line-141"></span><span id="local-6989586621679085900"><span class="annot"><a href="Core.SyntacticTree.html#symmetricCompose"><span class="hs-identifier hs-type">symmetricCompose</span></a></span><span>
+</span><span id="line-142"></span><span>    </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span> </span><span class="annot"><a href="Core.VectorSpace.html#IsVector"><span class="hs-identifier hs-type">IsVector</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679085900"><span class="hs-identifier hs-type">a</span></a></span><span>
+</span><span id="line-143"></span><span>       </span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Core.GradedList.html#Graded"><span class="hs-identifier hs-type">Graded</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679085900"><span class="hs-identifier hs-type">a</span></a></span><span>
+</span><span id="line-144"></span><span>       </span><span class="hs-special">)</span><span>
+</span><span id="line-145"></span><span>    </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="Core.SyntacticTree.html#SyntacticTree"><span class="hs-identifier hs-type">SyntacticTree</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679085900"><span class="hs-identifier hs-type">a</span></a></span><span>
+</span><span id="line-146"></span><span>    </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">[</span><span class="annot"><a href="Core.SyntacticTree.html#SyntacticTree"><span class="hs-identifier hs-type">SyntacticTree</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679085900"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-147"></span><span>    </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Core.SyntacticTree.html#SyntacticTree"><span class="hs-identifier hs-type">SyntacticTree</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679085900"><span class="hs-identifier hs-type">a</span></a></span><span>
+</span><span id="line-148"></span><span>    </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Core.VectorSpace.html#Vector"><span class="hs-identifier hs-type">Vector</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Core.VectorSpace.html#VectorScalar"><span class="hs-identifier hs-type">VectorScalar</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Core.SyntacticTree.html#SyntacticTree"><span class="hs-identifier hs-type">SyntacticTree</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679085900"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Core.SyntacticTree.html#SyntacticTree"><span class="hs-identifier hs-type">SyntacticTree</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679085900"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span></span><span>
+</span><span id="line-149"></span><span id="symmetricCompose"><span class="annot"><span class="annottext">symmetricCompose :: forall a.
+(IsVector a, Graded a) =&gt;
+SyntacticTree a
+-&gt; [SyntacticTree a]
+-&gt; SyntacticTree a
+-&gt; Vector (VectorScalar (SyntacticTree a)) (SyntacticTree a)
+</span><a href="Core.SyntacticTree.html#symmetricCompose"><span class="hs-identifier hs-var hs-var">symmetricCompose</span></a></span></span><span> </span><span id="local-6989586621679086132"><span class="annot"><span class="annottext">SyntacticTree a
+</span><a href="#local-6989586621679086132"><span class="hs-identifier hs-var">x</span></a></span></span><span> </span><span id="local-6989586621679086133"><span class="annot"><span class="annottext">[SyntacticTree a]
+</span><a href="#local-6989586621679086133"><span class="hs-identifier hs-var">ops</span></a></span></span><span> </span><span id="local-6989586621679086134"><span class="annot"><span class="annottext">SyntacticTree a
+</span><a href="#local-6989586621679086134"><span class="hs-identifier hs-var">obj</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-150"></span><span>    </span><span class="annot"><span class="annottext">[Vector (VectorScalar (SyntacticTree a)) (SyntacticTree a)]
+-&gt; Vector (VectorScalar (SyntacticTree a)) (SyntacticTree a)
+forall a. Monoid a =&gt; [a] -&gt; a
+</span><span class="hs-identifier hs-var">mconcat</span></span><span>
+</span><span id="line-151"></span><span>        </span><span class="annot"><span class="annottext">([Vector (VectorScalar (SyntacticTree a)) (SyntacticTree a)]
+ -&gt; Vector (VectorScalar (SyntacticTree a)) (SyntacticTree a))
+-&gt; [Vector (VectorScalar (SyntacticTree a)) (SyntacticTree a)]
+-&gt; Vector (VectorScalar (SyntacticTree a)) (SyntacticTree a)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">([SyntacticTree a]
+ -&gt; Vector (VectorScalar (SyntacticTree a)) (SyntacticTree a))
+-&gt; [[SyntacticTree a]]
+-&gt; [Vector (VectorScalar (SyntacticTree a)) (SyntacticTree a)]
+forall a b. (a -&gt; b) -&gt; [a] -&gt; [b]
+</span><span class="hs-identifier hs-var">map</span></span><span>
+</span><span id="line-152"></span><span>            </span><span class="hs-special">(</span><span> </span><span class="hs-glyph">\</span><span id="local-6989586621679086135"><span class="annot"><span class="annottext">[SyntacticTree a]
+</span><a href="#local-6989586621679086135"><span class="hs-identifier hs-var">perm_ops</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">SyntacticTree a
+-&gt; [SyntacticTree a] -&gt; SyntacticTree a -&gt; Maybe (SyntacticTree a)
+forall a.
+(Eq a, Graded a) =&gt;
+SyntacticTree a
+-&gt; [SyntacticTree a] -&gt; SyntacticTree a -&gt; Maybe (SyntacticTree a)
+</span><a href="Core.SyntacticTree.html#compose"><span class="hs-identifier hs-var">compose</span></a></span><span> </span><span class="annot"><span class="annottext">SyntacticTree a
+</span><a href="#local-6989586621679086132"><span class="hs-identifier hs-var">x</span></a></span><span> </span><span class="annot"><span class="annottext">[SyntacticTree a]
+</span><a href="#local-6989586621679086135"><span class="hs-identifier hs-var">perm_ops</span></a></span><span> </span><span class="annot"><span class="annottext">SyntacticTree a
+</span><a href="#local-6989586621679086134"><span class="hs-identifier hs-var">obj</span></a></span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-153"></span><span>                </span><span class="annot"><span class="hs-identifier hs-type">Just</span></span><span> </span><span id="local-6989586621679086136"><span class="annot"><span class="annottext">SyntacticTree a
+</span><a href="#local-6989586621679086136"><span class="hs-identifier hs-var">g</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">ScalarProduct (VectorScalar a) (SyntacticTree a)
+-&gt; Vector
+     (VectorScalar (ScalarProduct (VectorScalar a) (SyntacticTree a)))
+     (VectorBasis (ScalarProduct (VectorScalar a) (SyntacticTree a)))
+forall v.
+IsVector v =&gt;
+v -&gt; Vector (VectorScalar v) (VectorBasis v)
+</span><a href="Core.VectorSpace.html#vector"><span class="hs-identifier hs-var">vector</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">VectorScalar a
+</span><span class="hs-number">1</span></span><span> </span><span class="annot"><span class="annottext">VectorScalar a
+-&gt; SyntacticTree a
+-&gt; ScalarProduct (VectorScalar a) (SyntacticTree a)
+forall k a. Num k =&gt; k -&gt; a -&gt; ScalarProduct k a
+</span><a href="Core.VectorSpace.html#%2A%5E"><span class="hs-operator hs-var">*^</span></a></span><span> </span><span class="annot"><span class="annottext">SyntacticTree a
+</span><a href="#local-6989586621679086136"><span class="hs-identifier hs-var">g</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-154"></span><span>                </span><span class="annot"><span class="annottext">Maybe (SyntacticTree a)
+</span><span class="hs-identifier hs-var">Nothing</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Sum (VectorScalar a) (SyntacticTree a)
+-&gt; Vector
+     (VectorScalar (Sum (VectorScalar a) (SyntacticTree a)))
+     (VectorBasis (Sum (VectorScalar a) (SyntacticTree a)))
+forall v.
+IsVector v =&gt;
+v -&gt; Vector (VectorScalar v) (VectorBasis v)
+</span><a href="Core.VectorSpace.html#vector"><span class="hs-identifier hs-var">vector</span></a></span><span> </span><span class="annot"><span class="annottext">Sum (VectorScalar a) (SyntacticTree a)
+forall k a. Sum k a
+</span><a href="Core.VectorSpace.html#Zero"><span class="hs-identifier hs-var">Zero</span></a></span><span>
+</span><span id="line-155"></span><span>            </span><span class="hs-special">)</span><span>
+</span><span id="line-156"></span><span>        </span><span class="annot"><span class="annottext">([[SyntacticTree a]]
+ -&gt; [Vector (VectorScalar (SyntacticTree a)) (SyntacticTree a)])
+-&gt; [[SyntacticTree a]]
+-&gt; [Vector (VectorScalar (SyntacticTree a)) (SyntacticTree a)]
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">[SyntacticTree a] -&gt; [[SyntacticTree a]]
+forall a. [a] -&gt; [[a]]
+</span><span class="hs-identifier hs-var">permutations</span></span><span> </span><span class="annot"><span class="annottext">[SyntacticTree a]
+</span><a href="#local-6989586621679086133"><span class="hs-identifier hs-var">ops</span></a></span><span>
+</span><span id="line-157"></span><span>
+</span><span id="line-158"></span><span class="annot"><span class="hs-comment">-- | A class for types that can be represented as syntactic trees.</span></span><span>
+</span><span id="line-159"></span><span class="hs-keyword">class</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Core.VectorSpace.html#IsVector"><span class="hs-identifier hs-type">IsVector</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679085911"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span id="HasSyntacticTree"><span class="annot"><a href="Core.SyntacticTree.html#HasSyntacticTree"><span class="hs-identifier hs-var">HasSyntacticTree</span></a></span></span><span> </span><span id="local-6989586621679085911"><span class="annot"><a href="#local-6989586621679085911"><span class="hs-identifier hs-type">a</span></a></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-160"></span><span>    </span><span id="syn"><span class="annot"><a href="Core.SyntacticTree.html#syn"><span class="hs-identifier hs-type">syn</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="#local-6989586621679085911"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Core.SyntacticTree.html#SyntacticTree"><span class="hs-identifier hs-type">SyntacticTree</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679085911"><span class="hs-identifier hs-type">a</span></a></span><span>
+</span><span id="line-161"></span><span>
+</span><span id="line-162"></span><span class="annot"><span class="hs-comment">{- |
+  Evaluate a syntactic tree.
+
+  See @IsTree (PlanarTree d)@ instance in @Planar@ module for examples.
+-}</span></span><span>
+</span><span id="line-167"></span><span id="local-6989586621679085913"><span class="annot"><a href="Core.SyntacticTree.html#eval"><span class="hs-identifier hs-type">eval</span></a></span><span>
+</span><span id="line-168"></span><span>    </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span> </span><span class="annot"><a href="Core.VectorSpace.html#IsVector"><span class="hs-identifier hs-type">IsVector</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679085913"><span class="hs-identifier hs-type">a</span></a></span><span>
+</span><span id="line-169"></span><span>       </span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Core.VectorSpace.html#VectorBasis"><span class="hs-identifier hs-type">VectorBasis</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679085913"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="annot"><span class="hs-operator hs-type">~</span></span><span> </span><span class="annot"><a href="#local-6989586621679085913"><span class="hs-identifier hs-type">a</span></a></span><span>
+</span><span id="line-170"></span><span>       </span><span class="hs-special">)</span><span>
+</span><span id="line-171"></span><span>    </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="Core.SyntacticTree.html#SyntacticTree"><span class="hs-identifier hs-type">SyntacticTree</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679085913"><span class="hs-identifier hs-type">a</span></a></span><span>
+</span><span id="line-172"></span><span>    </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Core.VectorSpace.html#Vector"><span class="hs-identifier hs-type">Vector</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Core.VectorSpace.html#VectorScalar"><span class="hs-identifier hs-type">VectorScalar</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679085913"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><a href="#local-6989586621679085913"><span class="hs-identifier hs-type">a</span></a></span></span><span>
+</span><span id="line-173"></span><span id="eval"><span class="annot"><span class="annottext">eval :: forall a.
+(IsVector a, VectorBasis a ~ a) =&gt;
+SyntacticTree a -&gt; Vector (VectorScalar a) a
+</span><a href="Core.SyntacticTree.html#eval"><span class="hs-identifier hs-var hs-var">eval</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Core.SyntacticTree.html#Leaf"><span class="hs-identifier hs-type">Leaf</span></a></span><span> </span><span id="local-6989586621679086173"><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679086173"><span class="hs-identifier hs-var">a</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">a -&gt; Vector (VectorScalar a) (VectorBasis a)
+forall v.
+IsVector v =&gt;
+v -&gt; Vector (VectorScalar v) (VectorBasis v)
+</span><a href="Core.VectorSpace.html#vector"><span class="hs-identifier hs-var">vector</span></a></span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679086173"><span class="hs-identifier hs-var">a</span></a></span><span>
+</span><span id="line-174"></span><span class="annot"><a href="Core.SyntacticTree.html#eval"><span class="hs-identifier hs-var">eval</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Core.SyntacticTree.html#Node"><span class="hs-identifier hs-type">Node</span></a></span><span> </span><span id="local-6989586621679086174"><span class="annot"><span class="annottext">Operation a
+</span><a href="#local-6989586621679086174"><span class="hs-identifier hs-var">op</span></a></span></span><span> </span><span id="local-6989586621679086175"><span class="annot"><span class="annottext">[SyntacticTree a]
+</span><a href="#local-6989586621679086175"><span class="hs-keyword hs-var">as</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">([a] -&gt; Vector (VectorScalar a) a)
+-&gt; Vector (VectorScalar a) [a] -&gt; Vector (VectorScalar a) a
+forall v k b a.
+(IsVector v, VectorScalar v ~ k, VectorBasis v ~ b) =&gt;
+(a -&gt; v) -&gt; Vector k a -&gt; Vector k b
+</span><a href="Core.VectorSpace.html#linear"><span class="hs-identifier hs-var">linear</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Operation a -&gt; [a] -&gt; Vector (VectorScalar a) (VectorBasis a)
+forall a.
+Operation a -&gt; [a] -&gt; Vector (VectorScalar a) (VectorBasis a)
+</span><a href="Core.SyntacticTree.html#func"><span class="hs-identifier hs-var">func</span></a></span><span> </span><span class="annot"><span class="annottext">Operation a
+</span><a href="#local-6989586621679086174"><span class="hs-identifier hs-var">op</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(Vector (VectorScalar a) [a] -&gt; Vector (VectorScalar a) a)
+-&gt; Vector (VectorScalar a) [a] -&gt; Vector (VectorScalar a) a
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">[Vector (VectorScalar a) [a]] -&gt; Vector (VectorScalar a) [a]
+forall a. Num a =&gt; [a] -&gt; a
+forall (t :: * -&gt; *) a. (Foldable t, Num a) =&gt; t a -&gt; a
+</span><span class="hs-identifier hs-var">product</span></span><span> </span><span class="annot"><span class="annottext">([Vector (VectorScalar a) [a]] -&gt; Vector (VectorScalar a) [a])
+-&gt; [Vector (VectorScalar a) [a]] -&gt; Vector (VectorScalar a) [a]
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">(SyntacticTree a -&gt; Vector (VectorScalar a) [a])
+-&gt; [SyntacticTree a] -&gt; [Vector (VectorScalar a) [a]]
+forall a b. (a -&gt; b) -&gt; [a] -&gt; [b]
+</span><span class="hs-identifier hs-var">map</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">(a -&gt; [a])
+-&gt; Vector (VectorScalar a) a -&gt; Vector (VectorScalar a) [a]
+forall v k b a.
+(IsVector v, VectorScalar v ~ k, VectorBasis v ~ b) =&gt;
+(a -&gt; v) -&gt; Vector k a -&gt; Vector k b
+</span><a href="Core.VectorSpace.html#linear"><span class="hs-identifier hs-var">linear</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">a -&gt; [a] -&gt; [a]
+forall a. a -&gt; [a] -&gt; [a]
+</span><span class="hs-glyph hs-var">:</span></span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(Vector (VectorScalar a) a -&gt; Vector (VectorScalar a) [a])
+-&gt; (SyntacticTree a -&gt; Vector (VectorScalar a) a)
+-&gt; SyntacticTree a
+-&gt; Vector (VectorScalar a) [a]
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">SyntacticTree a -&gt; Vector (VectorScalar a) a
+forall a.
+(IsVector a, VectorBasis a ~ a) =&gt;
+SyntacticTree a -&gt; Vector (VectorScalar a) a
+</span><a href="Core.SyntacticTree.html#eval"><span class="hs-identifier hs-var">eval</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">[SyntacticTree a]
+</span><a href="#local-6989586621679086175"><span class="hs-keyword hs-var">as</span></a></span><span>
+</span><span id="line-175"></span><span>
+</span><span id="line-176"></span><span class="annot"><span class="hs-comment">{- |
+  Substitute the subexpression @x@ of @obj@ with the given list of
+  expressions @gens@ in all possible ways and return the result as a
+  vector.
+
+  If the number of expressions in the list @gens@ is different from
+  the number of occurrences of the subexpression @x@ in @obj@, the
+  function returns a zero vector.
+
+  See @IsTree (PlanarTree d)@ instance in @Planar@ module for examples.
+-}</span></span><span>
+</span><span id="line-187"></span><span id="local-6989586621679085926"><span class="annot"><a href="Core.SyntacticTree.html#substitute"><span class="hs-identifier hs-type">substitute</span></a></span><span>
+</span><span id="line-188"></span><span>    </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span> </span><span class="annot"><a href="Core.SyntacticTree.html#HasSyntacticTree"><span class="hs-identifier hs-type">HasSyntacticTree</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679085926"><span class="hs-identifier hs-type">a</span></a></span><span>
+</span><span id="line-189"></span><span>       </span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Core.VectorSpace.html#IsVector"><span class="hs-identifier hs-type">IsVector</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679085926"><span class="hs-identifier hs-type">a</span></a></span><span>
+</span><span id="line-190"></span><span>       </span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Core.VectorSpace.html#VectorBasis"><span class="hs-identifier hs-type">VectorBasis</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679085926"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="annot"><span class="hs-operator hs-type">~</span></span><span> </span><span class="annot"><a href="#local-6989586621679085926"><span class="hs-identifier hs-type">a</span></a></span><span>
+</span><span id="line-191"></span><span>       </span><span class="hs-special">)</span><span>
+</span><span id="line-192"></span><span>    </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679085926"><span class="hs-identifier hs-type">a</span></a></span><span>
+</span><span id="line-193"></span><span>    </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">[</span><span class="annot"><a href="#local-6989586621679085926"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-194"></span><span>    </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679085926"><span class="hs-identifier hs-type">a</span></a></span><span>
+</span><span id="line-195"></span><span>    </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Core.VectorSpace.html#Vector"><span class="hs-identifier hs-type">Vector</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Core.VectorSpace.html#VectorScalar"><span class="hs-identifier hs-type">VectorScalar</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679085926"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><a href="#local-6989586621679085926"><span class="hs-identifier hs-type">a</span></a></span></span><span>
+</span><span id="line-196"></span><span id="substitute"><span class="annot"><span class="annottext">substitute :: forall a.
+(HasSyntacticTree a, IsVector a, VectorBasis a ~ a) =&gt;
+a -&gt; [a] -&gt; a -&gt; Vector (VectorScalar a) a
+</span><a href="Core.SyntacticTree.html#substitute"><span class="hs-identifier hs-var hs-var">substitute</span></a></span></span><span> </span><span id="local-6989586621679086200"><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679086200"><span class="hs-identifier hs-var">x</span></a></span></span><span> </span><span id="local-6989586621679086201"><span class="annot"><span class="annottext">[a]
+</span><a href="#local-6989586621679086201"><span class="hs-identifier hs-var">gens</span></a></span></span><span> </span><span id="local-6989586621679086202"><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679086202"><span class="hs-identifier hs-var">obj</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(SyntacticTree a -&gt; Vector (VectorScalar a) a)
+-&gt; Vector (VectorScalar a) (SyntacticTree a)
+-&gt; Vector (VectorScalar a) a
+forall v k b a.
+(IsVector v, VectorScalar v ~ k, VectorBasis v ~ b) =&gt;
+(a -&gt; v) -&gt; Vector k a -&gt; Vector k b
+</span><a href="Core.VectorSpace.html#linear"><span class="hs-identifier hs-var">linear</span></a></span><span> </span><span class="annot"><span class="annottext">SyntacticTree a -&gt; Vector (VectorScalar a) a
+forall a.
+(IsVector a, VectorBasis a ~ a) =&gt;
+SyntacticTree a -&gt; Vector (VectorScalar a) a
+</span><a href="Core.SyntacticTree.html#eval"><span class="hs-identifier hs-var">eval</span></a></span><span> </span><span class="annot"><span class="annottext">(Vector (VectorScalar a) (SyntacticTree a)
+ -&gt; Vector (VectorScalar a) a)
+-&gt; Vector (VectorScalar a) (SyntacticTree a)
+-&gt; Vector (VectorScalar a) a
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">SyntacticTree a
+-&gt; [SyntacticTree a]
+-&gt; SyntacticTree a
+-&gt; Vector (VectorScalar (SyntacticTree a)) (SyntacticTree a)
+forall a.
+(IsVector a, Graded a) =&gt;
+SyntacticTree a
+-&gt; [SyntacticTree a]
+-&gt; SyntacticTree a
+-&gt; Vector (VectorScalar (SyntacticTree a)) (SyntacticTree a)
+</span><a href="Core.SyntacticTree.html#symmetricCompose"><span class="hs-identifier hs-var">symmetricCompose</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">a -&gt; SyntacticTree a
+forall a. HasSyntacticTree a =&gt; a -&gt; SyntacticTree a
+</span><a href="Core.SyntacticTree.html#syn"><span class="hs-identifier hs-var">syn</span></a></span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679086200"><span class="hs-identifier hs-var">x</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">(a -&gt; SyntacticTree a) -&gt; [a] -&gt; [SyntacticTree a]
+forall a b. (a -&gt; b) -&gt; [a] -&gt; [b]
+</span><span class="hs-identifier hs-var">map</span></span><span> </span><span class="annot"><span class="annottext">a -&gt; SyntacticTree a
+forall a. HasSyntacticTree a =&gt; a -&gt; SyntacticTree a
+</span><a href="Core.SyntacticTree.html#syn"><span class="hs-identifier hs-var">syn</span></a></span><span> </span><span class="annot"><span class="annottext">[a]
+</span><a href="#local-6989586621679086201"><span class="hs-identifier hs-var">gens</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(SyntacticTree a
+ -&gt; Vector (VectorScalar (SyntacticTree a)) (SyntacticTree a))
+-&gt; SyntacticTree a
+-&gt; Vector (VectorScalar (SyntacticTree a)) (SyntacticTree a)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">a -&gt; SyntacticTree a
+forall a. HasSyntacticTree a =&gt; a -&gt; SyntacticTree a
+</span><a href="Core.SyntacticTree.html#syn"><span class="hs-identifier hs-var">syn</span></a></span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679086202"><span class="hs-identifier hs-var">obj</span></a></span><span>
+</span><span id="line-197"></span></pre></body></html>

@@ -9,7 +9,7 @@ Stability   : experimental
 Implementation of a @Graded@ typeclass and utilities for lists of
 graded elements used in @Symbolics@ module.
 -}
-module GradedList (
+module Core.GradedList (
     Graded,
     grading,
     NonDecreasingList,
