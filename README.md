@@ -6,16 +6,12 @@
 
 This package provides a flexible and extensible framework for working with algebras of graphs, including the implementation of decorated trees, aromatic forests, and operations such as grafting and substitution. It also supports symbolic computation in graded vector spaces. In addition, the package can generate LaTeX code and corresponding PDF output to visualize decorated aromatic forests and other elements of vector spaces, facilitating the interpretation of computation results.
 
-## Motivation
-
-Many modern mathematical frameworks use trees and forests as a foundational combinatorial structure. From the Butcher group in numerical analysis to the branched rough paths and regularity structures in stochastic analysis, trees encode the composition of operations, hierarchical dependencies, and renormalization procedures. Arboretum offers a unified platform for prototyping and computing in these contexts.
-
 ## Getting Started
 
 Prerequisites: stack.
 
 ```bash
-git clone https://github.com/ebronasco/arboretum.hs.git
+git clone [...]
 cd arboretum.hs
 stack build
 ```
@@ -28,7 +24,7 @@ The reference documentation is found in **docs** directory. To read it open the 
 
 ### Examples
 
-To run the examples, open a termian in the root directory of the project and execute:
+To run the examples, open a terminal in the root directory of the project and execute:
 
 ```bash
 stack repl
