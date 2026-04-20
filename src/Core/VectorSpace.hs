@@ -33,6 +33,7 @@ module Core.VectorSpace (
     Finite (..),
     vectorFromList,
     vectorFromNonDecList,
+    sumNonDec,
     terms,
     termsGraded,
     basisElements,
@@ -54,6 +55,7 @@ module Core.VectorSpace (
     takeWhileV,
     filterV,
     takeV,
+    takeGrading,
     Sum (Zero),
     fromListS,
     toListS,
@@ -78,6 +80,7 @@ import qualified Data.Bifunctor as BF (
 import Data.Group
 import qualified Data.List as L (
     sortBy,
+    transpose,
  )
 import qualified Data.MultiSet as MS (
     MultiSet,
@@ -799,6 +802,28 @@ vectorFromNonDecList
 vectorFromNonDecList = fromListV . map fromListS . groupByGrading . nDecList
 
 {- |
+  Take a sum of infinite list of infinite vectors.
+
+  (Used in the definitions on `log` and `exp`)
+
+!!! The minimal terms in the vectors must be non-descreasing.
+-}
+
+sumNonDec :: (Num k, Eq k, Eq a, Graded a) => [Vector k a] -> Vector k a
+sumNonDec =
+    fromListV
+        . map mconcat
+        . mapTakeNonDec 0 (/= Zero)
+        . L.transpose
+        . map toListV
+  where
+    takeWhileCount f = (\ys -> (length ys, ys)) . takeWhile f
+    mapTakeNonDec _ _ [] = []
+    mapTakeNonDec start f (l : ls) = (\(c, y) ->
+        ((take start l) ++ y) : mapTakeNonDec (start + c) f ls) $
+            takeWhileCount f (drop start l)
+
+{- |
   Takes a function from the basis to a vector space and extends it to
   a linear map.
 
@@ -1352,3 +1377,15 @@ takeV
     -> Vector k a
     -> Vector k a
 takeV n = vectorFromNonDecList . take n . terms
+
+takeGrading
+    :: ( Num k
+       , Eq k
+       , Eq a
+       , Graded a
+       )
+    => Int
+    -> Vector k a
+    -> Vector k a
+takeGrading n = fromListV . take n . toListV
+

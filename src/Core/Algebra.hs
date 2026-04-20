@@ -23,6 +23,12 @@ module Core.Algebra (
     morphism,
     morphismGraded,
     morphismNonDec,
+    expOp,
+    logOp,
+    expWith,
+    logWith,
+    expV,
+    logV,
 ) where
 
 import Core.GradedList
@@ -224,7 +230,7 @@ antipode
 antipode v = vector $ fromInteger (-1) ^ length v *^ reverse v
 
 {- |
-  Antipode of a combinatorial HOpf algebra defined by a unit, a product, and a
+  Antipode of a combinatorial Hopf algebra defined by a unit, a product, and a
   coproduct. It implements the recursive formula for an antipode of a connected
   graded bialgebra. It is highly inefficient and should be used only for
   exploratory purposes.
@@ -252,3 +258,107 @@ antipodeWith unit prod coprod b =
                     linear2 (antipodeWith unit prod coprod, id) $
                         filterV ((unit /=) . snd . basisElement) $
                             coprod b
+
+
+---------------------------------------------------------------------
+
+-- * Exponentials and logarithms
+
+---------------------------------------------------------------------
+
+{- |
+  Exponential of a linear operator.
+-}
+expOp
+    :: (Eq a, Graded a, IsVector a, Fractional (VectorScalar a)) => (a -> Vector (VectorScalar a) a)
+    -> Vector (VectorScalar a) a
+    -> Vector (VectorScalar a) a
+expOp op x =
+    sumNonDec $
+        map (\(k, y) -> scale (factDiv k) y) $
+            zip (1 : [1 ..] :: [Integer]) $
+                iterate (linear op) x
+  where
+    factDiv k = 1 / fromInteger (product [1 .. k])
+
+{- |
+  Logarithm of a linear operator.
+-}
+logOp
+    :: (Eq a, Graded a, IsVector a, Fractional (VectorScalar a))
+    => (a -> Vector (VectorScalar a) a)
+    -> Vector (VectorScalar a) a
+    -> Vector (VectorScalar a) a
+logOp op x =
+    sumNonDec $
+        map (\(k, y) -> scale ((-1) ^ (k + 1) / fromInteger k) y) $
+            zip ([1 ..] :: [Integer]) $
+                iterate op' x
+  where
+    op' y = linear op y <> (scale (-1) y)
+
+{- |
+  Exponential with respect to a product.
+-}
+expWith
+    :: (Eq a, Graded a, IsVector a, Monoid a, Fractional (VectorScalar a))
+    => (a -> a -> Vector (VectorScalar a) a)
+    -> Vector (VectorScalar a) a
+    -> Vector (VectorScalar a) a
+expWith p x =
+    sumNonDec $
+        map (\(k, y) -> scale (factDiv k) y) $
+            zip (1 : [1 ..] :: [Integer]) $
+                iterate (bilinear p x) $
+                    vector $
+                        (fromInteger 1) *^ mempty
+  where
+    factDiv k = 1 / fromInteger (product [1 .. k])
+
+{- |
+  Logarithm with respect to a product.
+-}
+logWith
+    :: (Eq a, Graded a, IsVector a, Monoid a, Fractional (VectorScalar a))
+    => (a -> a -> Vector (VectorScalar a) a)
+    -> Vector (VectorScalar a) a
+    -> Vector (VectorScalar a) a
+logWith p x =
+    sumNonDec $
+        map (\(k, y) -> scale ((-1) ^ (k + 1) / fromInteger k) y) $
+            zip ([1 ..] :: [Integer]) $
+                iterate (bilinear p x') x'
+  where
+    x' = x - vector ((fromInteger 1) *^ mempty)
+
+{- |
+  Exponential.
+-}
+expV
+    :: (Eq a, Graded a, IsVector a, Monoid a, Fractional (VectorScalar a))
+    => Vector (VectorScalar a) a
+    -> Vector (VectorScalar a) a
+expV x =
+    sumNonDec $
+        map (\(k, y) -> scale (factDiv k) y) $
+            zip (1 : [1 ..] :: [Integer]) $
+                iterate (x *) $
+                    vector $
+                        (fromInteger 1) *^ mempty
+  where
+    factDiv k = 1 / fromInteger (product [1 .. k])
+
+{- |
+  Logarithm.
+-}
+logV
+    :: (Eq a, Graded a, IsVector a, Monoid a, Fractional (VectorScalar a))
+    => Vector Rational a
+    -> Vector Rational a
+logV x =
+    sumNonDec $
+        map (\(k, y) -> scale ((-1) ^ (k + 1) / fromInteger k) y) $
+            zip ([1 ..] :: [Integer]) $
+                iterate (x' *) x'
+  where
+    x' = x - vector ((fromInteger 1) *^ mempty)

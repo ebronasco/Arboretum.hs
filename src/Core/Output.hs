@@ -39,6 +39,7 @@ import Core.VectorSpace (
     pattern (:*^),
  )
 import Data.List (intercalate)
+import Data.Ratio (Ratio, denominator, numerator)
 import qualified Data.MultiSet as MS
 import System.Directory (copyFile)
 import System.Info (os)
@@ -129,6 +130,9 @@ instance Texifiable Int where
 
 instance Texifiable Double where
     texify = show
+
+instance (Texifiable a) => Texifiable (Ratio a) where
+    texify a = "\\frac{" ++ texify (numerator a) ++ "}{" ++ texify (denominator a) ++ "}"
 
 -- | Lists represent products.
 instance
