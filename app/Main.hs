@@ -114,6 +114,16 @@ q v w =
             (linearGraded gavK $ expV $ vector [v])
                 * (linearGraded gavK $ expV $ linearGraded (: []) $ lambda v w)
 
+q' :: (Eq a, Graded a) => ConnMono a -> ConnMono a -> ConnTenAlgebra a
+q' v w = linearGraded removeDer $ beta $ logV $ expV (vector [v]) * expV (vector [w])
+  where
+    removeDer a = if (any hasDer a) then Empty else vector a
+    hasDer (Conn _ _) = True
+    hasDer _ = False
+
+q'' :: (Eq a, Graded a) => ConnMono a -> ConnMono a -> ConnTenAlgebra a
+q'' v w = logV $ linearGraded gavKinv $ expV $ linearGraded gavKinv $ logV $ linearGraded gavK $ expV (vector [v]) * expV (vector [w])
+
 
 ---------------------------------------------------------------------
 
@@ -210,6 +220,40 @@ special :: (Eq a, Graded a, Show a) => LieMono a -> SpecialPolys a
 special = linear perTerm . oneside
   where
     perTerm e = rhoKer e <> rhoIm e
+
+
+type SpecTenAlgebra a = Vector Rational [SpecMono a]
+
+derTen :: (Eq a, Graded a) => SpecMono a -> [SpecMono a] -> SpecTenAlgebra a
+derTen x [] = Empty
+derTen x (y : ys) = (linear (\z -> z:ys) $ derTerm x y) + vector [y] * derTen x ys
+  where
+    derTerm a (SpecGen c) = vector $ CD a (SpecGen c)
+    derTerm a (CD b c) = vector $ CD a (CD b c)
+    derTerm a (S ds b c) =
+        vector (S (a : ds) b c)
+            <> linear (\y -> S ds y c) (derTerm a b)
+            <> linear (S ds b) (derTerm a c)
+    derTerm a (Tor ds b c) =
+        vector (Tor (a : ds) b c)
+            <> linear (\y -> Tor ds y c) (derTerm a b)
+            <> linear (Tor ds b) (derTerm a c)
+
+-- | Gavrilov's K map as defined in (2.22) in the paper
+gavKS :: (Eq a, Graded a) => [SpecMono a] -> SpecTenAlgebra a
+gavKS [] = vector []
+gavKS (x : xs) = vector [x] * gavKS xs - linear gavKS (derTen x xs)
+
+
+-- | Gavrilov's beta map as defined in Lemma 3 in the paper, see also the definition of map Z in section 2.5.3
+betaS :: (Eq a, Graded a) => SpecTenAlgebra a -> SpecTenAlgebra a
+betaS = logV . linearGraded gavKS . expV
+
+
+
+
+
+
 
 -- | Compute the kernel part of the expression following Hans' working notes.
 rhoKer :: (Eq a, Graded a, Show a) => LieMono a -> SpecialPolys a
